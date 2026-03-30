@@ -9,6 +9,7 @@ import Link from "next/link"
 import { getPurchases, updatePurchaseStatus } from "@/lib/api/purchases"
 import { getMobiles, getAccessories } from "@/lib/api/products"
 import { supabase } from "@/lib/supabase"
+import { getTenantId } from "@/lib/api/helpers"
 import type { Mobile, Accessory } from "@/data/types"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { Purchase, PurchaseItem, Supplier } from "@/data/types"
@@ -171,11 +172,11 @@ function PurchaseViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
         <DialogHeader>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
             <div>
-              <DialogTitle className="text-xl font-bold text-slate-900">
+              <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900">
                 Purchase Order Details
               </DialogTitle>
               <DialogDescription className="text-slate-500 mt-0.5">
@@ -195,7 +196,7 @@ function PurchaseViewDialog({
         </DialogHeader>
 
         {/* Meta info grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 bg-slate-50 rounded-xl p-4 mt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 bg-slate-50 rounded-xl p-3 sm:p-4 mt-2">
           <div>
             <p className="text-xs text-slate-400 mb-0.5">Date</p>
             <p className="text-sm font-medium text-slate-800">{formatDate(purchase.date)}</p>
@@ -222,13 +223,48 @@ function PurchaseViewDialog({
           )}
         </div>
 
-        {/* Items table */}
+        {/* Items */}
         <div className="mt-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-3">
             Items ({purchase.items.length})
           </h3>
-          <div className="rounded-xl border border-slate-200 overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm min-w-[450px]">
+
+          {/* Mobile card layout */}
+          <div className="sm:hidden space-y-2">
+            {purchase.items.map((item, idx) => (
+              <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-slate-800 text-sm">{item.productName}</span>
+                  <Badge
+                    variant="outline"
+                    className={
+                      item.productType === "Mobile"
+                        ? "border-blue-200 text-blue-700 bg-blue-50 shrink-0"
+                        : "border-slate-200 text-slate-700 bg-slate-50 shrink-0"
+                    }
+                  >
+                    {item.productType}
+                  </Badge>
+                </div>
+                {item.imeis && item.imeis.length > 0 && (
+                  <p className="text-xs text-slate-400 font-mono break-all">
+                    IMEIs: {item.imeis.join(", ")}
+                  </p>
+                )}
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>Qty: {item.quantity} × {formatCurrency(item.unitCost)}</span>
+                </div>
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
+                  <span className="text-xs text-slate-400">Total</span>
+                  <span className="font-semibold text-sm text-slate-900">{formatCurrency(item.total)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table layout */}
+          <div className="hidden sm:block rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
@@ -287,7 +323,7 @@ function PurchaseViewDialog({
 
         {/* Financial summary */}
         <div className="mt-4 flex justify-end">
-          <div className="w-full sm:w-72 space-y-2 bg-slate-50 rounded-xl p-4">
+          <div className="w-full sm:w-72 space-y-2 bg-slate-50 rounded-xl p-3 sm:p-4">
             <div className="flex justify-between text-sm text-slate-600">
               <span>Subtotal</span>
               <span>{formatCurrency(purchase.subtotal)}</span>
@@ -395,14 +431,6 @@ export default function PurchasesPage() {
     [purchases]
   )
 
-  const totalPayable = useMemo(
-    () =>
-      purchases
-        .filter((p) => p.paymentStatus !== "Paid")
-        .reduce((sum, p) => sum + p.balanceDue, 0),
-    [purchases]
-  )
-
   // ── Filtered data ──────────────────────────────────────────────────────────
   const filteredPurchases = useMemo(() => {
     return purchases.filter((p) => {
@@ -414,6 +442,14 @@ export default function PurchasesPage() {
       return true
     })
   }, [purchases, dateFrom, dateTo, supplierFilter, paymentStatusFilter, deliveryStatusFilter])
+
+  const totalPayable = useMemo(
+    () =>
+      filteredPurchases
+        .filter((p) => p.paymentStatus !== "Paid")
+        .reduce((sum, p) => sum + p.balanceDue, 0),
+    [filteredPurchases]
+  )
 
   // ── Active filter count ───────────────────────────────────────────────────
   const activeFilterCount = [
@@ -475,9 +511,12 @@ export default function PurchasesPage() {
     setEditSaving(true)
     try {
       const paid = parseFloat(editAmountPaid) || 0
+      const previousPaid = editPurchase.amountPaid || 0
       const newTotal = editSubtotal + (editPurchase.shippingCost || 0) + (editPurchase.tax || 0)
       const bal = Math.max(0, newTotal - paid)
       const ps = paid <= 0 ? "Unpaid" : paid >= newTotal ? "Paid" : "Partial"
+
+      const tenantId = await getTenantId()
 
       // Update purchase header
       await updatePurchaseStatus(editPurchase.id, {
@@ -495,7 +534,6 @@ export default function PurchasesPage() {
 
       // Delete old items and re-insert updated ones
       await supabase.from("purchase_items").delete().eq("purchase_id", editPurchase.id)
-      const tenantId = (await supabase.from("purchases").select("tenant_id").eq("id", editPurchase.id).single()).data?.tenant_id
       if (tenantId) {
         await supabase.from("purchase_items").insert(
           editItems.map(item => ({
@@ -510,6 +548,39 @@ export default function PurchasesPage() {
             imeis: item.imeis || null,
           }))
         )
+      }
+
+      // ── Sync payment records with supplier ledger ──────────────────────
+      // If amount paid changed, update/create/delete the payment record
+      // so the supplier ledger stays in sync
+      if (paid !== previousPaid) {
+        // Remove any existing payment records for this purchase
+        await supabase
+          .from("payments")
+          .delete()
+          .eq("reference_number", editPurchase.poNumber)
+          .eq("entity_type", "Supplier")
+          .eq("type", "Paid")
+
+        // Create a new payment record if amount > 0
+        if (paid > 0) {
+          const supplierName = suppliers.find(s => s.id === editPurchase.supplierId)?.companyName || editPurchase.supplierName
+          const { error: payErr } = await supabase.from("payments").insert({
+            tenant_id: tenantId,
+            date: new Date().toISOString().split("T")[0],
+            type: "Paid",
+            entity_type: "Supplier",
+            entity_id: editPurchase.supplierId,
+            entity_name: supplierName,
+            reference_type: "Purchase",
+            reference_number: editPurchase.poNumber,
+            amount: paid,
+            method: editPurchase.paymentMethod || "Cash",
+            status: "Completed",
+            notes: `Payment for ${editPurchase.poNumber}`,
+          })
+          if (payErr) throw new Error(`Failed to sync payment record: ${payErr.message}`)
+        }
       }
 
       setPurchases(prev => prev.map(p => p.id === editPurchase.id ? {
@@ -792,67 +863,75 @@ export default function PurchasesPage() {
 
       {/* ── Edit Dialog ──────────────────────────────────────────────────────── */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-base">Edit Purchase</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">Edit Purchase</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
               {editPurchase?.poNumber} · {editPurchase?.supplierName} · {editPurchase?.date}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5 py-2">
-            {/* Purchase-level fields */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Payment Status</Label>
-                <Select value={editPaymentStatus} onValueChange={setEditPaymentStatus}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Paid">Paid</SelectItem>
-                    <SelectItem value="Partial">Partial</SelectItem>
-                    <SelectItem value="Unpaid">Unpaid</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Delivery Status</Label>
-                <Select value={editDeliveryStatus} onValueChange={setEditDeliveryStatus}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Received">Received</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Partial">Partial</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Amount Paid (Rs)</Label>
-                <Input type="number" min={0} value={editAmountPaid} onChange={e => setEditAmountPaid(e.target.value)} className="h-9 text-sm" />
-                {editPurchase && (
-                  <p className="text-[10px] text-slate-400">
-                    Balance: {formatCurrency(Math.max(0, editPurchase.total - (parseFloat(editAmountPaid) || 0)))}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Notes</Label>
-                <Input value={editNotes} onChange={e => setEditNotes(e.target.value)} className="h-9 text-sm" placeholder="Optional..." />
+
+          <div className="space-y-4 sm:space-y-5 py-1 sm:py-2">
+            {/* ── Order Details Section ─────────────────────────── */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Order Details</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Payment Status</Label>
+                    <Select value={editPaymentStatus} onValueChange={setEditPaymentStatus}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Paid">Paid</SelectItem>
+                        <SelectItem value="Partial">Partial</SelectItem>
+                        <SelectItem value="Unpaid">Unpaid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Delivery Status</Label>
+                    <Select value={editDeliveryStatus} onValueChange={setEditDeliveryStatus}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Received">Received</SelectItem>
+                        <SelectItem value="Pending">Pending</SelectItem>
+                        <SelectItem value="Partial">Partial</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Amount Paid (Rs)</Label>
+                    <Input type="number" min={0} value={editAmountPaid} onChange={e => setEditAmountPaid(e.target.value)} className="h-9 text-sm" />
+                    {editPurchase && (
+                      <p className="text-[11px] text-slate-400">
+                        Balance: {formatCurrency(Math.max(0, editPurchase.total - (parseFloat(editAmountPaid) || 0)))}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Notes</Label>
+                    <Input value={editNotes} onChange={e => setEditNotes(e.target.value)} className="h-9 text-sm" placeholder="Optional..." />
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Editable Items */}
+            {/* ── Items Section ──────────────────────────────────── */}
             {editItems.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Items ({editItems.length})</p>
-                <div className="space-y-2">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Items ({editItems.length})</p>
+                <div className="space-y-3">
                   {editItems.map((item, idx) => (
-                    <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <div className="sm:col-span-2 space-y-1">
-                          <Label className="text-[10px] font-semibold text-slate-400">Product Name</Label>
+                    <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-3">
+                      {/* Product & Type */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-500">Product Name</Label>
                           <Select value={item.productName} onValueChange={v => updateEditItem(idx, "productName", v)}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select product" /></SelectTrigger>
+                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select product" /></SelectTrigger>
                             <SelectContent className="max-h-48">
-                              {/* Current value always shown */}
                               {item.productName && !productNames.includes(item.productName) && (
                                 <SelectItem value={item.productName}>{item.productName}</SelectItem>
                               )}
@@ -860,47 +939,53 @@ export default function PurchasesPage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-semibold text-slate-400">Type</Label>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-500">Type</Label>
                           <Select value={item.productType} onValueChange={v => updateEditItem(idx, "productType", v)}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Mobile">Mobile</SelectItem>
                               <SelectItem value="Accessory">Accessory</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-semibold text-slate-400">Qty</Label>
-                          <Input type="number" min={1} value={item.quantity} onChange={e => updateEditItem(idx, "quantity", parseInt(e.target.value) || 1)} className="h-8 text-xs" />
+                      </div>
+                      {/* Qty, Unit Cost, Total */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-500">Qty</Label>
+                          <Input type="number" min={1} value={item.quantity} onChange={e => updateEditItem(idx, "quantity", parseInt(e.target.value) || 1)} className="h-9 text-sm" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-500">Unit Cost</Label>
+                          <Input type="number" min={0} value={item.unitCost} onChange={e => updateEditItem(idx, "unitCost", parseFloat(e.target.value) || 0)} className="h-9 text-sm" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-500">Total</Label>
+                          <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-800">{formatCurrency(item.total)}</div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-semibold text-slate-400">Unit Cost (Rs)</Label>
-                          <Input type="number" min={0} value={item.unitCost} onChange={e => updateEditItem(idx, "unitCost", parseFloat(e.target.value) || 0)} className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-semibold text-slate-400">Total</Label>
-                          <div className="h-8 flex items-center px-2 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-800">{formatCurrency(item.total)}</div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-semibold text-slate-400">IMEIs</Label>
-                          <Input value={item.imeis?.join(", ") || ""} onChange={e => updateEditItem(idx, "imeis", e.target.value.split(",").map(s => s.trim()).filter(Boolean) as any)} className="h-8 text-xs font-mono" placeholder="—" />
-                        </div>
+                      {/* IMEIs */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-slate-500">IMEIs</Label>
+                        <Input value={item.imeis?.join(", ") || ""} onChange={e => updateEditItem(idx, "imeis", e.target.value.split(",").map(s => s.trim()).filter(Boolean) as any)} className="h-9 text-sm font-mono" placeholder="Comma-separated IMEIs..." />
                       </div>
                     </div>
                   ))}
-                  <div className="flex justify-end text-xs font-bold text-slate-700 pt-1">
-                    Subtotal: {formatCurrency(editSubtotal)}
+                  {/* Subtotal */}
+                  <div className="flex justify-end items-center gap-2 pt-1 pr-1">
+                    <span className="text-xs text-slate-500">Subtotal:</span>
+                    <span className="text-sm font-bold text-slate-800">{formatCurrency(editSubtotal)}</span>
                   </div>
                 </div>
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={handleEditSave} disabled={editSaving}>
+
+          {/* ── Action Buttons ────────────────────────────────── */}
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button size="sm" className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700" onClick={handleEditSave} disabled={editSaving}>
               {editSaving ? "Saving..." : "Save Changes"}
             </Button>
           </div>

@@ -101,6 +101,25 @@ export default function SupplierLedgerPage() {
       })
     )
 
+    // Reconcile: find purchases with amountPaid > 0 but no matching payment record
+    // This handles old/orphaned data where payment was recorded on purchase but not in payments table
+    const paymentRefNumbers = new Set(filteredPayments.map((sp) => sp.referenceNumber))
+    filteredPurchases.forEach((p) => {
+      if (p.amountPaid > 0 && !paymentRefNumbers.has(p.poNumber)) {
+        const supName = suppliers.find(s => s.id === p.supplierId)?.companyName || p.supplierName
+        raw.push({
+          id: `reconcile-${p.id}`,
+          date: p.date,
+          reference: p.poNumber,
+          description: `Payment Made — ${p.paymentMethod} (Payment for ${p.poNumber})`,
+          debit: p.amountPaid,
+          credit: 0,
+          type: "payment",
+          supplierName: supName,
+        })
+      }
+    })
+
     raw.sort((a, b) => a.date.localeCompare(b.date))
 
     const result: LedgerEntry[] = []

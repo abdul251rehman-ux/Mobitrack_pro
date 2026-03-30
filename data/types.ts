@@ -13,9 +13,11 @@ export interface Mobile {
   stock: number;
   condition: string;
   category: string;
+  deviceType: 'android' | 'iphone';
   notes?: string;
   dateAdded: string;
   image?: string;
+  batteryHealth?: number;
 }
 
 export interface Accessory {

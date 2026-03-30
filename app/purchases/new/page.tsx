@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   Plus, Trash2, Search, Package, Smartphone, Building2, ShoppingCart,
-  ChevronLeft, CreditCard, AlertCircle, Headphones, Hash,
+  ChevronLeft, CreditCard, AlertCircle, Headphones, Hash, Upload, ImageIcon, X as XIcon, Battery,
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -32,6 +32,8 @@ import Link from "next/link"
 interface MobileLineItem {
   id: string
   type: "Mobile"
+  deviceType: "android" | "iphone"
+  phoneCondition: "new" | "used"
   brand: string
   model: string
   color: string
@@ -42,6 +44,13 @@ interface MobileLineItem {
   imei: string
   buyPrice: number
   sellPrice: number
+  batteryHealth?: number
+  imageUrl?: string
+  // Used phone extra fields
+  conditionGrade?: string
+  screenCondition?: string
+  bodyCondition?: string
+  functionalIssues?: string[]
 }
 
 interface AccessoryLineItem {
@@ -53,6 +62,7 @@ interface AccessoryLineItem {
   quantity: number
   buyPrice: number
   sellPrice: number
+  imageUrl?: string
 }
 
 type PurchaseLineItem = MobileLineItem | AccessoryLineItem
@@ -77,19 +87,23 @@ export default function NewPurchasePage() {
   const [ramOpts, setRamOpts] = useState<string[]>([])
   const [mobileCategories, setMobileCategories] = useState<string[]>([])
   const [accessoryCategories, setAccessoryCategories] = useState<string[]>([])
+  const [iphoneModels, setIphoneModels] = useState<string[]>([])
+  const [conditions, setConditions] = useState<string[]>([])
 
   useEffect(() => {
     async function load() {
       try {
         setDataLoading(true)
         const tenantId = await getTenantId()
-        const [suppData, brandsRes, colorsRes, storageRes, ramRes, catRes] = await Promise.all([
+        const [suppData, brandsRes, colorsRes, storageRes, ramRes, catRes, iphoneRes, condRes] = await Promise.all([
           getSuppliers(),
           supabase.from("brands").select("name").eq("tenant_id", tenantId).eq("status", "Active").order("name"),
           supabase.from("colors").select("name").eq("tenant_id", tenantId).order("name"),
           supabase.from("storage_options").select("name").eq("tenant_id", tenantId).order("name"),
           supabase.from("ram_options").select("name").eq("tenant_id", tenantId).order("name"),
           supabase.from("categories").select("name, type").eq("tenant_id", tenantId).order("name"),
+          supabase.from("iphone_models").select("name").eq("tenant_id", tenantId).order("name"),
+          supabase.from("conditions").select("name").eq("tenant_id", tenantId).order("name"),
         ])
         setSuppliers(suppData)
         if (brandsRes.data) setBrands(brandsRes.data.map(d => d.name))
@@ -100,6 +114,8 @@ export default function NewPurchasePage() {
           setMobileCategories(catRes.data.filter(c => c.type === "Mobile" || c.type === "Both").map(c => c.name))
           setAccessoryCategories(catRes.data.filter(c => c.type === "Accessory" || c.type === "Both").map(c => c.name))
         }
+        if (iphoneRes.data) setIphoneModels(iphoneRes.data.map(d => d.name))
+        if (condRes.data) setConditions(condRes.data.map(d => d.name))
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to load data")
       } finally {
@@ -146,6 +162,29 @@ export default function NewPurchasePage() {
     if (type === "Accessory" || type === "Both") setAccessoryCategories(prev => [...new Set([...prev, name])].sort())
     toast.success(`Category "${name}" added!`); return true
   }
+  async function handleAddIphoneModel(name: string): Promise<boolean> {
+    const tenantId = await getTenantId()
+    const { error } = await supabase.from("iphone_models").insert({ tenant_id: tenantId, name })
+    if (error) { toast.error("Failed: " + error.message); return false }
+    setIphoneModels(prev => [...new Set([...prev, name])].sort())
+    toast.success(`iPhone model "${name}" added!`); return true
+  }
+  async function handleAddCondition(name: string): Promise<boolean> {
+    const tenantId = await getTenantId()
+    const { error } = await supabase.from("conditions").insert({ tenant_id: tenantId, name })
+    if (error) { toast.error("Failed: " + error.message); return false }
+    setConditions(prev => [...new Set([...prev, name])].sort())
+    toast.success(`Condition "${name}" added!`); return true
+  }
+
+  // ── Image upload helper ──────────────────────────────────────────────
+  function handleImageUpload(file: File, callback: (dataUrl: string) => void) {
+    if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5 MB"); return }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { toast.error("Only PNG, JPG, WEBP allowed"); return }
+    const reader = new FileReader()
+    reader.onloadend = () => callback(reader.result as string)
+    reader.readAsDataURL(file)
+  }
 
   // ── Section 1: Supplier ─────────────────────────────────────────────────
   const [supplierSearch, setSupplierSearch] = useState("")
@@ -169,6 +208,8 @@ export default function NewPurchasePage() {
 
   // ── Section 2: Item Adder ───────────────────────────────────────────────
   const [itemTab, setItemTab] = useState<"Mobile" | "Accessory">("Mobile")
+  const [mobileDeviceType, setMobileDeviceType] = useState<"android" | "iphone">("android")
+  const [phoneCondition, setPhoneCondition] = useState<"new" | "used">("new")
   const [lineItems, setLineItems] = useState<PurchaseLineItem[]>([])
 
   // Mobile form state
@@ -182,6 +223,14 @@ export default function NewPurchasePage() {
   const [mImei, setMImei] = useState("")
   const [mBuyPrice, setMBuyPrice] = useState("")
   const [mSellPrice, setMSellPrice] = useState("")
+  const [mBatteryHealth, setMBatteryHealth] = useState("")
+  const [mImageUrl, setMImageUrl] = useState("")
+
+  // Used phone extra fields
+  const [mConditionGrade, setMConditionGrade] = useState("B")
+  const [mScreenCondition, setMScreenCondition] = useState("minor_scratches")
+  const [mBodyCondition, setMBodyCondition] = useState("minor_wear")
+  const [mFunctionalIssues, setMFunctionalIssues] = useState<string[]>([])
 
   // Accessory form state
   const [aName, setAName] = useState("")
@@ -190,6 +239,7 @@ export default function NewPurchasePage() {
   const [aQty, setAQty] = useState("1")
   const [aBuyPrice, setABuyPrice] = useState("")
   const [aSellPrice, setASellPrice] = useState("")
+  const [aImageUrl, setAImageUrl] = useState("")
 
   // Inline add toggles
   const [showNew, setShowNew] = useState<Record<string, boolean>>({})
@@ -200,14 +250,16 @@ export default function NewPurchasePage() {
 
   function resetMobileForm(keepContext = false) {
     if (!keepContext) { setMBrand(""); setMCategory(""); setMCondition("New"); setMColor(""); setMStorage(""); setMRam("") }
-    setMModel(""); setMImei(""); setMBuyPrice(""); setMSellPrice("")
+    setMModel(""); setMImei(""); setMBuyPrice(""); setMSellPrice(""); setMBatteryHealth(""); setMImageUrl("")
+    setMConditionGrade("B"); setMScreenCondition("minor_scratches"); setMBodyCondition("minor_wear"); setMFunctionalIssues([])
   }
   function resetAccessoryForm() {
-    setAName(""); setABrand(""); setACategory(""); setAQty("1"); setABuyPrice(""); setASellPrice("")
+    setAName(""); setABrand(""); setACategory(""); setAQty("1"); setABuyPrice(""); setASellPrice(""); setAImageUrl("")
   }
 
   function handleAddMobile() {
-    if (!mBrand) { toast.error("Select a brand"); return }
+    const brand = mobileDeviceType === "iphone" ? "Apple" : mBrand
+    if (!brand) { toast.error("Select a brand"); return }
     if (!mModel.trim()) { toast.error("Enter model name"); return }
     if (!mImei.trim() || mImei.trim().length !== 15 || !/^\d{15}$/.test(mImei.trim())) {
       toast.error("IMEI must be exactly 15 digits"); return
@@ -220,12 +272,25 @@ export default function NewPurchasePage() {
     if (buy <= 0) { toast.error("Enter a valid buy price"); return }
 
     const item: MobileLineItem = {
-      id: uid(), type: "Mobile", brand: mBrand, model: mModel.trim(),
-      color: mColor, storage: mStorage, ram: mRam, category: mCategory,
-      condition: mCondition, imei: mImei.trim(), buyPrice: buy, sellPrice: sell,
+      id: uid(), type: "Mobile", deviceType: mobileDeviceType,
+      phoneCondition,
+      brand, model: mModel.trim(),
+      color: mColor, storage: mStorage,
+      ram: mobileDeviceType === "iphone" ? "" : mRam,
+      category: mCategory,
+      condition: phoneCondition === "used" ? "Used" : mCondition,
+      imei: mImei.trim(), buyPrice: buy, sellPrice: sell,
+      batteryHealth: mBatteryHealth ? parseInt(mBatteryHealth) : undefined,
+      imageUrl: mImageUrl || undefined,
+      ...(phoneCondition === "used" ? {
+        conditionGrade: mConditionGrade,
+        screenCondition: mScreenCondition,
+        bodyCondition: mBodyCondition,
+        functionalIssues: mFunctionalIssues,
+      } : {}),
     }
     setLineItems(prev => [...prev, item])
-    toast.success(`${mBrand} ${mModel.trim()} added`)
+    toast.success(`${brand} ${mModel.trim()} added`)
     resetMobileForm(true)
   }
 
@@ -240,6 +305,7 @@ export default function NewPurchasePage() {
     const item: AccessoryLineItem = {
       id: uid(), type: "Accessory", name: aName.trim(), brand: aBrand,
       category: aCategory, quantity: qty, buyPrice: buy, sellPrice: sell,
+      imageUrl: aImageUrl || undefined,
     }
     setLineItems(prev => [...prev, item])
     toast.success(`${aName.trim()} added`)
@@ -310,14 +376,20 @@ export default function NewPurchasePage() {
       // Create mobiles + IMEI records for each mobile item
       for (const item of lineItems) {
         if (item.type === "Mobile") {
-          await supabase.from("mobiles").insert({
+          const { error: mobileErr } = await supabase.from("mobiles").insert({
             tenant_id: tenantId, brand: item.brand, model: item.model,
             imei: item.imei, color: item.color || "", storage: item.storage || "",
             ram: item.ram || "", purchase_price: item.buyPrice, selling_price: item.sellPrice,
             supplier_id: selectedSupplierId, stock: 1, condition: item.condition || "New",
-            category: item.category || "", date_added: new Date().toISOString().split("T")[0],
+            category: item.category || "",
+            device_type: item.deviceType || "android",
+            date_added: new Date().toISOString().split("T")[0],
+            image_url: item.imageUrl || null,
+            battery_health: item.batteryHealth || null,
           })
-          await supabase.from("imei_records").insert({
+          if (mobileErr) throw new Error(`Failed to add mobile ${item.brand} ${item.model}: ${mobileErr.message}`)
+
+          const { error: imeiErr } = await supabase.from("imei_records").insert({
             tenant_id: tenantId, imei_number: item.imei, brand: item.brand,
             model: item.model, color: item.color || "", storage_capacity: item.storage || "",
             pta_status: "pending", device_status: "in_stock",
@@ -325,21 +397,54 @@ export default function NewPurchasePage() {
             supplier_id: selectedSupplierId, supplier_name: selectedSupplier?.companyName ?? "",
             purchase_date: new Date().toISOString().split("T")[0],
           })
+          if (imeiErr) throw new Error(`Failed to add IMEI record for ${item.imei}: ${imeiErr.message}`)
+
+          // If used phone, also insert into used_phones table
+          if (item.phoneCondition === "used") {
+            const { error: usedErr } = await supabase.from("used_phones").insert({
+              tenant_id: tenantId,
+              imei_number: item.imei,
+              brand: item.brand,
+              model: item.model,
+              color: item.color || "",
+              storage: item.storage || "",
+              ram: item.ram || "",
+              condition_grade: item.conditionGrade || "B",
+              battery_health: item.batteryHealth || null,
+              screen_condition: item.screenCondition || "minor_scratches",
+              body_condition: item.bodyCondition || "minor_wear",
+              functional_issues: item.functionalIssues || [],
+              accessories_included: [],
+              source_type: "purchased",
+              source_customer_name: selectedSupplier?.companyName ?? "",
+              purchase_price: item.buyPrice,
+              refurbishment_cost: 0,
+              selling_price: item.sellPrice,
+              pta_status: "pending",
+              status: "in_stock",
+              warranty_days: 7,
+              photos: item.imageUrl ? [item.imageUrl] : [],
+              date_added: new Date().toISOString().split("T")[0],
+            })
+            if (usedErr) throw new Error(`Failed to add used phone record: ${usedErr.message}`)
+          }
         } else {
-          await supabase.from("accessories").insert({
+          const { error: accErr } = await supabase.from("accessories").insert({
             tenant_id: tenantId, name: item.name, brand: item.brand || "",
             sku: `ACC-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
             category: item.category || "", purchase_price: item.buyPrice,
             selling_price: item.sellPrice, stock: item.quantity,
             supplier_id: selectedSupplierId, compatible_models: [],
             date_added: new Date().toISOString().split("T")[0],
+            image_url: item.imageUrl || null,
           })
+          if (accErr) throw new Error(`Failed to add accessory ${item.name}: ${accErr.message}`)
         }
       }
 
       // Create payment record if amount was paid
       if (amountPaidNum > 0) {
-        await supabase.from("payments").insert({
+        const { error: payErr } = await supabase.from("payments").insert({
           tenant_id: tenantId,
           date: new Date().toISOString().split("T")[0],
           type: "Paid",
@@ -351,9 +456,9 @@ export default function NewPurchasePage() {
           amount: amountPaidNum,
           method: paymentMethod,
           status: "Completed",
-          processed_by: "Admin",
           notes: `Payment for ${poNumber}`,
         })
+        if (payErr) throw new Error(`Failed to record payment: ${payErr.message}`)
       }
 
       toast.success(`Purchase order ${poNumber} recorded!`, {
@@ -441,8 +546,17 @@ export default function NewPurchasePage() {
                         </span>
                         {item.type === "Mobile" && (
                           <>
+                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 ${item.deviceType === "iphone" ? "border-slate-300 text-slate-600" : "border-blue-200 text-blue-600"}`}>
+                              {item.deviceType === "iphone" ? "iPhone" : "Android"}
+                            </Badge>
+                            {item.phoneCondition === "used" && (
+                              <Badge className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 border border-amber-300">
+                                Used · {item.conditionGrade}
+                              </Badge>
+                            )}
                             {item.color && <span className="text-[11px] text-slate-400">{item.color}</span>}
                             {item.storage && <span className="text-[11px] text-slate-400">{item.storage}{item.ram ? `/${item.ram}` : ""}</span>}
+                            {item.batteryHealth && <span className="text-[11px] text-emerald-500">Battery: {item.batteryHealth}%</span>}
                             <span className="text-[11px] text-slate-400 font-mono">IMEI: {item.imei}</span>
                           </>
                         )}
@@ -475,114 +589,336 @@ export default function NewPurchasePage() {
 
               {/* ── Mobile Form ──────────────────────────────────────────── */}
               {itemTab === "Mobile" && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-4">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                    <Smartphone className="w-3.5 h-3.5 text-blue-500" /> Add Mobile Phone
-                  </p>
-                  {/* Row 1: Brand, Model, Color, Storage, RAM, Category, Condition — all in one row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Brand <span className="text-red-500">*</span></Label>
-                      <Select value={mBrand} onValueChange={setMBrand}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Brand" /></SelectTrigger>
-                        <SelectContent>{brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <InlineAdd k="mBrand" placeholder="e.g. Huawei" onAdd={async n => { const ok = await handleAddBrand(n); if (ok) setMBrand(n); return ok }} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Model <span className="text-red-500">*</span></Label>
-                      <Input placeholder="e.g. Galaxy A54" value={mModel} onChange={e => setMModel(e.target.value)} className="h-9 text-sm bg-white" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Color</Label>
-                      <Select value={mColor} onValueChange={setMColor}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Color" /></SelectTrigger>
-                        <SelectContent>{colors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <InlineAdd k="mColor" placeholder="e.g. Midnight" onAdd={async n => { const ok = await handleAddColor(n); if (ok) setMColor(n); return ok }} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Storage</Label>
-                      <Select value={mStorage} onValueChange={setMStorage}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Storage" /></SelectTrigger>
-                        <SelectContent>{storageOpts.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <InlineAdd k="mStorage" placeholder="e.g. 512GB" onAdd={async n => { const ok = await handleAddStorage(n); if (ok) setMStorage(n); return ok }} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">RAM</Label>
-                      <Select value={mRam} onValueChange={setMRam}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="RAM" /></SelectTrigger>
-                        <SelectContent>{ramOpts.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <InlineAdd k="mRam" placeholder="e.g. 12GB" onAdd={async n => { const ok = await handleAddRam(n); if (ok) setMRam(n); return ok }} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Category</Label>
-                      <Select value={mCategory} onValueChange={setMCategory}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Category" /></SelectTrigger>
-                        <SelectContent>{mobileCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <InlineAdd k="mCat" placeholder="e.g. Gaming" onAdd={async n => { const ok = await handleAddCategory(n, "Mobile"); if (ok) setMCategory(n); return ok }} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Condition</Label>
-                      <Select value={mCondition} onValueChange={setMCondition}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="New">New</SelectItem>
-                          <SelectItem value="Refurbished">Refurbished</SelectItem>
-                          <SelectItem value="Used">Used</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-4 overflow-x-hidden">
+                  {/* New / Used toggle */}
+                  <div className="flex rounded-lg bg-slate-200/70 p-0.5 gap-0.5">
+                    <button type="button" onClick={() => { setPhoneCondition("new"); resetMobileForm() }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${phoneCondition === "new" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                      <Package className="w-3.5 h-3.5" /> New Phone
+                    </button>
+                    <button type="button" onClick={() => { setPhoneCondition("used"); resetMobileForm(); setMCondition("Used") }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${phoneCondition === "used" ? "bg-amber-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                      <Smartphone className="w-3.5 h-3.5" /> Used Phone
+                    </button>
                   </div>
 
-                  {/* Row 2: Supplier, IMEI, Buy Price, Sell Price */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-                        <Building2 className="w-3 h-3" /> Supplier <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="relative">
-                        <Input placeholder="Search supplier..." value={supplierSearch}
-                          onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
-                          onFocus={() => setSupplierDropdownOpen(true)} className="h-9 text-sm bg-white" />
-                        {supplierDropdownOpen && (
-                          <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                            {filteredSuppliers.length === 0 ? (
-                              <div className="px-3 py-2 text-xs text-slate-400 text-center">No suppliers</div>
-                            ) : filteredSuppliers.map(s => (
-                              <button key={s.id} type="button" disabled={s.status === "Inactive"}
-                                className={`w-full text-left px-3 py-2 text-xs hover:bg-blue-50 ${s.id === selectedSupplierId ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
-                                onClick={() => { setSelectedSupplierId(s.id); setSupplierSearch(s.companyName); setSupplierDropdownOpen(false) }}>
-                                <span className="font-medium">{s.companyName}</span>
-                                <span className="text-slate-400 ml-1">{s.city}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {supplierDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setSupplierDropdownOpen(false)} />}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-                        <Hash className="w-3 h-3" /> IMEI <span className="text-red-500">*</span>
-                      </Label>
-                      <Input placeholder="15-digit IMEI" value={mImei} onChange={e => setMImei(e.target.value.replace(/\D/g, "").slice(0, 15))}
-                        className="h-9 text-sm bg-white font-mono" maxLength={15} />
-                      <p className="text-[10px] text-slate-400">Dial *#06# to find IMEI</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Buy Price (Rs) <span className="text-red-500">*</span></Label>
-                      <Input type="number" min={0} placeholder="0" value={mBuyPrice} onChange={e => setMBuyPrice(e.target.value)} className="h-9 text-sm bg-white" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Sell Price (Rs)</Label>
-                      <Input type="number" min={0} placeholder="0" value={mSellPrice} onChange={e => setMSellPrice(e.target.value)} className="h-9 text-sm bg-white" />
-                    </div>
+                  {/* Android / iPhone sub-tabs */}
+                  <div className="flex rounded-lg bg-slate-200/70 p-0.5 gap-0.5">
+                    <button type="button" onClick={() => { setMobileDeviceType("android"); resetMobileForm() }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${mobileDeviceType === "android" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                      <Smartphone className="w-3.5 h-3.5" /> Android
+                    </button>
+                    <button type="button" onClick={() => { setMobileDeviceType("iphone"); resetMobileForm() }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${mobileDeviceType === "iphone" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" /></svg>
+                      iPhone
+                    </button>
                   </div>
-                  <Button type="button" onClick={handleAddMobile} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-9" size="sm">
+
+                  {/* ── ANDROID FORM ── */}
+                  {mobileDeviceType === "android" && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                        <Smartphone className="w-3.5 h-3.5 text-blue-500" /> Add Android Phone
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Brand <span className="text-red-500">*</span></Label>
+                          <Select value={mBrand} onValueChange={setMBrand}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Brand" /></SelectTrigger>
+                            <SelectContent>{brands.filter(b => b !== "Apple").map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="mBrand" placeholder="e.g. Huawei" onAdd={async n => { const ok = await handleAddBrand(n); if (ok) setMBrand(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Model <span className="text-red-500">*</span></Label>
+                          <Input placeholder="e.g. Galaxy A54" value={mModel} onChange={e => setMModel(e.target.value)} className="h-9 text-sm bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Color</Label>
+                          <Select value={mColor} onValueChange={setMColor}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Color" /></SelectTrigger>
+                            <SelectContent>{colors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="mColor" placeholder="e.g. Midnight" onAdd={async n => { const ok = await handleAddColor(n); if (ok) setMColor(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Storage</Label>
+                          <Select value={mStorage} onValueChange={setMStorage}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Storage" /></SelectTrigger>
+                            <SelectContent>{storageOpts.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="mStorage" placeholder="e.g. 512GB" onAdd={async n => { const ok = await handleAddStorage(n); if (ok) setMStorage(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">RAM</Label>
+                          <Select value={mRam} onValueChange={setMRam}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="RAM" /></SelectTrigger>
+                            <SelectContent>{ramOpts.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="mRam" placeholder="e.g. 12GB" onAdd={async n => { const ok = await handleAddRam(n); if (ok) setMRam(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Category</Label>
+                          <Select value={mCategory} onValueChange={setMCategory}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Category" /></SelectTrigger>
+                            <SelectContent>{mobileCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="mCat" placeholder="e.g. Gaming" onAdd={async n => { const ok = await handleAddCategory(n, "Mobile"); if (ok) setMCategory(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Condition</Label>
+                          <Select value={mCondition} onValueChange={setMCondition}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {conditions.length > 0 ? conditions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) : (
+                                <><SelectItem value="New">New</SelectItem><SelectItem value="Refurbished">Refurbished</SelectItem><SelectItem value="Used">Used</SelectItem></>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Hash className="w-3 h-3" /> IMEI <span className="text-red-500">*</span></Label>
+                          <Input placeholder="15-digit IMEI" value={mImei} onChange={e => setMImei(e.target.value.replace(/\D/g, "").slice(0, 15))} className="h-9 text-sm bg-white font-mono" maxLength={15} />
+                          <p className="text-[10px] text-slate-400">Dial *#06# to find IMEI</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Building2 className="w-3 h-3" /> Supplier <span className="text-red-500">*</span></Label>
+                          <div className="relative">
+                            <Input placeholder="Search supplier..." value={supplierSearch}
+                              onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
+                              onFocus={() => setSupplierDropdownOpen(true)} className="h-9 text-sm bg-white" />
+                            {supplierDropdownOpen && (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filteredSuppliers.length === 0 ? (
+                                  <div className="px-3 py-2 text-xs text-slate-400 text-center">No suppliers</div>
+                                ) : filteredSuppliers.map(s => (
+                                  <button key={s.id} type="button" disabled={s.status === "Inactive"}
+                                    className={`w-full text-left px-3 py-2 text-xs hover:bg-blue-50 ${s.id === selectedSupplierId ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                    onClick={() => { setSelectedSupplierId(s.id); setSupplierSearch(s.companyName); setSupplierDropdownOpen(false) }}>
+                                    <span className="font-medium">{s.companyName}</span>
+                                    <span className="text-slate-400 ml-1">{s.city}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {supplierDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setSupplierDropdownOpen(false)} />}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Buy Price (Rs) <span className="text-red-500">*</span></Label>
+                          <Input type="number" min={0} placeholder="0" value={mBuyPrice} onChange={e => setMBuyPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Sell Price (Rs)</Label>
+                          <Input type="number" min={0} placeholder="0" value={mSellPrice} onChange={e => setMSellPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                        </div>
+                        {/* Image Upload */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><ImageIcon className="w-3 h-3" /> Image</Label>
+                          {mImageUrl ? (
+                            <div className="relative h-9 flex items-center gap-2 px-2 rounded-md border border-slate-200 bg-white">
+                              <img src={mImageUrl} alt="" className="w-7 h-7 rounded object-cover" />
+                              <span className="text-xs text-emerald-600 flex-1 truncate">Uploaded</span>
+                              <button type="button" onClick={() => setMImageUrl("")} className="text-slate-400 hover:text-red-500"><XIcon className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <label className="h-9 flex items-center justify-center gap-1.5 px-3 rounded-md border border-dashed border-slate-300 bg-white cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+                              <Upload className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="text-xs text-slate-500">Upload</span>
+                              <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0], setMImageUrl) }} />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── IPHONE FORM ── */}
+                  {mobileDeviceType === "iphone" && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" /></svg>
+                        Add iPhone
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">iPhone Model <span className="text-red-500">*</span></Label>
+                          <Select value={mModel} onValueChange={setMModel}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Select model" /></SelectTrigger>
+                            <SelectContent>{iphoneModels.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="iphoneModel" placeholder="e.g. iPhone 15 Pro" onAdd={async n => { const ok = await handleAddIphoneModel(n); if (ok) setMModel(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Color</Label>
+                          <Select value={mColor} onValueChange={setMColor}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Color" /></SelectTrigger>
+                            <SelectContent>{colors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="iColor" placeholder="e.g. Space Black" onAdd={async n => { const ok = await handleAddColor(n); if (ok) setMColor(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Storage</Label>
+                          <Select value={mStorage} onValueChange={setMStorage}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Storage" /></SelectTrigger>
+                            <SelectContent>{storageOpts.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="iStorage" placeholder="e.g. 256GB" onAdd={async n => { const ok = await handleAddStorage(n); if (ok) setMStorage(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Condition</Label>
+                          <Select value={mCondition} onValueChange={setMCondition}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {conditions.length > 0 ? conditions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) : (
+                                <><SelectItem value="New">New</SelectItem><SelectItem value="Refurbished">Refurbished</SelectItem><SelectItem value="Used">Used</SelectItem></>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Battery className="w-3 h-3" /> Battery Health (%)</Label>
+                          <Input type="number" min={0} max={100} placeholder="e.g. 87" value={mBatteryHealth} onChange={e => setMBatteryHealth(e.target.value)} className="h-9 text-sm bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Category</Label>
+                          <Select value={mCategory} onValueChange={setMCategory}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Category" /></SelectTrigger>
+                            <SelectContent>{mobileCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <InlineAdd k="iCat" placeholder="e.g. Flagship" onAdd={async n => { const ok = await handleAddCategory(n, "Mobile"); if (ok) setMCategory(n); return ok }} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Hash className="w-3 h-3" /> IMEI <span className="text-red-500">*</span></Label>
+                          <Input placeholder="15-digit IMEI" value={mImei} onChange={e => setMImei(e.target.value.replace(/\D/g, "").slice(0, 15))} className="h-9 text-sm bg-white font-mono" maxLength={15} />
+                          <p className="text-[10px] text-slate-400">Dial *#06# to find IMEI</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Building2 className="w-3 h-3" /> Supplier <span className="text-red-500">*</span></Label>
+                          <div className="relative">
+                            <Input placeholder="Search supplier..." value={supplierSearch}
+                              onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
+                              onFocus={() => setSupplierDropdownOpen(true)} className="h-9 text-sm bg-white" />
+                            {supplierDropdownOpen && (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filteredSuppliers.length === 0 ? (
+                                  <div className="px-3 py-2 text-xs text-slate-400 text-center">No suppliers</div>
+                                ) : filteredSuppliers.map(s => (
+                                  <button key={s.id} type="button" disabled={s.status === "Inactive"}
+                                    className={`w-full text-left px-3 py-2 text-xs hover:bg-blue-50 ${s.id === selectedSupplierId ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                                    onClick={() => { setSelectedSupplierId(s.id); setSupplierSearch(s.companyName); setSupplierDropdownOpen(false) }}>
+                                    <span className="font-medium">{s.companyName}</span>
+                                    <span className="text-slate-400 ml-1">{s.city}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {supplierDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setSupplierDropdownOpen(false)} />}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Buy Price (Rs) <span className="text-red-500">*</span></Label>
+                          <Input type="number" min={0} placeholder="0" value={mBuyPrice} onChange={e => setMBuyPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Sell Price (Rs)</Label>
+                          <Input type="number" min={0} placeholder="0" value={mSellPrice} onChange={e => setMSellPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                        </div>
+                        {/* Image Upload */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><ImageIcon className="w-3 h-3" /> Image</Label>
+                          {mImageUrl ? (
+                            <div className="relative h-9 flex items-center gap-2 px-2 rounded-md border border-slate-200 bg-white">
+                              <img src={mImageUrl} alt="" className="w-7 h-7 rounded object-cover" />
+                              <span className="text-xs text-emerald-600 flex-1 truncate">Uploaded</span>
+                              <button type="button" onClick={() => setMImageUrl("")} className="text-slate-400 hover:text-red-500"><XIcon className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <label className="h-9 flex items-center justify-center gap-1.5 px-3 rounded-md border border-dashed border-slate-300 bg-white cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+                              <Upload className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="text-xs text-slate-500">Upload</span>
+                              <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0], setMImageUrl) }} />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Used Phone Extra Fields ─────────────────────────── */}
+                  {phoneCondition === "used" && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-3">
+                      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Used Phone Details</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {/* Condition Grade */}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-slate-600">Grade <span className="text-red-500">*</span></Label>
+                          <Select value={mConditionGrade} onValueChange={setMConditionGrade}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="A+">A+ — Like New</SelectItem>
+                              <SelectItem value="A">A — Excellent</SelectItem>
+                              <SelectItem value="B+">B+ — Good</SelectItem>
+                              <SelectItem value="B">B — Fair</SelectItem>
+                              <SelectItem value="C">C — Poor</SelectItem>
+                              <SelectItem value="D">D — Very Poor</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Battery Health */}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-slate-600">Battery Health %</Label>
+                          <Input type="number" min={0} max={100} placeholder="e.g. 85" value={mBatteryHealth} onChange={e => setMBatteryHealth(e.target.value)} className="h-9 text-sm bg-white" />
+                        </div>
+                        {/* Screen Condition */}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-slate-600">Screen</Label>
+                          <Select value={mScreenCondition} onValueChange={setMScreenCondition}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="perfect">Perfect</SelectItem>
+                              <SelectItem value="minor_scratches">Minor Scratches</SelectItem>
+                              <SelectItem value="cracked">Cracked</SelectItem>
+                              <SelectItem value="replaced">Replaced</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Body Condition */}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-slate-600">Body</Label>
+                          <Select value={mBodyCondition} onValueChange={setMBodyCondition}>
+                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="perfect">Perfect</SelectItem>
+                              <SelectItem value="minor_wear">Minor Wear</SelectItem>
+                              <SelectItem value="dents">Dents</SelectItem>
+                              <SelectItem value="heavy_damage">Heavy Damage</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {/* Functional Issues */}
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-slate-600">Functional Issues (select all that apply)</Label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {["Wi-Fi Issue", "Bluetooth Issue", "Speaker Problem", "Camera Issue", "Charging Port", "Touch Screen Issue", "Face ID / Fingerprint", "Fast Battery Drain", "Overheating"].map(issue => (
+                            <button key={issue} type="button"
+                              onClick={() => setMFunctionalIssues(prev => prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue])}
+                              className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-colors ${mFunctionalIssues.includes(issue) ? "bg-red-100 border-red-300 text-red-700" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                              {issue}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button type="button" onClick={handleAddMobile} className={`${phoneCondition === "used" ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"} text-white gap-2 h-9`} size="sm">
                     <Plus className="w-4 h-4" /> Add to Purchase List
                   </Button>
                 </div>
@@ -590,11 +926,11 @@ export default function NewPurchasePage() {
 
               {/* ── Accessory Form ───────────────────────────────────────── */}
               {itemTab === "Accessory" && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-4 overflow-x-hidden">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                     <Headphones className="w-3.5 h-3.5 text-blue-500" /> Add Accessory
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {/* Supplier */}
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
@@ -658,6 +994,23 @@ export default function NewPurchasePage() {
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-600">Sell Price (Rs)</Label>
                       <Input type="number" min={0} placeholder="0" value={aSellPrice} onChange={e => setASellPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                    </div>
+                    {/* Image Upload */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><ImageIcon className="w-3 h-3" /> Image</Label>
+                      {aImageUrl ? (
+                        <div className="relative h-9 flex items-center gap-2 px-2 rounded-md border border-slate-200 bg-white">
+                          <img src={aImageUrl} alt="" className="w-7 h-7 rounded object-cover" />
+                          <span className="text-xs text-emerald-600 flex-1 truncate">Uploaded</span>
+                          <button type="button" onClick={() => setAImageUrl("")} className="text-slate-400 hover:text-red-500"><XIcon className="w-3.5 h-3.5" /></button>
+                        </div>
+                      ) : (
+                        <label className="h-9 flex items-center justify-center gap-1.5 px-3 rounded-md border border-dashed border-slate-300 bg-white cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+                          <Upload className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-xs text-slate-500">Upload</span>
+                          <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0], setAImageUrl) }} />
+                        </label>
+                      )}
                     </div>
                   </div>
                   <Button type="button" onClick={handleAddAccessory} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-9" size="sm">

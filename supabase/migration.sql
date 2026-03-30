@@ -140,8 +140,10 @@ CREATE TABLE mobiles (
   selling_price NUMERIC,
   supplier_id UUID REFERENCES suppliers(id),
   stock INT DEFAULT 0,
-  condition TEXT CHECK (condition IN ('New', 'Refurbished', 'Used')),
-  category TEXT CHECK (category IN ('Flagship', 'Mid-Range', 'Budget')),
+  condition TEXT DEFAULT 'New',
+  category TEXT DEFAULT '',
+  device_type TEXT DEFAULT 'android' CHECK (device_type IN ('android', 'iphone')),
+  battery_health INT,
   notes TEXT,
   image_url TEXT,
   date_added DATE DEFAULT CURRENT_DATE,
@@ -1231,6 +1233,21 @@ CREATE TRIGGER purchase_update_supplier
   FOR EACH ROW
   EXECUTE FUNCTION update_supplier_on_purchase();
 
+
+-- ============================================================================
+-- ADD battery_health COLUMN TO mobiles TABLE
+-- ============================================================================
+ALTER TABLE mobiles ADD COLUMN IF NOT EXISTS battery_health INT;
+
+-- ============================================================================
+-- ADD device_type COLUMN TO mobiles TABLE (android / iphone)
+-- ============================================================================
+ALTER TABLE mobiles ADD COLUMN IF NOT EXISTS device_type TEXT DEFAULT 'android';
+
+-- Remove restrictive CHECK constraints on condition and category
+-- so that dynamic values from the categories/conditions tables are accepted
+ALTER TABLE mobiles DROP CONSTRAINT IF EXISTS mobiles_condition_check;
+ALTER TABLE mobiles DROP CONSTRAINT IF EXISTS mobiles_category_check;
 
 -- ============================================================================
 -- END OF MIGRATION

@@ -148,8 +148,10 @@ export interface DbMobile {
   stock: number
   condition: string
   category: string
+  device_type: 'android' | 'iphone'
   notes: string | null
   image_url: string | null
+  battery_health: number | null
   date_added: string
   created_at: string
   updated_at: string
@@ -672,9 +674,11 @@ export function toMobile(db: DbMobile): Mobile {
     stock: db.stock,
     condition: db.condition as Mobile['condition'],
     category: db.category as Mobile['category'],
+    deviceType: db.device_type ?? 'android',
     notes: db.notes ?? undefined,
     dateAdded: db.date_added,
     image: db.image_url ?? undefined,
+    batteryHealth: db.battery_health ?? undefined,
   }
 }
 
@@ -692,9 +696,11 @@ export function toDbMobile(m: Partial<Mobile>, tenantId: string): Partial<DbMobi
   if (m.stock !== undefined) db.stock = m.stock
   if (m.condition !== undefined) db.condition = m.condition
   if (m.category !== undefined) db.category = m.category
+  if (m.deviceType !== undefined) db.device_type = m.deviceType
   if (m.notes !== undefined) db.notes = m.notes || null
   if (m.dateAdded !== undefined) db.date_added = m.dateAdded
   if (m.image !== undefined) db.image_url = m.image || null
+  if (m.batteryHealth !== undefined) db.battery_health = m.batteryHealth || null
   return db as Partial<DbMobile>
 }
 
@@ -832,7 +838,7 @@ export function toDbSale(s: Partial<Sale>, tenantId: string): Partial<DbSale> {
   const db: Record<string, unknown> = { tenant_id: tenantId }
   if (s.invoiceNumber !== undefined) db.invoice_number = s.invoiceNumber
   if (s.date !== undefined) db.date = s.date
-  if (s.customerId !== undefined) db.customer_id = s.customerId
+  if (s.customerId !== undefined) db.customer_id = s.customerId || null
   if (s.customerName !== undefined) db.customer_name = s.customerName
   if (s.customerPhone !== undefined) db.customer_phone = s.customerPhone
   if (s.subtotal !== undefined) db.subtotal = s.subtotal
@@ -1163,7 +1169,7 @@ export function toDbPayment(p: Partial<Payment>, tenantId: string): Partial<DbPa
   if (p.method !== undefined) db.method = p.method
   if (p.status !== undefined) db.status = p.status
   if (p.notes !== undefined) db.notes = p.notes || null
-  if (p.processedBy !== undefined) db.processed_by = p.processedBy
+  if (p.processedBy !== undefined) db.processed_by = p.processedBy || null
   return db as Partial<DbPayment>
 }
 

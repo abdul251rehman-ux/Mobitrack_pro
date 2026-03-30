@@ -128,21 +128,20 @@ export default function NewSalePage() {
 
   const productResults = useMemo((): ProductResult[] => {
     const q = productSearch.toLowerCase().trim()
-    if (!q) return []
     const mResults: ProductResult[] = mobiles
-      .filter(m => m.stock > 0 && (`${m.brand} ${m.model}`.toLowerCase().includes(q) || m.imei.includes(q)))
+      .filter(m => m.stock > 0 && (!q || `${m.brand} ${m.model}`.toLowerCase().includes(q) || m.imei.includes(q) || m.color.toLowerCase().includes(q) || m.storage.toLowerCase().includes(q)))
       .map(m => ({
         id: m.id, name: `${m.brand} ${m.model}`, type: "Mobile" as const,
         price: m.sellingPrice, stock: m.stock, imei: m.imei,
         color: m.color, storage: m.storage,
       }))
     const aResults: ProductResult[] = accessories
-      .filter(a => a.stock > 0 && (`${a.name} ${a.brand}`.toLowerCase().includes(q)))
+      .filter(a => a.stock > 0 && (!q || `${a.name} ${a.brand} ${a.category}`.toLowerCase().includes(q)))
       .map(a => ({
         id: a.id, name: `${a.name} — ${a.brand}`, type: "Accessory" as const,
         price: a.sellingPrice, stock: a.stock,
       }))
-    return [...mResults, ...aResults].slice(0, 15)
+    return [...mResults, ...aResults].slice(0, 20)
   }, [productSearch, mobiles, accessories])
 
   // ── Cart ────────────────────────────────────────────────────────────────
@@ -400,35 +399,46 @@ export default function NewSalePage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <Input placeholder="Search by name, brand, model, IMEI..." value={productSearch}
                   onChange={e => { setProductSearch(e.target.value); setProductDropdownOpen(true) }}
-                  onFocus={() => { if (productSearch) setProductDropdownOpen(true) }}
+                  onFocus={() => setProductDropdownOpen(true)}
                   className="h-10 pl-10 text-sm" />
-                {productDropdownOpen && productSearch.length > 0 && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+                {productDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-y-auto">
                     {productResults.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-slate-400 text-center">No products found</div>
-                    ) : productResults.map(p => (
-                      <button key={p.id + (p.imei || "")} type="button"
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3"
-                        onClick={() => addToCart(p)}>
-                        <span className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${p.type === "Mobile" ? "bg-blue-100" : "bg-emerald-100"}`}>
-                          {p.type === "Mobile" ? <Smartphone className="w-3.5 h-3.5 text-blue-600" /> : <Headphones className="w-3.5 h-3.5 text-emerald-600" />}
-                        </span>
-                        <span className="flex-1 min-w-0">
-                          <span className="font-medium text-slate-800 block truncate">{p.name}</span>
-                          <span className="text-xs text-slate-400">
-                            {p.type} · {formatCurrency(p.price)} · Stock: {p.stock}
-                            {p.imei && ` · IMEI: ${p.imei}`}
-                            {p.color && ` · ${p.color}`}
-                            {p.storage && ` · ${p.storage}`}
+                      <div className="px-4 py-3 text-sm text-slate-400 text-center">No in-stock products found</div>
+                    ) : (
+                      <>
+                        <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                            {productSearch.trim() ? `${productResults.length} result(s)` : `All In-Stock Products (${productResults.length})`}
                           </span>
-                        </span>
-                        <Plus className="w-4 h-4 text-blue-500 shrink-0" />
-                      </button>
-                    ))}
+                        </div>
+                        {productResults.map(p => (
+                          <button key={p.id + (p.imei || "")} type="button"
+                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3 border-b border-slate-50 last:border-0"
+                            onClick={() => addToCart(p)}>
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${p.type === "Mobile" ? "bg-blue-100" : "bg-emerald-100"}`}>
+                              {p.type === "Mobile" ? <Smartphone className="w-4 h-4 text-blue-600" /> : <Headphones className="w-4 h-4 text-emerald-600" />}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className="font-medium text-slate-800 block truncate">{p.name}</span>
+                              <span className="text-[11px] text-slate-400 flex flex-wrap gap-x-2">
+                                <span className={`font-semibold ${p.type === "Mobile" ? "text-blue-600" : "text-emerald-600"}`}>{p.type}</span>
+                                <span className="font-bold text-slate-700">{formatCurrency(p.price)}</span>
+                                <span>Stock: {p.stock}</span>
+                                {p.imei && <span className="font-mono">IMEI: {p.imei}</span>}
+                                {p.color && <span>{p.color}</span>}
+                                {p.storage && <span>{p.storage}</span>}
+                              </span>
+                            </span>
+                            <Plus className="w-4 h-4 text-blue-500 shrink-0" />
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
-              {productDropdownOpen && productSearch.length > 0 && <div className="fixed inset-0 z-40" onClick={() => setProductDropdownOpen(false)} />}
+              {productDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setProductDropdownOpen(false)} />}
             </div>
 
             {/* ── Cart Items ──────────────────────────────────────────── */}

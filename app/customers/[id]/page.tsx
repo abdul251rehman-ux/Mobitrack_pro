@@ -5,20 +5,32 @@ import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft, Phone, Mail, MapPin, StickyNote,
   ShoppingBag, TrendingUp, Receipt, Star,
-  CalendarDays, CreditCard, Package,
+  CalendarDays, CreditCard, Package, Plus, Wallet, AlertCircle,
 } from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 import { ColumnDef } from "@tanstack/react-table"
+import { toast } from "sonner"
 
 import { getCustomerById } from "@/lib/api/customers"
 import { getSales } from "@/lib/api/sales"
-import { Customer, Sale } from "@/data/types"
+import { getPayments } from "@/lib/api/payments"
+import { supabase } from "@/lib/supabase"
+import { getTenantId } from "@/lib/api/helpers"
+import { Customer, Sale, Payment } from "@/data/types"
 import { DataTable } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
 // ── Tier styling ──────────────────────────────────────────────────────────────
@@ -76,22 +88,24 @@ function CustomerAvatar({ name, id, size = "lg" }: { name: string; id: string; s
   )
 }
 
-// ── Stat card (local, no icon color prop needed) ───────────────────────────────
+// ── Stat card ───────────────────────────────────────────────────────────
 function InfoStatCard({
   title,
   value,
   sub,
   accent,
+  valueColor,
 }: {
   title: string
   value: string
   sub?: string
   accent?: string
+  valueColor?: string
 }) {
   return (
     <div className={`rounded-xl border bg-white p-5 space-y-1 ${accent ?? "border-slate-200"}`}>
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{title}</p>
-      <p className="text-2xl font-bold text-slate-900 leading-tight">{value}</p>
+      <p className={`text-2xl font-bold leading-tight ${valueColor ?? "text-slate-900"}`}>{value}</p>
       {sub && <p className="text-xs text-slate-400">{sub}</p>}
     </div>
   )
@@ -117,26 +131,36 @@ export default function CustomerDetailPage() {
 
   const [customer, setCustomer] = useState<Customer | null | undefined>(undefined)
   const [customerSales, setCustomerSales] = useState<Sale[]>([])
+  const [customerPayments, setCustomerPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true)
-        const [cust, allSales] = await Promise.all([
-          getCustomerById(id),
-          getSales(),
-        ])
-        setCustomer(cust)
-        setCustomerSales(allSales.filter((s) => s.customerId === id))
-      } catch {
-        setCustomer(null)
-      } finally {
-        setLoading(false)
-      }
+  // ── Payment dialog state ────────────────────────────────────────────────
+  const [payDialogOpen, setPayDialogOpen] = useState(false)
+  const [payAmount, setPayAmount] = useState("")
+  const [payMethod, setPayMethod] = useState("Cash")
+  const [payInvoice, setPayInvoice] = useState("")
+  const [payNotes, setPayNotes] = useState("")
+  const [paySubmitting, setPaySubmitting] = useState(false)
+
+  async function fetchData() {
+    try {
+      setLoading(true)
+      const [cust, allSales, allPayments] = await Promise.all([
+        getCustomerById(id),
+        getSales(),
+        getPayments(),
+      ])
+      setCustomer(cust)
+      setCustomerSales(allSales.filter((s) => s.customerId === id))
+      setCustomerPayments(allPayments.filter((p) => p.entityType === "Customer" && p.entityId === id && p.type === "Received"))
+    } catch {
+      setCustomer(null)
+    } finally {
+      setLoading(false)
     }
-    fetchData()
-  }, [id])
+  }
+
+  useEffect(() => { fetchData() }, [id])
 
   // ── Monthly spending – last 6 months ────────────────────────────────────────
   const monthlyData = useMemo(() => {
@@ -151,7 +175,7 @@ export default function CustomerDetailPage() {
     }
 
     customerSales.forEach((s) => {
-      const prefix = s.date.slice(0, 7) // "YYYY-MM"
+      const prefix = s.date.slice(0, 7)
       const bucket = months.find((m) => m.key === prefix)
       if (bucket) bucket.amount += s.total
     })
@@ -160,12 +184,94 @@ export default function CustomerDetailPage() {
   }, [customerSales])
 
   // ── Derived stats ───────────────────────────────────────────────────────────
-  const totalSpent = useMemo(
+  const totalBilled = useMemo(
     () => customerSales.reduce((acc, s) => acc + s.total, 0),
     [customerSales]
   )
 
-  const avgOrder = customerSales.length > 0 ? totalSpent / customerSales.length : 0
+  const totalPaid = useMemo(
+    () => customerPayments.reduce((acc, p) => acc + p.amount, 0),
+    [customerPayments]
+  )
+
+  // Also consider amountReceived from sales that may not have payment records
+  const totalReceivedFromSales = useMemo(
+    () => customerSales.reduce((acc, s) => acc + s.amountReceived, 0),
+    [customerSales]
+  )
+
+  // Use the higher of the two as total paid (handles missing payment records)
+  const effectiveTotalPaid = Math.max(totalPaid, totalReceivedFromSales)
+  const outstandingBalance = Math.max(0, totalBilled - effectiveTotalPaid)
+
+  const avgOrder = customerSales.length > 0 ? totalBilled / customerSales.length : 0
+
+  // ── Unpaid sales for the payment dialog dropdown ──────────────────────────
+  const unpaidSales = useMemo(
+    () => customerSales.filter(s => {
+      // Find payments for this invoice
+      const paidForInvoice = customerPayments
+        .filter(p => p.referenceNumber === s.invoiceNumber)
+        .reduce((sum, p) => sum + p.amount, 0)
+      return s.total > paidForInvoice
+    }),
+    [customerSales, customerPayments]
+  )
+
+  // ── Receive payment handler ──────────────────────────────────────────────
+  async function handleReceivePayment() {
+    const amount = parseFloat(payAmount)
+    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
+    if (!customer) return
+
+    setPaySubmitting(true)
+    try {
+      const tenantId = await getTenantId()
+
+      // Find the sale if a specific invoice was selected
+      const sale = payInvoice ? customerSales.find(s => s.invoiceNumber === payInvoice) : null
+      const refNumber = payInvoice || `PAYMENT-${Date.now()}`
+
+      const { error } = await supabase.from("payments").insert({
+        tenant_id: tenantId,
+        date: new Date().toISOString().split("T")[0],
+        type: "Received",
+        entity_type: "Customer",
+        entity_id: customer.id,
+        entity_name: customer.name,
+        reference_type: "Sale",
+        reference_number: refNumber,
+        amount,
+        method: payMethod,
+        status: "Completed",
+        notes: payNotes || `Payment received from ${customer.name}`,
+      })
+      if (error) throw new Error(`Failed to record payment: ${error.message}`)
+
+      // Update sale's amount_received if a specific invoice was selected
+      if (sale) {
+        const currentReceived = sale.amountReceived || 0
+        const newReceived = currentReceived + amount
+        const newChange = Math.max(0, newReceived - sale.total)
+        await supabase.from("sales").update({
+          amount_received: newReceived,
+          change_due: newChange,
+          status: newReceived >= sale.total ? "Completed" : "Pending",
+        }).eq("id", sale.id)
+      }
+
+      toast.success(`Payment of ${formatCurrency(amount)} received!`)
+      setPayDialogOpen(false)
+      setPayAmount(""); setPayMethod("Cash"); setPayInvoice(""); setPayNotes("")
+
+      // Refresh data
+      await fetchData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record payment")
+    } finally {
+      setPaySubmitting(false)
+    }
+  }
 
   // ── Sale history columns ────────────────────────────────────────────────────
   const columns: ColumnDef<Sale>[] = [
@@ -191,13 +297,15 @@ export default function CustomerDetailPage() {
     {
       id: "items",
       header: "Items",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1.5 text-slate-600">
-          <Package className="w-3.5 h-3.5 text-slate-400" />
-          {row.original.items.reduce((acc, i) => acc + i.quantity, 0)} item
-          {row.original.items.reduce((acc, i) => acc + i.quantity, 0) !== 1 ? "s" : ""}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const count = row.original.items.reduce((acc, i) => acc + i.quantity, 0)
+        return (
+          <div className="flex items-center gap-1.5 text-slate-600">
+            <Package className="w-3.5 h-3.5 text-slate-400" />
+            {count} item{count !== 1 ? "s" : ""}
+          </div>
+        )
+      },
     },
     {
       accessorKey: "total",
@@ -209,13 +317,82 @@ export default function CustomerDetailPage() {
       ),
     },
     {
-      accessorKey: "paymentMethod",
-      header: "Payment",
+      id: "received",
+      header: "Received",
       cell: ({ row }) => (
-        <div className="flex items-center gap-1.5 text-slate-600">
+        <span className="text-sm text-emerald-600 font-medium">
+          {formatCurrency(row.original.amountReceived)}
+        </span>
+      ),
+    },
+    {
+      id: "balance",
+      header: "Balance",
+      cell: ({ row }) => {
+        const bal = row.original.total - row.original.amountReceived
+        return bal > 0
+          ? <span className="text-sm font-bold text-red-600">{formatCurrency(bal)}</span>
+          : <span className="text-sm text-emerald-600 font-medium">Paid</span>
+      },
+    },
+    {
+      accessorKey: "paymentMethod",
+      header: "Method",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5 text-slate-600 text-sm">
           <CreditCard className="w-3.5 h-3.5 text-slate-400" />
           {row.original.paymentMethod}
         </div>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+  ]
+
+  // ── Payment history columns ────────────────────────────────────────────────
+  const paymentColumns: ColumnDef<Payment>[] = [
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5 text-slate-600 whitespace-nowrap text-sm">
+          <CalendarDays className="w-3.5 h-3.5 text-slate-400" />
+          {formatDate(row.original.date)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "referenceNumber",
+      header: "Reference",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-slate-500">{row.original.referenceNumber}</span>
+      ),
+    },
+    {
+      accessorKey: "amount",
+      header: "Amount",
+      cell: ({ row }) => (
+        <span className="font-bold text-emerald-600">{formatCurrency(row.original.amount)}</span>
+      ),
+    },
+    {
+      accessorKey: "method",
+      header: "Method",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5 text-slate-600 text-sm">
+          <CreditCard className="w-3.5 h-3.5 text-slate-400" />
+          {row.original.method}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: ({ row }) => (
+        <span className="text-xs text-slate-400 truncate max-w-50 block">{row.original.notes || "—"}</span>
       ),
     },
     {
@@ -273,7 +450,7 @@ export default function CustomerDetailPage() {
 
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <CustomerAvatar name={customer.name} id={customer.id} size="lg" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">{customer.name}</h1>
               <span
@@ -285,6 +462,13 @@ export default function CustomerDetailPage() {
             </div>
             <p className="text-slate-500 text-sm mt-0.5">{customer.phone}</p>
           </div>
+          {/* Receive Payment button */}
+          <Button
+            onClick={() => setPayDialogOpen(true)}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Receive Payment
+          </Button>
         </div>
       </div>
 
@@ -301,7 +485,6 @@ export default function CustomerDetailPage() {
               </h2>
             </div>
             <div className="p-5 space-y-4">
-              {/* Name */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                   <ShoppingBag className="w-4 h-4 text-blue-500" />
@@ -311,8 +494,6 @@ export default function CustomerDetailPage() {
                   <p className="text-sm font-medium text-slate-800 mt-0.5">{customer.name}</p>
                 </div>
               </div>
-
-              {/* Phone */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                   <Phone className="w-4 h-4 text-blue-600" />
@@ -322,8 +503,6 @@ export default function CustomerDetailPage() {
                   <p className="text-sm font-medium text-slate-800 mt-0.5">{customer.phone}</p>
                 </div>
               </div>
-
-              {/* Email */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                   <Mail className="w-4 h-4 text-blue-600" />
@@ -335,8 +514,6 @@ export default function CustomerDetailPage() {
                   </p>
                 </div>
               </div>
-
-              {/* Address */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                   <MapPin className="w-4 h-4 text-blue-600" />
@@ -348,8 +525,6 @@ export default function CustomerDetailPage() {
                   </p>
                 </div>
               </div>
-
-              {/* Notes */}
               {customer.notes && (
                 <>
                   <Separator />
@@ -370,18 +545,36 @@ export default function CustomerDetailPage() {
 
         {/* Stats grid */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Financial summary — prominent cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <InfoStatCard
-              title="Total Spent"
-              value={formatCurrency(customer.totalSpent)}
-              sub={`Across ${customer.totalPurchases} purchases`}
+              title="Total Billed"
+              value={formatCurrency(totalBilled)}
+              sub={`${customerSales.length} sale${customerSales.length !== 1 ? "s" : ""}`}
               accent="border-blue-200"
             />
             <InfoStatCard
-              title="Number of Purchases"
-              value={String(customer.totalPurchases)}
-              sub={`Last: ${formatDate(customer.lastPurchaseDate)}`}
+              title="Total Paid"
+              value={formatCurrency(effectiveTotalPaid)}
+              sub="Payments received"
               accent="border-emerald-200"
+              valueColor="text-emerald-700"
+            />
+            <InfoStatCard
+              title="Outstanding"
+              value={outstandingBalance > 0 ? formatCurrency(outstandingBalance) : "Settled"}
+              sub={outstandingBalance > 0 ? "Customer owes" : "No balance due"}
+              accent={outstandingBalance > 0 ? "border-red-200" : "border-emerald-200"}
+              valueColor={outstandingBalance > 0 ? "text-red-600" : "text-emerald-700"}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <InfoStatCard
+              title="Number of Sales"
+              value={String(customerSales.length)}
+              sub={customerSales.length > 0 ? `Last: ${formatDate(customerSales[0]?.date)}` : "No sales"}
+              accent="border-slate-200"
             />
             <InfoStatCard
               title="Avg. Order Value"
@@ -401,12 +594,12 @@ export default function CustomerDetailPage() {
               </div>
               <p className="text-xs text-slate-400">
                 {customer.loyaltyTier === "Platinum"
-                  ? "Top tier — ₨500k+"
+                  ? "Top tier — Rs 500k+"
                   : customer.loyaltyTier === "Gold"
-                  ? "₨200k–₨500k spent"
+                  ? "Rs 200k-500k spent"
                   : customer.loyaltyTier === "Silver"
-                  ? "₨50k–₨200k spent"
-                  : "Under ₨50k spent"}
+                  ? "Rs 50k-200k spent"
+                  : "Under Rs 50k spent"}
               </p>
             </div>
           </div>
@@ -440,7 +633,7 @@ export default function CustomerDetailPage() {
                       tickLine={false}
                     />
                     <YAxis
-                      tickFormatter={(v) => `₨${(v / 1000).toFixed(0)}k`}
+                      tickFormatter={(v) => `Rs ${(v / 1000).toFixed(0)}k`}
                       tick={{ fontSize: 11, fill: "#94a3b8" }}
                       axisLine={false}
                       tickLine={false}
@@ -469,9 +662,11 @@ export default function CustomerDetailPage() {
               {customerSales.length} sale{customerSales.length !== 1 ? "s" : ""}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-sm text-slate-500">
-            <Receipt className="w-4 h-4" />
-            <span>Total: <span className="font-semibold text-slate-800">{formatCurrency(totalSpent)}</span></span>
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <span>Total: <span className="font-semibold text-slate-800">{formatCurrency(totalBilled)}</span></span>
+            {outstandingBalance > 0 && (
+              <span className="text-red-600 font-semibold">Due: {formatCurrency(outstandingBalance)}</span>
+            )}
           </div>
         </div>
         <div className="p-5">
@@ -489,6 +684,146 @@ export default function CustomerDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Payment History */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Wallet className="w-4 h-4 text-emerald-600" />
+            <h2 className="font-semibold text-slate-800">Payment History</h2>
+            <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-0.5">
+              {customerPayments.length} payment{customerPayments.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-500">Total Received: <span className="font-semibold text-emerald-700">{formatCurrency(effectiveTotalPaid)}</span></span>
+            <Button size="sm" variant="outline" onClick={() => setPayDialogOpen(true)} className="gap-1.5 text-xs h-8">
+              <Plus className="w-3 h-3" /> Add Payment
+            </Button>
+          </div>
+        </div>
+        <div className="p-5">
+          {customerPayments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 text-slate-400 gap-2">
+              <Wallet className="w-8 h-8" />
+              <p className="text-sm">No payments recorded yet</p>
+              {outstandingBalance > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setPayDialogOpen(true)} className="gap-1.5 mt-2">
+                  <Plus className="w-3.5 h-3.5" /> Record First Payment
+                </Button>
+              )}
+            </div>
+          ) : (
+            <DataTable
+              columns={paymentColumns}
+              data={customerPayments}
+              searchPlaceholder="Search payments..."
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ── Receive Payment Dialog ────────────────────────────────────────── */}
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-emerald-600" />
+              Receive Payment
+            </DialogTitle>
+            <DialogDescription>
+              Record a payment received from <span className="font-semibold text-slate-700">{customer.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {outstandingBalance > 0 && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-700">Outstanding: {formatCurrency(outstandingBalance)}</p>
+                <p className="text-xs text-red-500 mt-0.5">Customer owes this amount</p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {/* Invoice selection */}
+            {unpaidSales.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Against Invoice (optional)</Label>
+                <Select value={payInvoice} onValueChange={setPayInvoice}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Select invoice..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">General Payment</SelectItem>
+                    {unpaidSales.map(s => {
+                      const paidForThis = customerPayments
+                        .filter(p => p.referenceNumber === s.invoiceNumber)
+                        .reduce((sum, p) => sum + p.amount, 0)
+                      const due = s.total - Math.max(paidForThis, s.amountReceived)
+                      return (
+                        <SelectItem key={s.invoiceNumber} value={s.invoiceNumber}>
+                          {s.invoiceNumber} — Due: {formatCurrency(Math.max(0, due))}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
+              <Input
+                type="number"
+                min={0}
+                value={payAmount}
+                onChange={e => setPayAmount(e.target.value)}
+                placeholder="0"
+                className="h-9 text-sm"
+                autoFocus
+              />
+            </div>
+
+            {/* Payment method */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Payment Method</Label>
+              <Select value={payMethod} onValueChange={setPayMethod}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cash">Cash</SelectItem>
+                  <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="JazzCash">JazzCash</SelectItem>
+                  <SelectItem value="EasyPaisa">EasyPaisa</SelectItem>
+                  <SelectItem value="Cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Notes (optional)</Label>
+              <Input
+                value={payNotes}
+                onChange={e => setPayNotes(e.target.value)}
+                placeholder="e.g., Remaining balance for phone"
+                className="h-9 text-sm"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialogOpen(false)} disabled={paySubmitting}>Cancel</Button>
+            <Button onClick={handleReceivePayment} disabled={paySubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+              {paySubmitting ? "Saving..." : "Record Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -12,7 +12,8 @@ import {
 } from "lucide-react"
 
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/api/suppliers"
-import { Supplier } from "@/data/types"
+import { getPurchases } from "@/lib/api/purchases"
+import { Supplier, Purchase } from "@/data/types"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
@@ -448,8 +449,30 @@ export default function SuppliersPage() {
     async function fetchData() {
       try {
         setLoading(true)
-        const data = await getSuppliers()
-        setSupplierList(data)
+        const [data, allPurchases] = await Promise.all([
+          getSuppliers(),
+          getPurchases(),
+        ])
+
+        // Calculate real totalPurchases and outstandingBalance from purchases data
+        const purchasesBySupplier = new Map<string, { total: number; balance: number }>()
+        allPurchases.forEach((p) => {
+          const existing = purchasesBySupplier.get(p.supplierId) || { total: 0, balance: 0 }
+          existing.total += p.total
+          existing.balance += p.balanceDue
+          purchasesBySupplier.set(p.supplierId, existing)
+        })
+
+        const enriched = data.map((s) => {
+          const stats = purchasesBySupplier.get(s.id)
+          return {
+            ...s,
+            totalPurchases: stats?.total ?? 0,
+            outstandingBalance: stats?.balance ?? 0,
+          }
+        })
+
+        setSupplierList(enriched)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to fetch suppliers")
       } finally {
