@@ -570,7 +570,7 @@ export default function StockAlertsPage() {
   const activeAlertCount = stats.outOfStock + stats.lowStock + stats.overstock
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <PageHeader
         title="Stock Alerts"
@@ -594,97 +594,97 @@ export default function StockAlertsPage() {
       />
 
       {/* ── Stat Cards ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         {/* Out of Stock */}
         <button
           onClick={() => handleStatCardClick("out_of_stock")}
           className={cn(
-            "text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white",
-            "hover:shadow-lg hover:-translate-y-0.5 group",
+            "text-left rounded-2xl border-2 p-3 sm:p-5 transition-all duration-200 bg-white",
+            "hover:shadow-lg hover:-translate-y-0.5 active:scale-95",
             alertTypeFilter === "out_of_stock" && activeTab === "alerts"
-              ? "border-red-400 shadow-md shadow-red-100"
+              ? "border-red-400 shadow-md shadow-red-100 bg-red-50/40"
               : "border-slate-100 hover:border-red-300"
           )}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center shadow-sm">
-              <AlertOctagon className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-red-600 flex items-center justify-center shadow-sm shadow-red-200">
+              <AlertOctagon className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
             </div>
             {stats.outOfStock > 0 && (
-              <span className="relative flex h-2.5 w-2.5">
+              <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
               </span>
             )}
           </div>
-          <p className="text-3xl font-bold text-slate-900 mb-1">{stats.outOfStock}</p>
-          <p className="text-sm font-semibold text-slate-500">Out of Stock</p>
-          <p className="text-xs text-slate-400 mt-0.5">Immediate action required</p>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 leading-none mb-1">{stats.outOfStock}</p>
+          <p className="text-[10px] sm:text-sm font-semibold text-slate-600 leading-tight">Out of Stock</p>
+          <p className="hidden sm:block text-xs text-slate-400 mt-0.5">Immediate action required</p>
         </button>
 
         {/* Low Stock */}
         <button
           onClick={() => handleStatCardClick("low_stock")}
           className={cn(
-            "text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white",
-            "hover:shadow-lg hover:-translate-y-0.5 group",
+            "text-left rounded-2xl border-2 p-3 sm:p-5 transition-all duration-200 bg-white",
+            "hover:shadow-lg hover:-translate-y-0.5 active:scale-95",
             alertTypeFilter === "low_stock" && activeTab === "alerts"
-              ? "border-orange-400 shadow-md shadow-orange-100"
+              ? "border-orange-400 shadow-md shadow-orange-100 bg-orange-50/40"
               : "border-slate-100 hover:border-orange-300"
           )}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center shadow-sm">
-              <AlertTriangle className="w-6 h-6 text-white" />
+          <div className="mb-3">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-orange-500 flex items-center justify-center shadow-sm shadow-orange-200">
+              <AlertTriangle className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-900 mb-1">{stats.lowStock}</p>
-          <p className="text-sm font-semibold text-slate-500">Low Stock</p>
-          <p className="text-xs text-slate-400 mt-0.5">Below minimum level</p>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 leading-none mb-1">{stats.lowStock}</p>
+          <p className="text-[10px] sm:text-sm font-semibold text-slate-600 leading-tight">Low Stock</p>
+          <p className="hidden sm:block text-xs text-slate-400 mt-0.5">Below minimum level</p>
         </button>
 
         {/* Overstocked */}
         <button
           onClick={() => handleStatCardClick("overstock")}
           className={cn(
-            "text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white",
-            "hover:shadow-lg hover:-translate-y-0.5 group",
+            "text-left rounded-2xl border-2 p-3 sm:p-5 transition-all duration-200 bg-white",
+            "hover:shadow-lg hover:-translate-y-0.5 active:scale-95",
             alertTypeFilter === "overstock" && activeTab === "alerts"
-              ? "border-blue-400 shadow-md shadow-blue-100"
+              ? "border-blue-400 shadow-md shadow-blue-100 bg-blue-50/40"
               : "border-slate-100 hover:border-blue-300"
           )}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-sm">
-              <TrendingUp className="w-6 h-6 text-white" />
+          <div className="mb-3">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-200">
+              <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-900 mb-1">{stats.overstock}</p>
-          <p className="text-sm font-semibold text-slate-500">Overstocked</p>
-          <p className="text-xs text-slate-400 mt-0.5">Excess inventory detected</p>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 leading-none mb-1">{stats.overstock}</p>
+          <p className="text-[10px] sm:text-sm font-semibold text-slate-600 leading-tight">Overstocked</p>
+          <p className="hidden sm:block text-xs text-slate-400 mt-0.5">Excess inventory detected</p>
         </button>
       </div>
 
       {/* ── Tabs ────────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ActiveTab)}>
-        <TabsList className="bg-slate-100 w-full sm:w-auto overflow-x-auto">
-          <TabsTrigger value="alerts" className="gap-2">
-            <BellRing className="w-4 h-4" />
-            Active Alerts
+        <TabsList className="bg-slate-100 w-full grid grid-cols-3">
+          <TabsTrigger value="alerts" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1 sm:px-3">
+            <BellRing className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Alerts</span>
             {stats.total > 0 && (
-              <span className="ml-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold px-1">
+              <span className="min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold px-1 shrink-0">
                 {stats.total}
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="rules" className="gap-2">
-            <Settings className="w-4 h-4" />
-            Alert Rules
-            <span className="ml-1 text-[11px] text-slate-500">({rules.length})</span>
+          <TabsTrigger value="rules" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1 sm:px-3">
+            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Rules</span>
+            <span className="text-[10px] text-slate-500 shrink-0">({rules.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="history" className="gap-2">
-            <Clock className="w-4 h-4" />
-            History
+          <TabsTrigger value="history" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1 sm:px-3">
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">History</span>
           </TabsTrigger>
         </TabsList>
 
@@ -743,8 +743,92 @@ export default function StockAlertsPage() {
               </div>
             </Card>
 
-            {/* Alerts Table */}
-            <div className="rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+            {/* Alerts — Mobile card list */}
+            <div className="md:hidden rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+              {filteredAlerts.length === 0 ? (
+                <div className="py-12 flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <p className="text-slate-500 font-medium text-sm">No alerts found</p>
+                  <p className="text-slate-400 text-xs">All stock levels are healthy</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {filteredAlerts.map((log) => {
+                    const meta = ALERT_TYPE_META[log.alert_type]
+                    return (
+                      <div key={log.id} className={cn("px-4 py-3 transition-colors", meta.rowClass)}>
+                        {/* Row 1: product name + type badge */}
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <PulsingDot type={log.alert_type} />
+                            <p className="font-semibold text-sm text-slate-800 truncate">{log.product_name}</p>
+                          </div>
+                          <AlertTypeBadge type={log.alert_type} />
+                        </div>
+                        {/* Row 2: brand + stock info */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5">
+                            {log.product_type === "mobile_phone"
+                              ? <Smartphone className="w-3 h-3 text-blue-400 shrink-0" />
+                              : <Package className="w-3 h-3 text-purple-400 shrink-0" />
+                            }
+                            <span className="text-xs text-slate-500">{log.brand}</span>
+                            {log.category && <span className="text-xs text-slate-400">· {log.category}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={cn(
+                              "text-base font-bold",
+                              log.current_stock === 0 ? "text-red-600" : log.alert_type === "low_stock" ? "text-orange-600" : "text-blue-600"
+                            )}>{log.current_stock}</span>
+                            <span className="text-[10px] text-slate-400">/ min {log.minimum_stock_level}</span>
+                          </div>
+                        </div>
+                        {/* Row 3: status + date + actions */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <AlertStatusBadge status={log.status} />
+                            <span className="text-[10px] text-slate-400">
+                              {log.last_restocked ? formatDate(log.last_restocked) : "Never restocked"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            {log.status === "active" && (
+                              <button onClick={() => handleAcknowledge(log)} title="Acknowledge"
+                                className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-colors">
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                            {log.status === "acknowledged" && (
+                              <button onClick={() => handleResolve(log)} title="Mark Resolved"
+                                className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-colors">
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
+                            {log.alert_type !== "overstock" && log.status !== "resolved" && (
+                              <button onClick={() => handleCreatePO(log)} title="Create PO"
+                                className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors">
+                                <ShoppingCart className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => router.push(log.product_type === "mobile_phone" ? "/products/mobiles" : "/products/accessories")}
+                              title="View Product"
+                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Alerts — Desktop table */}
+            <div className="hidden md:block rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -776,7 +860,6 @@ export default function StockAlertsPage() {
                       const meta = ALERT_TYPE_META[log.alert_type]
                       return (
                         <TableRow key={log.id} className={cn("transition-colors", meta.rowClass)}>
-                          {/* Product */}
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <PulsingDot type={log.alert_type} />
@@ -793,11 +876,7 @@ export default function StockAlertsPage() {
                               </div>
                             </div>
                           </TableCell>
-
-                          {/* Alert Type */}
                           <TableCell><AlertTypeBadge type={log.alert_type} /></TableCell>
-
-                          {/* Current Stock */}
                           <TableCell className="text-center">
                             <span className={cn(
                               "text-lg font-bold",
@@ -806,57 +885,39 @@ export default function StockAlertsPage() {
                               {log.current_stock}
                             </span>
                           </TableCell>
-
-                          {/* Min Level */}
                           <TableCell className="text-center">
                             <span className="text-sm font-medium text-slate-600">{log.minimum_stock_level}</span>
                           </TableCell>
-
-                          {/* Status */}
                           <TableCell><AlertStatusBadge status={log.status} /></TableCell>
-
-                          {/* Last Restocked */}
                           <TableCell>
                             <span className="text-xs text-slate-500">
                               {log.last_restocked ? formatDate(log.last_restocked) : "—"}
                             </span>
                           </TableCell>
-
-                          {/* Actions */}
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
                               {log.status === "active" && (
-                                <button
-                                  onClick={() => handleAcknowledge(log)}
-                                  title="Acknowledge"
-                                  className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-colors"
-                                >
+                                <button onClick={() => handleAcknowledge(log)} title="Acknowledge"
+                                  className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-colors">
                                   <CheckCircle className="w-4 h-4" />
                                 </button>
                               )}
                               {log.status === "acknowledged" && (
-                                <button
-                                  onClick={() => handleResolve(log)}
-                                  title="Mark Resolved"
-                                  className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-colors"
-                                >
+                                <button onClick={() => handleResolve(log)} title="Mark Resolved"
+                                  className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-colors">
                                   <RotateCcw className="w-4 h-4" />
                                 </button>
                               )}
                               {log.alert_type !== "overstock" && log.status !== "resolved" && (
-                                <button
-                                  onClick={() => handleCreatePO(log)}
-                                  title="Create Purchase Order"
-                                  className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
-                                >
+                                <button onClick={() => handleCreatePO(log)} title="Create Purchase Order"
+                                  className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors">
                                   <ShoppingCart className="w-4 h-4" />
                                 </button>
                               )}
                               <button
                                 onClick={() => router.push(log.product_type === "mobile_phone" ? "/products/mobiles" : "/products/accessories")}
                                 title="View Product"
-                                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                              >
+                                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
                                 <Eye className="w-4 h-4" />
                               </button>
                             </div>
@@ -1001,48 +1062,111 @@ export default function StockAlertsPage() {
           <div className="space-y-4">
             {/* History Filters */}
             <Card className="p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={historyStatusFilter} onValueChange={(v) => setHistoryStatusFilter(v as AlertStatus | "all")}>
-                  <SelectTrigger className="w-36 h-8 text-xs bg-slate-50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="acknowledged">Acknowledged</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={historyTypeFilter} onValueChange={(v) => setHistoryTypeFilter(v as ProductType | "all")}>
-                  <SelectTrigger className="w-40 h-8 text-xs bg-slate-50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="mobile_phone">Mobile Phones</SelectItem>
-                    <SelectItem value="accessory">Accessories</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <div className="flex items-center gap-1.5">
-                  <Input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="h-8 text-xs w-36 bg-slate-50" />
-                  <span className="text-xs text-slate-400">to</span>
-                  <Input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="h-8 text-xs w-36 bg-slate-50" />
+              <div className="space-y-2">
+                {/* Row 1: Status + Type */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={historyStatusFilter} onValueChange={(v) => setHistoryStatusFilter(v as AlertStatus | "all")}>
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 w-full">
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="acknowledged">Acknowledged</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={historyTypeFilter} onValueChange={(v) => setHistoryTypeFilter(v as ProductType | "all")}>
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 w-full">
+                      <SelectValue placeholder="All Types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="mobile_phone">Mobile Phones</SelectItem>
+                      <SelectItem value="accessory">Accessories</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-
-                {(historyStatusFilter !== "all" || historyTypeFilter !== "all" || historyDateFrom || historyDateTo) && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs text-slate-400 hover:text-red-500"
-                    onClick={() => { setHistoryStatusFilter("all"); setHistoryTypeFilter("all"); setHistoryDateFrom(""); setHistoryDateTo("") }}>
-                    <X className="w-3.5 h-3.5 mr-1" /> Clear
-                  </Button>
-                )}
-                <span className="ml-auto text-xs text-slate-500">{filteredHistory.length} records</span>
+                {/* Row 2: Date range */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-medium block mb-1 ml-0.5">From</label>
+                    <Input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="h-9 text-xs bg-slate-50 w-full" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-medium block mb-1 ml-0.5">To</label>
+                    <Input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="h-9 text-xs bg-slate-50 w-full" />
+                  </div>
+                </div>
+                {/* Row 3: Clear + count */}
+                <div className="flex items-center justify-between pt-0.5">
+                  {(historyStatusFilter !== "all" || historyTypeFilter !== "all" || historyDateFrom || historyDateTo) ? (
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-red-500 px-2"
+                      onClick={() => { setHistoryStatusFilter("all"); setHistoryTypeFilter("all"); setHistoryDateFrom(""); setHistoryDateTo("") }}>
+                      <X className="w-3 h-3 mr-1" /> Clear filters
+                    </Button>
+                  ) : <span />}
+                  <span className="text-xs text-slate-500">{filteredHistory.length} record{filteredHistory.length !== 1 ? "s" : ""}</span>
+                </div>
               </div>
             </Card>
 
-            {/* History Table */}
-            <div className="rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+            {/* History — Mobile card list */}
+            <div className="md:hidden rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+              {filteredHistory.length === 0 ? (
+                <div className="py-12 flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-slate-300" />
+                  </div>
+                  <p className="text-slate-500 font-medium text-sm">No history records found</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {filteredHistory.map((log) => (
+                    <div key={log.id} className="px-4 py-3">
+                      {/* Row 1: name + type badge */}
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-slate-800 truncate">{log.product_name}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {log.product_type === "mobile_phone"
+                              ? <Smartphone className="w-3 h-3 text-blue-400 shrink-0" />
+                              : <Package className="w-3 h-3 text-purple-400 shrink-0" />
+                            }
+                            <span className="text-xs text-slate-500">{log.brand}</span>
+                          </div>
+                        </div>
+                        <AlertTypeBadge type={log.alert_type} />
+                      </div>
+                      {/* Row 2: status + stock */}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <AlertStatusBadge status={log.status} />
+                        <span className="text-xs text-slate-500">
+                          Stock: <span className="font-bold text-slate-700">{log.current_stock}</span>
+                          <span className="text-slate-400"> / {log.minimum_stock_level}</span>
+                        </span>
+                      </div>
+                      {/* Row 3: triggered + resolved */}
+                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>Triggered: {format(new Date(log.created_at), "dd MMM yyyy, hh:mm a")}</span>
+                        {log.resolved_at && (
+                          <span className="text-emerald-600 font-medium">Resolved {format(new Date(log.resolved_at), "dd MMM")}</span>
+                        )}
+                      </div>
+                      {log.acknowledged_by && (
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Ack. by <span className="font-medium text-slate-600">{log.acknowledged_by}</span>
+                          {log.acknowledged_at && <> · {format(new Date(log.acknowledged_at), "dd MMM, hh:mm a")}</>}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* History — Desktop table */}
+            <div className="hidden md:block rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -1064,7 +1188,6 @@ export default function StockAlertsPage() {
                   ) : (
                     filteredHistory.map((log) => (
                       <TableRow key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                        {/* Product */}
                         <TableCell>
                           <p className="font-semibold text-sm text-slate-800">{log.product_name}</p>
                           <div className="flex items-center gap-1 mt-0.5">
@@ -1075,26 +1198,16 @@ export default function StockAlertsPage() {
                             <span className="text-xs text-slate-500">{log.brand}</span>
                           </div>
                         </TableCell>
-
-                        {/* Alert Type */}
                         <TableCell><AlertTypeBadge type={log.alert_type} /></TableCell>
-
-                        {/* Stock */}
                         <TableCell className="text-center">
                           <span className="font-bold text-slate-700">{log.current_stock}</span>
                           <span className="text-xs text-slate-400"> / {log.minimum_stock_level}</span>
                         </TableCell>
-
-                        {/* Status */}
                         <TableCell><AlertStatusBadge status={log.status} /></TableCell>
-
-                        {/* Triggered */}
                         <TableCell>
                           <p className="text-xs text-slate-600">{format(new Date(log.created_at), "dd MMM yyyy")}</p>
                           <p className="text-[10px] text-slate-400">{format(new Date(log.created_at), "hh:mm a")}</p>
                         </TableCell>
-
-                        {/* Acknowledged By */}
                         <TableCell>
                           {log.acknowledged_by ? (
                             <div>
@@ -1105,8 +1218,6 @@ export default function StockAlertsPage() {
                             </div>
                           ) : <span className="text-slate-300 text-sm">—</span>}
                         </TableCell>
-
-                        {/* Resolved */}
                         <TableCell>
                           {log.resolved_at ? (
                             <p className="text-xs text-emerald-600 font-medium">{format(new Date(log.resolved_at), "dd MMM yyyy")}</p>

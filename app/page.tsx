@@ -1,10 +1,11 @@
 "use client"
-import { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   TrendingUp, ShoppingCart, Package, DollarSign,
   ArrowRight, AlertTriangle, Plus, BarChart2, Smartphone,
   ShoppingBag, CheckCircle2, Users, Truck, Tag, ArrowUpRight,
-  ArrowDownRight,
+  ArrowDownRight, Calendar, ChevronDown, Clock, CalendarDays, X,
 } from "lucide-react"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -24,7 +25,7 @@ import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { format, subMonths } from "date-fns"
+import { format, subMonths, subDays, startOfWeek, endOfWeek, subWeeks, addDays, parseISO, differenceInDays } from "date-fns"
 
 /* ─── Custom Tooltips ─────────────────────────────────────────────────────── */
 const SparkTooltip = ({ active, payload }: any) => {
@@ -64,13 +65,16 @@ const BarTooltip = ({ active, payload, label }: any) => {
 
 const BAR_COLORS = ["#2563EB", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"]
 
-type Period = "month" | "lastMonth" | "year"
+type Period = "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "year" | "range"
 
 /* ─── Page ─────────────────────────────────────────────────────────────────── */
 export default function DashboardPage() {
   const { user } = useAuth()
   const TODAY = format(new Date(), "yyyy-MM-dd")
   const [period, setPeriod] = useState<Period>("month")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sales, setSales] = useState<Sale[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
@@ -121,27 +125,36 @@ export default function DashboardPage() {
   const currentMonthKey = format(todayParsed, "yyyy-MM")
   const lastMonthKey = format(subMonths(todayParsed, 1), "yyyy-MM")
   const currentYearKey = format(todayParsed, "yyyy")
+  const todayStr = format(todayParsed, "yyyy-MM-dd")
+  const yesterdayStr = format(subDays(todayParsed, 1), "yyyy-MM-dd")
+  const thisWeekStart = format(startOfWeek(todayParsed, { weekStartsOn: 1 }), "yyyy-MM-dd")
+  const lastWeekStartStr = format(startOfWeek(subWeeks(todayParsed, 1), { weekStartsOn: 1 }), "yyyy-MM-dd")
+  const lastWeekEndStr = format(endOfWeek(subWeeks(todayParsed, 1), { weekStartsOn: 1 }), "yyyy-MM-dd")
 
   /* ── Period filter ──────────────────────────────────────────────────── */
   const filteredSales = useMemo(() => {
-    if (period === "month") {
-      return sales.filter(s => s.date.startsWith(currentMonthKey) && s.status !== "Refunded")
-    } else if (period === "lastMonth") {
-      return sales.filter(s => s.date.startsWith(lastMonthKey) && s.status !== "Refunded")
-    } else {
-      return sales.filter(s => s.date.startsWith(currentYearKey) && s.status !== "Refunded")
-    }
-  }, [period, sales, currentMonthKey, lastMonthKey, currentYearKey])
+    const base = sales.filter(s => s.status !== "Refunded")
+    if (period === "yesterday") return base.filter(s => s.date === yesterdayStr)
+    if (period === "thisWeek") return base.filter(s => s.date >= thisWeekStart && s.date <= todayStr)
+    if (period === "lastWeek") return base.filter(s => s.date >= lastWeekStartStr && s.date <= lastWeekEndStr)
+    if (period === "month") return base.filter(s => s.date.startsWith(currentMonthKey))
+    if (period === "lastMonth") return base.filter(s => s.date.startsWith(lastMonthKey))
+    if (period === "year") return base.filter(s => s.date.startsWith(currentYearKey))
+    if (period === "range" && dateFrom && dateTo) return base.filter(s => s.date >= dateFrom && s.date <= dateTo)
+    return base.filter(s => s.date.startsWith(currentMonthKey))
+  }, [period, sales, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
 
   const filteredPurchases = useMemo(() => {
-    if (period === "month") {
-      return purchases.filter(p => p.date.startsWith(currentMonthKey))
-    } else if (period === "lastMonth") {
-      return purchases.filter(p => p.date.startsWith(lastMonthKey))
-    } else {
-      return purchases.filter(p => p.date.startsWith(currentYearKey))
-    }
-  }, [period, purchases, currentMonthKey, lastMonthKey, currentYearKey])
+    const base = purchases
+    if (period === "yesterday") return base.filter(p => p.date === yesterdayStr)
+    if (period === "thisWeek") return base.filter(p => p.date >= thisWeekStart && p.date <= todayStr)
+    if (period === "lastWeek") return base.filter(p => p.date >= lastWeekStartStr && p.date <= lastWeekEndStr)
+    if (period === "month") return base.filter(p => p.date.startsWith(currentMonthKey))
+    if (period === "lastMonth") return base.filter(p => p.date.startsWith(lastMonthKey))
+    if (period === "year") return base.filter(p => p.date.startsWith(currentYearKey))
+    if (period === "range" && dateFrom && dateTo) return base.filter(p => p.date >= dateFrom && p.date <= dateTo)
+    return base.filter(p => p.date.startsWith(currentMonthKey))
+  }, [period, purchases, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
 
   const periodRevenue    = useMemo(() => filteredSales.reduce((s, x) => s + x.total, 0), [filteredSales])
   const periodPurchases  = useMemo(() => filteredPurchases.reduce((s, x) => s + x.total, 0), [filteredPurchases])
@@ -159,32 +172,86 @@ export default function DashboardPage() {
 
   /* ── Sparkline data for financial cards (daily within period) */
   const salesSparkData = useMemo(() => {
-    const days = period === "year" ? 12 : 10
-    return Array.from({ length: days }, (_, i) => {
-      if (period === "year") {
+    const base = (arr: typeof sales) => arr.filter(s => s.status !== "Refunded")
+    if (period === "year") {
+      return Array.from({ length: 12 }, (_, i) => {
         const monthKey = format(subMonths(todayParsed, 11 - i), "yyyy-MM")
-        return { v: sales.filter(s => s.date.startsWith(monthKey) && s.status !== "Refunded").reduce((s, x) => s + x.total, 0) }
-      } else {
-        const baseMonth = period === "lastMonth" ? lastMonthKey : currentMonthKey
-        const dayStr = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
-        return { v: sales.filter(s => s.date <= dayStr && s.date >= baseMonth + "-01" && s.status !== "Refunded").reduce((s, x) => s + x.total, 0) }
-      }
+        return { v: base(sales).filter(s => s.date.startsWith(monthKey)).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    if (period === "yesterday") {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = format(subDays(todayParsed, 6 - i), "yyyy-MM-dd")
+        return { v: base(sales).filter(s => s.date === d).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    if (period === "thisWeek") {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = format(addDays(parseISO(thisWeekStart), i), "yyyy-MM-dd")
+        return { v: base(sales).filter(s => s.date === d).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    if (period === "lastWeek") {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = format(addDays(parseISO(lastWeekStartStr), i), "yyyy-MM-dd")
+        return { v: base(sales).filter(s => s.date === d).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    if (period === "range" && dateFrom && dateTo) {
+      const totalDays = Math.max(1, differenceInDays(parseISO(dateTo), parseISO(dateFrom)))
+      const points = Math.min(10, totalDays + 1)
+      return Array.from({ length: points }, (_, i) => {
+        const d = format(addDays(parseISO(dateFrom), Math.round(i * totalDays / (points - 1 || 1))), "yyyy-MM-dd")
+        return { v: base(sales).filter(s => s.date <= d && s.date >= dateFrom).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    // month / lastMonth
+    const baseMonth = period === "lastMonth" ? lastMonthKey : currentMonthKey
+    return Array.from({ length: 10 }, (_, i) => {
+      const dayStr = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
+      return { v: base(sales).filter(s => s.date <= dayStr && s.date >= baseMonth + "-01").reduce((s, x) => s + x.total, 0) }
     })
-  }, [period, sales, currentMonthKey, lastMonthKey])
+  }, [period, sales, currentMonthKey, lastMonthKey, thisWeekStart, lastWeekStartStr, dateFrom, dateTo])
 
   const purchaseSparkData = useMemo(() => {
-    const days = period === "year" ? 12 : 10
-    return Array.from({ length: days }, (_, i) => {
-      if (period === "year") {
+    if (period === "year") {
+      return Array.from({ length: 12 }, (_, i) => {
         const monthKey = format(subMonths(todayParsed, 11 - i), "yyyy-MM")
         return { v: purchases.filter(p => p.date.startsWith(monthKey)).reduce((s, x) => s + x.total, 0) }
-      } else {
-        const baseMonth = period === "lastMonth" ? lastMonthKey : currentMonthKey
-        const dayStr = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
-        return { v: purchases.filter(p => p.date <= dayStr && p.date >= baseMonth + "-01").reduce((s, x) => s + x.total, 0) }
-      }
+      })
+    }
+    if (period === "yesterday") {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = format(subDays(todayParsed, 6 - i), "yyyy-MM-dd")
+        return { v: purchases.filter(p => p.date === d).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    if (period === "thisWeek") {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = format(addDays(parseISO(thisWeekStart), i), "yyyy-MM-dd")
+        return { v: purchases.filter(p => p.date === d).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    if (period === "lastWeek") {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = format(addDays(parseISO(lastWeekStartStr), i), "yyyy-MM-dd")
+        return { v: purchases.filter(p => p.date === d).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    if (period === "range" && dateFrom && dateTo) {
+      const totalDays = Math.max(1, differenceInDays(parseISO(dateTo), parseISO(dateFrom)))
+      const points = Math.min(10, totalDays + 1)
+      return Array.from({ length: points }, (_, i) => {
+        const d = format(addDays(parseISO(dateFrom), Math.round(i * totalDays / (points - 1 || 1))), "yyyy-MM-dd")
+        return { v: purchases.filter(p => p.date <= d && p.date >= dateFrom).reduce((s, x) => s + x.total, 0) }
+      })
+    }
+    const baseMonth = period === "lastMonth" ? lastMonthKey : currentMonthKey
+    return Array.from({ length: 10 }, (_, i) => {
+      const dayStr = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
+      return { v: purchases.filter(p => p.date <= dayStr && p.date >= baseMonth + "-01").reduce((s, x) => s + x.total, 0) }
     })
-  }, [period, purchases, currentMonthKey, lastMonthKey])
+  }, [period, purchases, currentMonthKey, lastMonthKey, thisWeekStart, lastWeekStartStr, dateFrom, dateTo])
 
   const profitSparkData = useMemo(() =>
     salesSparkData.map((d, i) => ({ v: Math.max(0, d.v - (purchaseSparkData[i]?.v ?? 0) * 0.3) }))
@@ -236,7 +303,25 @@ export default function DashboardPage() {
   const totalSalesCount = sales.length
   const totalPurchasesCount = purchases.length
 
-  const periodLabel = period === "month" ? "This Month" : period === "lastMonth" ? "Last Month" : "This Year"
+  const periodLabel = {
+    yesterday: "Yesterday",
+    thisWeek: "This Week",
+    lastWeek: "Last Week",
+    month: "This Month",
+    lastMonth: "Last Month",
+    year: "This Year",
+    range: dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : "Custom Range",
+  }[period]
+
+  const FILTER_OPTIONS: { value: Period; label: string; icon: React.ElementType; desc: string }[] = [
+    { value: "yesterday", label: "Yesterday",    icon: Clock,        desc: "Sales from yesterday" },
+    { value: "thisWeek",  label: "This Week",    icon: CalendarDays, desc: "Mon – today" },
+    { value: "lastWeek",  label: "Last Week",    icon: CalendarDays, desc: "Mon – Sun, prev week" },
+    { value: "month",     label: "This Month",   icon: Calendar,     desc: format(todayParsed, "MMMM yyyy") },
+    { value: "lastMonth", label: "Last Month",   icon: Calendar,     desc: format(subMonths(todayParsed, 1), "MMMM yyyy") },
+    { value: "year",      label: "This Year",    icon: TrendingUp,   desc: currentYearKey },
+    { value: "range",     label: "Custom Range", icon: CalendarDays, desc: "Pick a date range" },
+  ]
 
   if (loading) {
     return (
@@ -312,25 +397,174 @@ export default function DashboardPage() {
             <h2 className="text-base font-bold text-slate-800">Financial Overview</h2>
             <p className="text-xs text-slate-400 mt-0.5">Revenue, purchases & profit summary</p>
           </div>
-          {/* Period toggle */}
-          <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5 self-start sm:self-auto">
-            {(["month", "lastMonth", "year"] as Period[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  period === p
-                    ? "bg-white text-slate-800 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {p === "month" ? "This Month" : p === "lastMonth" ? "Last Month" : "This Year"}
-              </button>
-            ))}
+          {/* Period filter trigger button */}
+          <div className="relative self-start sm:self-auto">
+            <button
+              onClick={() => setShowFilterMenu(v => !v)}
+              className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:border-blue-300 hover:shadow-md transition-all min-w-[140px]"
+            >
+              <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="flex-1 text-left truncate">{periodLabel}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${showFilterMenu ? "rotate-180" : ""}`} />
+            </button>
+
+            {/* Desktop dropdown */}
+            {showFilterMenu && (
+              <div className="hidden sm:block absolute right-0 mt-1.5 z-50 bg-white border border-slate-100 rounded-2xl shadow-xl py-1.5 min-w-[180px]">
+                {FILTER_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setPeriod(opt.value); if (opt.value !== "range") setShowFilterMenu(false) }}
+                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium transition-colors ${
+                      period === opt.value ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <opt.icon className={`w-3.5 h-3.5 ${period === opt.value ? "text-blue-500" : "text-slate-400"}`} />
+                    {opt.label}
+                  </button>
+                ))}
+                {period === "range" && (
+                  <div className="px-3 pb-2 pt-1 border-t border-slate-100 space-y-1.5">
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Mobile bottom sheet — rendered via portal to escape overflow:hidden on AppShell */}
+          {showFilterMenu && typeof document !== "undefined" && createPortal(
+            <div className="sm:hidden fixed inset-0 z-[9999] flex flex-col justify-end" onClick={() => setShowFilterMenu(false)}>
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+              <div
+                className="relative bg-white rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Handle bar */}
+                <div className="flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 rounded-full bg-slate-200" />
+                </div>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Select Period</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Filter financial overview data</p>
+                  </div>
+                  <button onClick={() => setShowFilterMenu(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                    <X className="w-4 h-4 text-slate-500" />
+                  </button>
+                </div>
+                {/* Options */}
+                <div className="px-4 py-3 space-y-1">
+                  {FILTER_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => { setPeriod(opt.value); if (opt.value !== "range") setShowFilterMenu(false) }}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all ${
+                        period === opt.value
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                          : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        period === opt.value ? "bg-white/20" : "bg-white shadow-sm"
+                      }`}>
+                        <opt.icon className={`w-4 h-4 ${period === opt.value ? "text-white" : "text-blue-500"}`} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className={`text-sm font-semibold leading-tight ${period === opt.value ? "text-white" : "text-slate-800"}`}>{opt.label}</p>
+                        <p className={`text-[10px] mt-0.5 ${period === opt.value ? "text-blue-100" : "text-slate-400"}`}>{opt.desc}</p>
+                      </div>
+                      {period === opt.value && (
+                        <CheckCircle2 className="w-4.5 h-4.5 text-white shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {/* Custom range date pickers */}
+                {period === "range" && (
+                  <div className="mx-4 mb-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Date Range</p>
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-500 font-medium block mb-1">From</label>
+                        <input
+                          type="date"
+                          value={dateFrom}
+                          onChange={e => setDateFrom(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-500 font-medium block mb-1">To</label>
+                        <input
+                          type="date"
+                          value={dateTo}
+                          onChange={e => setDateTo(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowFilterMenu(false)}
+                      className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm shadow-md shadow-blue-200 active:scale-95 transition-transform"
+                    >
+                      Apply Range
+                    </button>
+                  </div>
+                )}
+                {/* Safe area bottom */}
+                <div className="h-6" />
+              </div>
+            </div>,
+            document.body
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* ── MOBILE: individual gradient cards ── */}
+        <div className="sm:hidden space-y-3">
+          {([
+            {
+              label: "Sales Revenue", value: formatCurrency(periodRevenue),
+              sub: `${filteredSales.length} transactions`,
+              icon: ShoppingCart, grad: "from-blue-500 to-blue-600",
+              shadow: "shadow-blue-200/60",
+            },
+            {
+              label: "Purchases", value: formatCurrency(periodPurchases),
+              sub: `${filteredPurchases.length} orders`,
+              icon: TrendingUp, grad: "from-violet-500 to-violet-600",
+              shadow: "shadow-violet-200/60",
+            },
+            {
+              label: "Gross Profit", value: formatCurrency(Math.max(0, Math.round(periodProfit))),
+              sub: `${periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% margin`,
+              icon: DollarSign, grad: "from-emerald-500 to-emerald-600",
+              shadow: "shadow-emerald-200/60",
+            },
+          ] as const).map(({ label, value, sub, icon: Icon, grad, shadow }) => (
+            <div key={label} className={`relative overflow-hidden rounded-2xl bg-linear-to-r ${grad} px-5 py-5 shadow-lg ${shadow}`}>
+              <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
+              <div className="absolute right-6 bottom-0 w-14 h-14 rounded-full bg-white/5" />
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-white/70 text-xs font-medium mb-1">{label}</p>
+                  <p className="text-white text-2xl font-bold tracking-tight">{value}</p>
+                  <p className="text-white/60 text-xs mt-1.5">{sub}</p>
+                </div>
+                <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                  <Icon className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── DESKTOP: full gradient cards with sparklines ── */}
+        <div className="hidden sm:grid sm:grid-cols-3 gap-4">
           {/* Sales Card */}
           <div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-blue-500 to-blue-700 p-5 shadow-lg shadow-blue-200/60">
             <div className="absolute -right-4 -top-4 w-28 h-28 rounded-full bg-white/10" />
@@ -342,10 +576,10 @@ export default function DashboardPage() {
                   <p className="text-blue-100 text-[11px]">{periodLabel}</p>
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-                  <ShoppingCart className="w-4.5 h-4.5 text-white" />
+                  <ShoppingCart className="w-4 h-4 text-white" />
                 </div>
               </div>
-              <p className="text-white text-xl sm:text-2xl font-bold tracking-tight mb-1">{formatCurrency(periodRevenue)}</p>
+              <p className="text-white text-2xl font-bold tracking-tight mb-1">{formatCurrency(periodRevenue)}</p>
               <p className="text-blue-200 text-xs">{filteredSales.length} transactions</p>
               <div className="mt-3 h-14">
                 <ResponsiveContainer width="100%" height="100%">
@@ -375,10 +609,10 @@ export default function DashboardPage() {
                   <p className="text-violet-100 text-[11px]">{periodLabel}</p>
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-                  <TrendingUp className="w-4.5 h-4.5 text-white" />
+                  <TrendingUp className="w-4 h-4 text-white" />
                 </div>
               </div>
-              <p className="text-white text-xl sm:text-2xl font-bold tracking-tight mb-1">{formatCurrency(periodPurchases)}</p>
+              <p className="text-white text-2xl font-bold tracking-tight mb-1">{formatCurrency(periodPurchases)}</p>
               <p className="text-violet-200 text-xs">{filteredPurchases.length} purchase orders</p>
               <div className="mt-3 h-14">
                 <ResponsiveContainer width="100%" height="100%">
@@ -408,10 +642,10 @@ export default function DashboardPage() {
                   <p className="text-emerald-100 text-[11px]">{periodLabel}</p>
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-                  <DollarSign className="w-4.5 h-4.5 text-white" />
+                  <DollarSign className="w-4 h-4 text-white" />
                 </div>
               </div>
-              <p className="text-white text-xl sm:text-2xl font-bold tracking-tight mb-1">{formatCurrency(Math.max(0, Math.round(periodProfit)))}</p>
+              <p className="text-white text-2xl font-bold tracking-tight mb-1">{formatCurrency(Math.max(0, Math.round(periodProfit)))}</p>
               <p className="text-emerald-200 text-xs">
                 {periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% gross margin
               </p>
@@ -434,23 +668,23 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Compact Stat Counters ────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-6">
-        {[
+      {/* ── Stat Counters ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+        {([
           { label: "Total Products",   value: totalProducts,       icon: Package,     color: "text-blue-600",    bg: "bg-blue-50",    border: "border-blue-100",    href: "/products/mobiles"  },
           { label: "Customers",        value: customers.length,    icon: Users,       color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100",  href: "/customers"         },
           { label: "Suppliers",        value: suppliers.length,    icon: Truck,       color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100", href: "/suppliers"         },
           { label: "Total Sales",      value: totalSalesCount,     icon: ShoppingCart,color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-100",   href: "/sales"             },
           { label: "Total Purchases",  value: totalPurchasesCount, icon: TrendingUp,  color: "text-rose-600",    bg: "bg-rose-50",    border: "border-rose-100",    href: "/purchases"         },
-        ].map(({ label, value, icon: Icon, color, bg, border, href }) => (
-          <Link key={href} href={href}>
-            <div className={`flex items-center gap-2 sm:gap-3 rounded-2xl bg-white border ${border} px-3 sm:px-4 py-3 sm:py-3.5 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer shadow-sm`}>
-              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
-                <Icon className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${color}`} />
+        ] as const).map(({ label, value, icon: Icon, color, bg, border, href }, idx) => (
+          <Link key={href} href={href} className={idx === 4 ? "col-span-2 sm:col-span-1" : ""}>
+            <div className={`flex flex-col gap-3.5 rounded-2xl bg-white border ${border} p-4 sm:p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer shadow-sm h-full`}>
+              <div className={`w-11 h-11 rounded-xl ${bg} flex items-center justify-center`}>
+                <Icon className={`w-5 h-5 ${color}`} />
               </div>
-              <div className="min-w-0">
-                <p className="text-lg sm:text-xl font-bold text-slate-800 leading-none">{value}</p>
-                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 font-medium truncate">{label}</p>
+              <div>
+                <p className="text-2xl sm:text-3xl font-bold text-slate-800 leading-none">{value}</p>
+                <p className="text-xs text-slate-500 mt-1.5 font-medium">{label}</p>
               </div>
             </div>
           </Link>
@@ -531,7 +765,26 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            {/* Mobile card list */}
+            <div className="divide-y divide-slate-50 md:hidden">
+              {recentSales.map(sale => (
+                <div key={sale.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/70 transition-colors gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-mono text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md shrink-0">{sale.invoiceNumber}</span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 text-xs truncate">{sale.customerName}</p>
+                      <p className="text-[10px] text-slate-400">{formatDate(sale.date)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-bold text-slate-800 text-sm">{formatCurrency(sale.total)}</span>
+                    <StatusBadge status={sale.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50/70">
@@ -584,7 +837,26 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            {/* Mobile card list */}
+            <div className="divide-y divide-slate-50 md:hidden">
+              {recentPurchases.map(p => (
+                <div key={p.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/70 transition-colors gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-mono text-[10px] font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md shrink-0">{p.poNumber}</span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 text-xs truncate">{p.supplierName}</p>
+                      <p className="text-[10px] text-slate-400">{formatDate(p.date)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-bold text-slate-800 text-sm">{formatCurrency(p.total)}</span>
+                    <StatusBadge status={p.paymentStatus} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50/70">
@@ -635,13 +907,25 @@ export default function DashboardPage() {
               </Link>
             </div>
           </CardHeader>
-          <CardContent className="px-6 pb-5 pt-2">
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={topProducts} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name"
-                  tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} width={110}
-                  tickFormatter={(v: string) => v.length > 15 ? v.substring(0, 14) + "…" : v}
+          <CardContent className="px-3 sm:px-6 pb-5 pt-2">
+            <ResponsiveContainer width="100%" height={Math.max(120, topProducts.length * 36)}>
+              <BarChart data={topProducts} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 10, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                  domain={[0, (dataMax: number) => Math.max(dataMax + 1, 2)]}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={80}
+                  tickFormatter={(v: string) => v.length > 11 ? v.substring(0, 10) + "…" : v}
                 />
                 <Tooltip content={<BarTooltip />} />
                 <Bar dataKey="units" radius={[0, 6, 6, 0]} maxBarSize={16}>
