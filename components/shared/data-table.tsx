@@ -46,22 +46,22 @@ export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlace
   })
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Toolbar */}
-      <div className="rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-2 sm:gap-3">
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 flex items-center gap-1.5 overflow-x-auto">
         {searchKey && (
-          <div className="relative flex-1 min-w-0 sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <div className="relative shrink-0 w-44">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <Input
               placeholder={searchPlaceholder}
               value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
               onChange={(e) => table.getColumn(searchKey)?.setFilterValue(e.target.value)}
-              className="pl-9 h-9 text-sm"
+              className="pl-8 h-8 text-xs"
             />
           </div>
         )}
         {toolbar}
-        <div className={cn("flex items-center gap-2", searchKey || toolbar ? "ml-auto" : "ml-auto")}>
+        <div className={cn("flex items-center gap-2 ml-auto shrink-0")}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs px-3">
@@ -87,13 +87,13 @@ export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlace
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
-        <Table>
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+        <Table className="min-w-full">
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
               <TableRow key={headerGroup.id} className="bg-slate-50 hover:bg-slate-50 border-b-slate-200">
                 {headerGroup.headers.map(header => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="whitespace-nowrap text-xs px-2 py-1.5">
                     {header.isPlaceholder ? null : (
                       <div
                         className={cn("flex items-center gap-1", header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-900 transition-colors")}
@@ -119,7 +119,7 @@ export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlace
               table.getRowModel().rows.map(row => (
                 <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                   {row.getVisibleCells().map(cell => (
-                    <TableCell key={cell.id} className="text-xs sm:text-sm">
+                    <TableCell key={cell.id} className="text-xs px-2 py-1.5">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}

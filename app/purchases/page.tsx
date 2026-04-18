@@ -51,7 +51,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       accessorKey: "poNumber",
       header: "PO #",
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-semibold text-blue-600">
+        <span className="text-xs font-semibold text-blue-600 whitespace-nowrap">
           {row.getValue("poNumber")}
         </span>
       ),
@@ -60,14 +60,14 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       accessorKey: "date",
       header: "Date",
       cell: ({ row }) => (
-        <span className="text-sm text-slate-600">{formatDate(row.getValue("date"))}</span>
+        <span className="text-xs text-slate-500 whitespace-nowrap">{formatDate(row.getValue("date"))}</span>
       ),
     },
     {
       accessorKey: "supplierName",
       header: "Supplier",
       cell: ({ row }) => (
-        <span className="font-medium text-slate-800">{row.getValue("supplierName")}</span>
+        <span className="text-xs font-semibold text-slate-800">{row.getValue("supplierName")}</span>
       ),
     },
     {
@@ -77,36 +77,35 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
         const items: PurchaseItem[] = row.original.items
         const totalQty = items.reduce((sum, i) => sum + i.quantity, 0)
         return (
-          <span className="text-sm text-slate-600">
-            {items.length} line{items.length !== 1 ? "s" : ""}{" "}
-            <span className="text-slate-400">({totalQty} units)</span>
+          <span className="text-xs text-slate-500">
+            {items.length}L · <span className="text-slate-400">{totalQty}u</span>
           </span>
         )
       },
     },
     {
       accessorKey: "total",
-      header: "Total Cost",
+      header: "Total",
       cell: ({ row }) => (
-        <span className="font-bold text-slate-900">{formatCurrency(row.getValue("total"))}</span>
+        <span className="text-xs font-bold text-slate-900 whitespace-nowrap">{formatCurrency(row.getValue("total"))}</span>
       ),
     },
     {
       accessorKey: "amountPaid",
-      header: "Amount Paid",
+      header: "Amt Paid",
       cell: ({ row }) => (
-        <span className="text-sm text-slate-700">{formatCurrency(row.getValue("amountPaid"))}</span>
+        <span className="text-xs text-slate-600 whitespace-nowrap">{formatCurrency(row.getValue("amountPaid"))}</span>
       ),
     },
     {
       accessorKey: "balanceDue",
-      header: "Balance Due",
+      header: "Bal Due",
       cell: ({ row }) => {
         const balance: number = row.getValue("balanceDue")
         return balance > 0 ? (
-          <span className="text-sm font-semibold text-red-600">{formatCurrency(balance)}</span>
+          <span className="text-xs font-semibold text-red-600 whitespace-nowrap">{formatCurrency(balance)}</span>
         ) : (
-          <span className="text-sm text-slate-400">—</span>
+          <span className="text-xs text-slate-300">—</span>
         )
       },
     },
@@ -120,11 +119,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       header: "Delivery",
       cell: ({ row }) => {
         const status: string = row.getValue("deliveryStatus")
-        // Override "Partial" delivery to use blue per spec
-        const cls =
-          status === "Partial"
-            ? "bg-blue-100 text-blue-700"
-            : undefined
+        const cls = status === "Partial" ? "bg-blue-100 text-blue-700" : undefined
         return <StatusBadge status={status} className={cls} />
       },
     },
@@ -133,24 +128,12 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       header: "Actions",
       enableHiding: false,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-slate-500 hover:text-blue-600 hover:bg-blue-50"
-            onClick={() => onView(row.original)}
-            title="View details"
-          >
-            <Eye className="w-4 h-4" />
+        <div className="flex items-center gap-0.5">
+          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50" onClick={() => onView(row.original)} title="View details">
+            <Eye className="w-3.5 h-3.5" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-slate-500 hover:text-blue-600 hover:bg-blue-50"
-            onClick={() => onEdit(row.original)}
-            title="Edit purchase"
-          >
-            <Pencil className="w-4 h-4" />
+          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => onEdit(row.original)} title="Edit purchase">
+            <Pencil className="w-3.5 h-3.5" />
           </Button>
         </div>
       ),
@@ -600,47 +583,31 @@ export default function PurchasesPage() {
 
   // ── Filter toolbar ────────────────────────────────────────────────────────
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-2 w-full">
+    <div className="flex items-center gap-1.5 shrink-0">
       {/* Date range */}
-      <div className="flex items-center gap-1.5">
-        <Input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className="h-9 w-28 sm:w-36 text-sm"
-          placeholder="From"
-        />
-        <span className="text-slate-400 text-sm">—</span>
-        <Input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className="h-9 w-28 sm:w-36 text-sm"
-          placeholder="To"
-        />
+      <div className="flex items-center gap-1 shrink-0">
+        <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[108px] text-xs" />
+        <span className="text-slate-400 text-xs">—</span>
+        <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[108px] text-xs" />
       </div>
 
       {/* Supplier */}
       <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-        <SelectTrigger className="h-9 w-full sm:w-52 text-sm">
+        <SelectTrigger className="h-8 w-32 text-xs">
           <SelectValue placeholder="All Suppliers" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Suppliers</SelectItem>
-          {suppliers
-            .filter((s) => s.status === "Active")
-            .map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.companyName}
-              </SelectItem>
-            ))}
+          {suppliers.filter((s) => s.status === "Active").map((s) => (
+            <SelectItem key={s.id} value={s.id}>{s.companyName}</SelectItem>
+          ))}
         </SelectContent>
       </Select>
 
       {/* Payment status */}
       <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
-        <SelectTrigger className="h-9 w-full sm:w-40 text-sm">
-          <SelectValue placeholder="Payment Status" />
+        <SelectTrigger className="h-8 w-28 text-xs">
+          <SelectValue placeholder="All Payments" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Payments</SelectItem>
@@ -652,8 +619,8 @@ export default function PurchasesPage() {
 
       {/* Delivery status */}
       <Select value={deliveryStatusFilter} onValueChange={setDeliveryStatusFilter}>
-        <SelectTrigger className="h-9 w-full sm:w-40 text-sm">
-          <SelectValue placeholder="Delivery Status" />
+        <SelectTrigger className="h-8 w-28 text-xs">
+          <SelectValue placeholder="All Deliveries" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Deliveries</SelectItem>
@@ -665,15 +632,10 @@ export default function PurchasesPage() {
 
       {/* Reset */}
       {activeFilterCount > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 gap-1.5 text-slate-600 hover:text-red-600 hover:border-red-300"
-          onClick={handleReset}
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
+        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs text-slate-600 hover:text-red-600 hover:border-red-300" onClick={handleReset}>
+          <RotateCcw className="w-3 h-3" />
           Reset
-          <span className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-600 text-[10px] font-bold">
+          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-100 text-red-600 text-[9px] font-bold">
             {activeFilterCount}
           </span>
         </Button>
@@ -697,15 +659,14 @@ export default function PurchasesPage() {
         }
       />
 
-      {/* ── Stat Cards ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 mb-8">
+      {/* ── Stat Cards — 4 in one row ────────────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-2.5 sm:gap-3 mb-4">
         <StatCard
           title="Today's Purchases"
           value={String(todayCount)}
           subtext={formatDate(TODAY)}
           icon={ShoppingBag}
           iconBg="bg-blue-100"
-          gradient="from-purple-50 to-violet-50"
         />
         <StatCard
           title="This Week"
@@ -713,15 +674,13 @@ export default function PurchasesPage() {
           subtext="Last 7 days"
           icon={CalendarDays}
           iconBg="bg-blue-100"
-          gradient="from-blue-50 to-indigo-50"
         />
         <StatCard
           title="This Month"
           value={String(monthCount)}
-          subtext="March 2026"
+          subtext={new Date().toLocaleString("default", { month: "long", year: "numeric" })}
           icon={TrendingDown}
           iconBg="bg-blue-100"
-          gradient="from-emerald-50 to-teal-50"
         />
         <StatCard
           title="Total Payable"
@@ -729,7 +688,6 @@ export default function PurchasesPage() {
           subtext="Balance due to suppliers"
           icon={AlertCircle}
           iconBg="bg-red-100"
-          gradient="from-red-50 to-rose-50"
         />
       </div>
 

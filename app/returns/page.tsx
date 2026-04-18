@@ -367,27 +367,27 @@ export default function ReturnsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <PageHeader
         title="Returns & Refunds"
         description="Manage product returns, exchanges, and refund processing"
         action={
           <Button
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs px-3"
             onClick={() => {
               resetForm()
               setShowCreate(true)
             }}
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-3.5 h-3.5" />
             Process Return
           </Button>
         }
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-2.5">
         <StatCard
           title="Total Returns"
           value={String(stats.total)}
@@ -420,23 +420,23 @@ export default function ReturnsPage() {
 
       {/* Filters */}
       <Card className="border border-slate-100 shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex flex-col lg:flex-row gap-3">
+        <CardContent className="px-3 py-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className="relative flex-1 min-w-[180px] max-w-[220px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <Input
-                placeholder="Search by return # or customer..."
+                placeholder="Search return # or customer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
+                className="pl-8 h-8 text-xs"
               />
             </div>
 
             {/* Status */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full lg:w-[160px]">
-                <SelectValue placeholder="Status" />
+              <SelectTrigger className="h-8 w-[130px] text-xs">
+                <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
@@ -448,8 +448,8 @@ export default function ReturnsPage() {
 
             {/* Reason */}
             <Select value={reasonFilter} onValueChange={setReasonFilter}>
-              <SelectTrigger className="w-full lg:w-[200px]">
-                <SelectValue placeholder="Reason" />
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="All Reasons" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Reasons</SelectItem>
@@ -460,26 +460,14 @@ export default function ReturnsPage() {
             </Select>
 
             {/* Date from */}
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full lg:w-[150px]"
-              placeholder="From"
-            />
-
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[110px] text-xs" />
+            <span className="text-slate-400 text-xs">—</span>
             {/* Date to */}
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full lg:w-[150px]"
-              placeholder="To"
-            />
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[110px] text-xs" />
 
             {/* Reset */}
-            <Button variant="outline" size="sm" onClick={resetFilters} className="shrink-0">
-              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+            <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs shrink-0">
+              <RotateCcw className="w-3 h-3" />
               Reset
             </Button>
           </div>
@@ -489,98 +477,72 @@ export default function ReturnsPage() {
       {/* Table */}
       <Card className="border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-full">
             <TableHeader>
-              <TableRow className="bg-slate-50/80">
-                <TableHead>Return #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Invoice #</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead>Refund Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+              <TableRow className="bg-slate-50 hover:bg-slate-50">
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Return #</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Date</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Invoice #</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Customer</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Items</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Reason</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Refund Amt</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2">Status</TableHead>
+                <TableHead className="whitespace-nowrap text-xs px-3 py-2 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-slate-400">
-                    <RotateCcw className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <TableCell colSpan={9} className="text-center py-10 text-slate-400 text-xs">
+                    <RotateCcw className="w-6 h-6 mx-auto mb-1.5 opacity-40" />
                     No returns found
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((ret) => (
                   <TableRow key={ret.id}>
-                    <TableCell className="font-semibold text-slate-900">{ret.returnNumber}</TableCell>
-                    <TableCell>{formatDate(ret.date)}</TableCell>
-                    <TableCell className="text-slate-600">{ret.invoiceNumber}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">{ret.customerName}</p>
-                        <p className="text-xs text-slate-400">{ret.customerPhone}</p>
-                      </div>
+                    <TableCell className="px-3 py-2 text-xs font-semibold text-blue-600 whitespace-nowrap">{ret.returnNumber}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{formatDate(ret.date)}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{ret.invoiceNumber}</TableCell>
+                    <TableCell className="px-3 py-2">
+                      <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{ret.customerName}</p>
+                      <p className="text-[10px] text-slate-400">{ret.customerPhone}</p>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 border border-slate-200">
-                        {ret.items.length} {ret.items.length === 1 ? "item" : "items"}
+                    <TableCell className="px-3 py-2">
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px] px-1.5 py-0 h-4">
+                        {ret.items.length}{ret.items.length === 1 ? " item" : " items"}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${REASON_COLORS[ret.reason]}`}>
+                    <TableCell className="px-3 py-2">
+                      <span className={`inline-flex items-center rounded-md px-1.5 py-0 text-[10px] font-medium whitespace-nowrap ${REASON_COLORS[ret.reason]}`}>
                         {ret.reason}
                       </span>
                     </TableCell>
-                    <TableCell className="font-medium text-slate-900">{formatCurrency(ret.refundAmount)}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${STATUS_COLORS[ret.status]}`}>
+                    <TableCell className="px-3 py-2 text-xs font-semibold text-slate-800 whitespace-nowrap">{formatCurrency(ret.refundAmount)}</TableCell>
+                    <TableCell className="px-3 py-2">
+                      <span className={`inline-flex items-center rounded-md px-1.5 py-0 text-[10px] font-medium whitespace-nowrap ${STATUS_COLORS[ret.status]}`}>
                         {ret.status}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600"
-                          onClick={() => setViewReturn(ret)}
-                          title="View details"
-                        >
-                          <Eye className="w-4 h-4" />
+                    <TableCell className="px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50" onClick={() => setViewReturn(ret)} title="View">
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
                         {ret.status === "Pending" && (
                           <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-slate-500 hover:text-emerald-600"
-                              onClick={() => approveReturn(ret.id)}
-                              title="Approve"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => approveReturn(ret.id)} title="Approve">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-slate-500 hover:text-red-600"
-                              onClick={() => rejectReturn(ret.id)}
-                              title="Reject"
-                            >
-                              <XCircle className="w-4 h-4" />
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={() => rejectReturn(ret.id)} title="Reject">
+                              <XCircle className="w-3.5 h-3.5" />
                             </Button>
                           </>
                         )}
                         {ret.status === "Approved" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-slate-500 hover:text-emerald-600"
-                            onClick={() => completeReturn(ret.id)}
-                            title="Complete"
-                          >
-                            <Package className="w-4 h-4" />
+                          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} title="Complete">
+                            <Package className="w-3.5 h-3.5" />
                           </Button>
                         )}
                       </div>

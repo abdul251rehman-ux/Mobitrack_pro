@@ -440,14 +440,14 @@ export default function PaymentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Payments Center"
         description="Track all received and paid payments, manage receivables and payables"
       />
 
       {/* ─── Stats Row ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div className="grid grid-cols-4 gap-2.5">
         <StatCard
           title="Total Received"
           value={formatCurrency(stats.totalReceived)}
@@ -479,70 +479,48 @@ export default function PaymentsPage() {
       </div>
 
       {/* ─── Tabs ───────────────────────────────────────────────────────────── */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-slate-100">
-          <TabsTrigger value="all">All Payments</TabsTrigger>
-          <TabsTrigger value="receivables">Receivables &amp; Payables</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
+        <TabsList className="bg-slate-100 h-8 p-0.5">
+          <TabsTrigger value="all" className="text-xs h-7 px-3">All Payments</TabsTrigger>
+          <TabsTrigger value="receivables" className="text-xs h-7 px-3">Receivables &amp; Payables</TabsTrigger>
         </TabsList>
 
         {/* ═══ ALL PAYMENTS TAB ════════════════════════════════════════════════ */}
-        <TabsContent value="all" className="space-y-4">
-          {/* Filters + actions */}
+        <TabsContent value="all" className="space-y-3">
+          {/* Filters + actions — single row */}
           <Card className="border-slate-100 shadow-sm">
-            <CardContent className="p-4 space-y-4">
-              {/* Row 1: search + actions */}
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    placeholder="Search by name, reference, ID..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
-                  />
+            <CardContent className="px-3 py-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[160px] max-w-[200px]">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <Input placeholder="Search name, ref, ID..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-xs" />
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => openRecordDialog()} className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" /> Record Payment
-                  </Button>
-                  <Button variant="outline" onClick={handleExportCSV}>
-                    <Download className="h-4 w-4 mr-2" /> Export CSV
-                  </Button>
-                </div>
-              </div>
-
-              {/* Row 2: filters */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
                 <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue placeholder="All Types" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Types</SelectItem>
                     <SelectItem value="Received">Received</SelectItem>
                     <SelectItem value="Paid">Paid</SelectItem>
                   </SelectContent>
                 </Select>
-
                 <Select value={filterEntityType} onValueChange={setFilterEntityType}>
-                  <SelectTrigger><SelectValue placeholder="Entity" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue placeholder="All Entities" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Entities</SelectItem>
                     <SelectItem value="Customer">Customer</SelectItem>
                     <SelectItem value="Supplier">Supplier</SelectItem>
                   </SelectContent>
                 </Select>
-
                 <Select value={filterMethod} onValueChange={setFilterMethod}>
-                  <SelectTrigger><SelectValue placeholder="Method" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue placeholder="All Methods" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Methods</SelectItem>
-                    {PAYMENT_METHODS.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
+                    {PAYMENT_METHODS.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                   </SelectContent>
                 </Select>
-
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Statuses</SelectItem>
                     <SelectItem value="Completed">Completed</SelectItem>
@@ -550,26 +528,17 @@ export default function PaymentsPage() {
                     <SelectItem value="Failed">Failed</SelectItem>
                   </SelectContent>
                 </Select>
-
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-medium text-slate-400 sm:hidden">From</label>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    placeholder="From"
-                    className="text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-medium text-slate-400 sm:hidden">To</label>
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    placeholder="To"
-                    className="text-sm"
-                  />
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[108px] text-xs" />
+                <span className="text-slate-400 text-xs">—</span>
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[108px] text-xs" />
+                {/* Actions */}
+                <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                  <Button onClick={() => openRecordDialog()} className="bg-blue-600 hover:bg-blue-700 h-8 text-xs gap-1.5 px-3">
+                    <Plus className="h-3.5 w-3.5" /> Record Payment
+                  </Button>
+                  <Button variant="outline" onClick={handleExportCSV} className="h-8 text-xs gap-1.5 px-3">
+                    <Download className="h-3.5 w-3.5" /> Export CSV
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -578,24 +547,24 @@ export default function PaymentsPage() {
           {/* Payments table */}
           <Card className="border-slate-100 shadow-sm">
             <CardContent className="p-0">
-              <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-                <Table className="min-w-[700px]">
+              <div className="overflow-x-auto">
+                <Table className="min-w-full">
                   <TableHeader>
-                    <TableRow className="bg-slate-50/60">
-                      <TableHead className="text-xs font-semibold text-slate-500 whitespace-nowrap">Date</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-500 whitespace-nowrap">Type</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-500 whitespace-nowrap">Entity</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-500 whitespace-nowrap">Reference</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-500 text-right whitespace-nowrap">Amount</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-500 whitespace-nowrap">Method</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-500 whitespace-nowrap">Status</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-500 text-right whitespace-nowrap">Actions</TableHead>
+                    <TableRow className="bg-slate-50 hover:bg-slate-50">
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2">Date</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2">Type</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2">Entity</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2">Reference</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2 text-right">Amount</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2">Method</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2">Status</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs px-3 py-2 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredPayments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-12 text-slate-400">
+                        <TableCell colSpan={8} className="text-center py-10 text-slate-400 text-xs">
                           No payments found matching your filters.
                         </TableCell>
                       </TableRow>
@@ -604,78 +573,71 @@ export default function PaymentsPage() {
                         const methodMeta = METHOD_META[p.method]
                         return (
                           <TableRow key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                            <TableCell className="text-sm text-slate-700 whitespace-nowrap">
+                            <TableCell className="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">
                               {formatDate(p.date)}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                               <Badge
                                 variant="outline"
                                 className={cn(
-                                  "text-xs font-medium",
+                                  "text-[10px] font-medium px-1.5 py-0 h-5 gap-0.5",
                                   p.type === "Received"
                                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                     : "bg-red-50 text-red-700 border-red-200"
                                 )}
                               >
                                 {p.type === "Received" ? (
-                                  <ArrowDownLeft className="h-3 w-3 mr-1" />
+                                  <ArrowDownLeft className="h-2.5 w-2.5" />
                                 ) : (
-                                  <ArrowUpRight className="h-3 w-3 mr-1" />
+                                  <ArrowUpRight className="h-2.5 w-2.5" />
                                 )}
                                 {p.type}
                               </Badge>
                             </TableCell>
-                            <TableCell>
-                              <div>
-                                <p className="text-sm font-medium text-slate-800">{p.entityName}</p>
-                                <p className="text-xs text-slate-400">{p.entityType}</p>
-                              </div>
+                            <TableCell className="px-3 py-2">
+                              <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{p.entityName}</p>
+                              <p className="text-[10px] text-slate-400">{p.entityType}</p>
                             </TableCell>
-                            <TableCell>
-                              <div>
-                                <p className="text-sm text-slate-700">{p.referenceType}</p>
-                                {p.referenceNumber && (
-                                  <p className="text-xs text-slate-400 font-mono">{p.referenceNumber}</p>
-                                )}
-                              </div>
+                            <TableCell className="px-3 py-2">
+                              <p className="text-xs text-slate-700">{p.referenceType}</p>
+                              {p.referenceNumber && (
+                                <p className="text-[10px] text-slate-400 font-mono">{p.referenceNumber}</p>
+                              )}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="px-3 py-2 text-right">
                               <span
                                 className={cn(
-                                  "text-sm font-semibold",
+                                  "text-xs font-semibold whitespace-nowrap",
                                   p.type === "Received" ? "text-emerald-600" : "text-red-600"
                                 )}
                               >
                                 {p.type === "Received" ? "+" : "-"}{formatCurrency(Math.abs(p.amount))}
                               </span>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                               {methodMeta ? (
                                 <Badge
                                   variant="outline"
-                                  className={cn("text-xs font-medium", methodMeta.color, methodMeta.bg, methodMeta.border)}
+                                  className={cn("text-[10px] font-medium px-1.5 py-0 h-5 gap-0.5", methodMeta.color, methodMeta.bg, methodMeta.border)}
                                 >
                                   {methodMeta.icon}
-                                  <span className="ml-1">{p.method}</span>
+                                  <span>{p.method}</span>
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="text-xs">{p.method}</Badge>
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{p.method}</Badge>
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                               <StatusBadge status={p.status} />
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="px-3 py-2 text-right">
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600"
-                                onClick={() => {
-                                  setViewPayment(p)
-                                  setShowViewDialog(true)
-                                }}
+                                size="icon-sm"
+                                className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                                onClick={() => { setViewPayment(p); setShowViewDialog(true) }}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -695,15 +657,15 @@ export default function PaymentsPage() {
         </TabsContent>
 
         {/* ═══ RECEIVABLES & PAYABLES TAB ══════════════════════════════════════ */}
-        <TabsContent value="receivables" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <TabsContent value="receivables" className="space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {/* Customer Receivables */}
             <Card className="border-slate-100 shadow-sm">
               <CardContent className="p-0">
-                <div className="p-4 border-b border-slate-100">
+                <div className="px-3 py-2 border-b border-slate-100">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-                      <Users className="h-4 w-4 text-white" />
+                    <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0">
+                      <Users className="h-3.5 w-3.5 text-white" />
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-slate-800">Customer Receivables</h3>
@@ -713,35 +675,35 @@ export default function PaymentsPage() {
                 </div>
                 <div className="divide-y divide-slate-100">
                   {customerReceivables.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-slate-400">No outstanding receivables</div>
+                    <div className="py-6 text-center text-xs text-slate-400">No outstanding receivables</div>
                   ) : (
                     customerReceivables.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/50 transition-colors">
+                      <div key={c.id} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50/50 transition-colors">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800 truncate">{c.name}</p>
-                          <p className="text-xs text-slate-400">{c.phone}</p>
+                          <p className="text-xs font-medium text-slate-800 truncate">{c.name}</p>
+                          <p className="text-[10px] text-slate-400">{c.phone}</p>
                         </div>
-                        <div className="text-right mr-3">
-                          <p className="text-sm font-semibold text-emerald-600">{formatCurrency(c.totalDue)}</p>
-                          <p className="text-xs text-slate-400">
+                        <div className="text-right mr-2">
+                          <p className="text-xs font-semibold text-emerald-600">{formatCurrency(c.totalDue)}</p>
+                          <p className="text-[10px] text-slate-400">
                             {c.lastPaymentDate ? `Last: ${formatDate(c.lastPaymentDate)}` : "No payments"}
                           </p>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                          className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 shrink-0"
                           onClick={() => openRecordDialog("Customer", c.id)}
                         >
-                          Record Payment
+                          Record
                         </Button>
                       </div>
                     ))
                   )}
                 </div>
                 {customerReceivables.length > 0 && (
-                  <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50">
-                    <div className="flex justify-between text-sm">
+                  <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/50">
+                    <div className="flex justify-between text-xs">
                       <span className="font-medium text-slate-600">Total Receivable</span>
                       <span className="font-bold text-emerald-600">
                         {formatCurrency(customerReceivables.reduce((s, c) => s + c.totalDue, 0))}
@@ -755,10 +717,10 @@ export default function PaymentsPage() {
             {/* Supplier Payables */}
             <Card className="border-slate-100 shadow-sm">
               <CardContent className="p-0">
-                <div className="p-4 border-b border-slate-100">
+                <div className="px-3 py-2 border-b border-slate-100">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center">
-                      <Truck className="h-4 w-4 text-white" />
+                    <div className="w-7 h-7 rounded-lg bg-red-600 flex items-center justify-center shrink-0">
+                      <Truck className="h-3.5 w-3.5 text-white" />
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-slate-800">Supplier Payables</h3>
@@ -768,35 +730,35 @@ export default function PaymentsPage() {
                 </div>
                 <div className="divide-y divide-slate-100">
                   {supplierPayables.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-slate-400">No outstanding payables</div>
+                    <div className="py-6 text-center text-xs text-slate-400">No outstanding payables</div>
                   ) : (
                     supplierPayables.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/50 transition-colors">
+                      <div key={s.id} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50/50 transition-colors">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800 truncate">{s.name}</p>
-                          <p className="text-xs text-slate-400">{s.phone}</p>
+                          <p className="text-xs font-medium text-slate-800 truncate">{s.name}</p>
+                          <p className="text-[10px] text-slate-400">{s.phone}</p>
                         </div>
-                        <div className="text-right mr-3">
-                          <p className="text-sm font-semibold text-red-600">{formatCurrency(s.totalDue)}</p>
-                          <p className="text-xs text-slate-400">
+                        <div className="text-right mr-2">
+                          <p className="text-xs font-semibold text-red-600">{formatCurrency(s.totalDue)}</p>
+                          <p className="text-[10px] text-slate-400">
                             {s.lastPaymentDate ? `Last: ${formatDate(s.lastPaymentDate)}` : "No payments"}
                           </p>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                          className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 shrink-0"
                           onClick={() => openRecordDialog("Supplier", s.id)}
                         >
-                          Record Payment
+                          Record
                         </Button>
                       </div>
                     ))
                   )}
                 </div>
                 {supplierPayables.length > 0 && (
-                  <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50">
-                    <div className="flex justify-between text-sm">
+                  <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/50">
+                    <div className="flex justify-between text-xs">
                       <span className="font-medium text-slate-600">Total Payable</span>
                       <span className="font-bold text-red-600">
                         {formatCurrency(supplierPayables.reduce((s, sp) => s + sp.totalDue, 0))}

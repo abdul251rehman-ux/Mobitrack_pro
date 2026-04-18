@@ -122,105 +122,99 @@ function AccessoryCard({
   const marginStyle = getMarginStyle(margin)
 
   return (
-    <Card className="relative overflow-hidden border border-slate-200/80 hover:shadow-xl hover:shadow-slate-200/70 transition-all duration-300 hover:-translate-y-1 bg-white group">
+    <Card className="relative overflow-hidden border border-slate-200/80 hover:shadow-md hover:shadow-slate-200/70 transition-all duration-200 hover:-translate-y-0.5 bg-white group rounded-xl">
 
-      {/* Header: image if available, otherwise gradient */}
+      {/* Header */}
       {accessory.image ? (
-        <div className="relative h-36 bg-white border-b border-slate-100 overflow-hidden">
+        <div className="relative h-24 bg-white border-b border-slate-100 overflow-hidden">
           <Image
             src={accessory.image}
             alt={accessory.name}
             fill
-            className="object-contain p-3"
+            className="object-contain p-2"
             sizes="(max-width: 768px) 50vw, 25vw"
           />
-          {/* Margin badge overlay */}
-          <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-full bg-white shadow-md border border-slate-100 px-2.5 py-1 text-xs font-bold">
-            <TrendingUp className={cn("w-3 h-3", marginStyle.icon)} />
+          <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md bg-white shadow-sm border border-slate-100 px-1.5 py-0.5 text-[10px] font-bold">
+            <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
             <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
           </span>
         </div>
       ) : (
-        <div className={cn("relative bg-gradient-to-br h-36 flex items-center justify-between px-5 overflow-hidden", cfg.headerGradient)}>
-          {/* Decorative circles */}
-          <div className="absolute -top-5 -right-5 w-24 h-24 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute -bottom-8 -left-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
-
-          {/* Icon pill */}
-          <div className="relative z-10 p-3 rounded-2xl bg-white/20 backdrop-blur-sm">
-            <Icon className="w-7 h-7 text-white/90 drop-shadow" />
+        <div className={cn("relative bg-gradient-to-br h-24 flex items-center justify-between px-4 overflow-hidden", cfg.headerGradient)}>
+          <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-white/10 pointer-events-none" />
+          <div className="absolute -bottom-5 -left-3 w-14 h-14 rounded-full bg-white/10 pointer-events-none" />
+          <div className="relative z-10 p-2 rounded-xl bg-white/20 backdrop-blur-sm">
+            <Icon className="w-5 h-5 text-white/90" />
           </div>
-
-          {/* Margin badge */}
-          <span className="relative z-10 inline-flex items-center gap-1 rounded-full bg-white/90 shadow px-2.5 py-1 text-xs font-bold">
-            <TrendingUp className={cn("w-3 h-3", marginStyle.icon)} />
+          <span className="relative z-10 inline-flex items-center gap-0.5 rounded-md bg-white/90 shadow px-1.5 py-0.5 text-[10px] font-bold">
+            <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
             <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
           </span>
         </div>
       )}
 
       {/* Body */}
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2">
 
         {/* Category + name */}
         <div>
           <span className={cn(
-            "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium mb-1.5",
+            "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium mb-1",
             cfg.badge
           )}>
             {accessory.category}
           </span>
-          <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-1">
+          <h3 className="font-bold text-slate-900 text-[13px] leading-snug line-clamp-1">
             {accessory.name}
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5 font-mono">
+          <p className="text-[10px] text-slate-400 font-mono truncate">
             {accessory.brand} · {accessory.sku}
           </p>
         </div>
 
         {/* Price box */}
-        <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
+        <div className="bg-slate-50 rounded-lg px-2.5 py-2 space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Sell Price</span>
-            <span className="text-base font-extrabold text-slate-900 tabular-nums leading-none">
+            <span className="text-[10px] text-slate-400">Sell Price</span>
+            <span className="text-[13px] font-extrabold text-slate-900 tabular-nums leading-none">
               {formatCurrency(accessory.sellingPrice)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Buy Price</span>
-            <span className="text-xs text-slate-500 tabular-nums">{formatCurrency(accessory.purchasePrice)}</span>
+            <span className="text-[10px] text-slate-400">Buy Price</span>
+            <span className="text-[10px] text-slate-500 tabular-nums">{formatCurrency(accessory.purchasePrice)}</span>
           </div>
-          <div className="flex items-center justify-between pt-1.5 border-t border-slate-200">
-            <span className="text-xs text-slate-400">Profit</span>
-            <span className="text-xs font-semibold text-emerald-600 tabular-nums">+{formatCurrency(profit)}</span>
+          <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+            <span className="text-[10px] text-slate-400">Profit</span>
+            <span className="text-[10px] font-semibold text-emerald-600 tabular-nums">+{formatCurrency(profit)}</span>
           </div>
         </div>
 
         {/* Stock + action buttons */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-1.5">
           <span className={cn(
-            "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
+            "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium",
             stockPillStyle[stockStatus]
           )}>
             <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", stockDotColor[stockStatus])} />
             {accessory.stock} units
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-7 w-7 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              className="h-6 w-6 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               onClick={() => onEdit(accessory)}
             >
-              <Pencil className="w-3.5 h-3.5" />
+              <Pencil className="w-3 h-3" />
             </Button>
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-7 w-7 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              className="h-6 w-6 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
               onClick={() => onDelete(accessory)}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3 h-3" />
             </Button>
           </div>
         </div>
@@ -426,6 +420,9 @@ function AccessoryFormDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        <DialogTitle className="sr-only">
+          {isEditing ? "Edit Accessory" : "Add New Accessory"}
+        </DialogTitle>
 
         {/* ── Gradient header banner ── */}
         <div className={cn(
@@ -1314,7 +1311,7 @@ export default function AccessoriesPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 max-w-screen-2xl mx-auto">
+      <div className="space-y-4 max-w-screen-2xl mx-auto">
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -1345,7 +1342,7 @@ export default function AccessoriesPage() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
         <StatCard
           title="Total Products"
           value={String(stats.total)}
@@ -1517,7 +1514,7 @@ export default function AccessoriesPage() {
           }
         />
       ) : view === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filtered.map(accessory => (
             <AccessoryCard
               key={accessory.id}

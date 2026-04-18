@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   Search, Trash2, Plus, ShoppingCart, Smartphone, Package,
-  User, UserPlus, ChevronLeft, Headphones,
+  User, UserPlus, ChevronLeft, Headphones, X, CheckCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -304,25 +304,25 @@ export default function NewSalePage() {
       <PageHeader title="New Sale" description="Create a new sales transaction"
         action={<Link href="/sales"><Button variant="outline" className="gap-2"><ChevronLeft className="w-4 h-4" /> Back</Button></Link>} />
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         <Card className="shadow-sm border-slate-200">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                <ShoppingCart className="w-4.5 h-4.5 text-blue-600" />
+          <CardHeader className="px-4 pt-4 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                <ShoppingCart className="w-3.5 h-3.5 text-blue-600" />
               </div>
               <div>
-                <CardTitle className="text-[15px] font-semibold text-slate-900">Point of Sale</CardTitle>
-                <CardDescription className="text-xs text-slate-500 mt-0.5">Select customer, add products, and complete sale</CardDescription>
+                <CardTitle className="text-[13px] font-semibold text-slate-900">Point of Sale</CardTitle>
+                <CardDescription className="text-[11px] text-slate-400">Select customer, add products, and complete sale</CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="px-4 pb-4 space-y-4">
 
             {/* ── Row 1: Customer ─────────────────────────────────────── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Customer Type</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-500">Customer Type</Label>
                 <Select value={customerMode} onValueChange={(v: "walkin" | "existing") => { setCustomerMode(v); if (v === "walkin") { setSelectedCustomerId(""); setCustomerSearch("") } }}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -373,7 +373,7 @@ export default function NewSalePage() {
                       <Input placeholder="Name" value={newName} onChange={e => setNewName(e.target.value)} className="h-9 text-xs flex-1" />
                       <Input placeholder="Phone" value={newPhone} onChange={e => setNewPhone(e.target.value)} className="h-9 text-xs w-28" />
                       <Button size="sm" className="h-9 px-2 text-[10px]" onClick={handleCreateCustomer}>Save</Button>
-                      <Button size="sm" variant="ghost" className="h-9 px-1.5" onClick={() => setShowNewCustomer(false)}>✕</Button>
+                      <Button size="sm" variant="ghost" className="h-9 px-1.5" onClick={() => setShowNewCustomer(false)}><X className="w-3.5 h-3.5" /></Button>
                     </div>
                   )}
                 </div>
@@ -391,16 +391,16 @@ export default function NewSalePage() {
             </div>
 
             {/* ── Row 2: Product Search ───────────────────────────────── */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
                 <Search className="w-3 h-3" /> Search Products
               </Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 <Input placeholder="Search by name, brand, model, IMEI..." value={productSearch}
                   onChange={e => { setProductSearch(e.target.value); setProductDropdownOpen(true) }}
                   onFocus={() => setProductDropdownOpen(true)}
-                  className="h-10 pl-10 text-sm" />
+                  className="h-9 pl-9 text-sm" />
                 {productDropdownOpen && (
                   <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-y-auto">
                     {productResults.length === 0 ? (
@@ -472,47 +472,47 @@ export default function NewSalePage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-8 flex flex-col items-center justify-center gap-2 text-center">
-                <ShoppingCart className="w-8 h-8 text-slate-300" />
-                <p className="text-sm font-medium text-slate-400">Cart is empty</p>
-                <p className="text-xs text-slate-300">Search and add products above</p>
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 py-5 flex flex-col items-center justify-center gap-1.5 text-center">
+                <ShoppingCart className="w-6 h-6 text-slate-300" />
+                <p className="text-xs font-medium text-slate-400">Cart is empty — search and add products above</p>
               </div>
             )}
 
             {/* ── Totals Row ──────────────────────────────────────────── */}
             {cartItems.length > 0 && (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Subtotal</Label>
-                    <div className="h-9 flex items-center px-3 rounded-lg border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-800">{formatCurrency(subtotal)}</div>
+                {/* Totals row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Subtotal</Label>
+                    <div className="h-8 flex items-center px-2.5 rounded-md border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 truncate">{formatCurrency(subtotal)}</div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Discount (Rs)</Label>
-                    <Input type="number" min={0} value={overallDiscount} onChange={e => setOverallDiscount(e.target.value)} className="h-9 text-sm" placeholder="0" />
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Discount (Rs)</Label>
+                    <Input type="number" min={0} value={overallDiscount} onChange={e => setOverallDiscount(e.target.value)} className="h-8 text-xs" placeholder="0" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Tax (Rs)</Label>
-                    <Input type="number" min={0} value={taxAmount} onChange={e => setTaxAmount(e.target.value)} className="h-9 text-sm" placeholder="0" />
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Tax (Rs)</Label>
+                    <Input type="number" min={0} value={taxAmount} onChange={e => setTaxAmount(e.target.value)} className="h-8 text-xs" placeholder="0" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Grand Total</Label>
-                    <div className="h-9 flex items-center px-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-sm font-bold text-blue-800">{formatCurrency(grandTotal)}</div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Grand Total</Label>
+                    <div className="h-8 flex items-center px-2.5 rounded-md border-2 border-blue-300 bg-blue-50 text-xs font-bold text-blue-800 truncate">{formatCurrency(grandTotal)}</div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Received (Rs)</Label>
-                    <Input type="number" min={0} value={amountReceived} onChange={e => setAmountReceived(e.target.value)} className="h-9 text-sm" placeholder="0" />
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Received (Rs)</Label>
+                    <Input type="number" min={0} value={amountReceived} onChange={e => setAmountReceived(e.target.value)} className="h-8 text-xs" placeholder="0" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Change</Label>
-                    <div className={`h-9 flex items-center px-3 rounded-lg border text-sm font-bold ${changeDue >= 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Change</Label>
+                    <div className={`h-8 flex items-center px-2.5 rounded-md border text-xs font-bold truncate ${changeDue >= 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
                       {changeDue >= 0 ? formatCurrency(changeDue) : "—"}
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Method</Label>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Method</Label>
                     <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Cash">Cash</SelectItem>
                         <SelectItem value="Card">Card</SelectItem>
@@ -525,14 +525,14 @@ export default function NewSalePage() {
                 </div>
 
                 {/* Notes + Complete */}
-                <div className="flex items-end gap-4">
-                  <div className="flex-1 space-y-1.5">
-                    <Label className="text-xs font-medium text-slate-700">Notes <span className="text-xs text-slate-400 font-normal">(optional)</span></Label>
-                    <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any notes..." className="h-9 text-sm" />
+                <div className="flex items-end gap-2.5">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[11px] font-medium text-slate-500">Notes <span className="font-normal text-slate-400">(optional)</span></Label>
+                    <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any notes..." className="h-8 text-xs" />
                   </div>
                   <Button type="button" onClick={handleSubmit} disabled={submitting}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 h-9 px-6 shrink-0">
-                    <ShoppingCart className="w-4 h-4" /> {submitting ? "Processing..." : "Complete Sale"}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-8 px-5 shrink-0 text-xs font-semibold">
+                    <CheckCircle className="w-3.5 h-3.5" /> {submitting ? "Processing..." : "Complete Sale"}
                   </Button>
                 </div>
               </>

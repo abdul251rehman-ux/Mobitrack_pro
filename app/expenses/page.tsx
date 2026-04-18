@@ -141,26 +141,21 @@ function StatusBadge({ status }: { status: "Paid" | "Pending" }) {
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, amount, count, countLabel, icon, gradient, trend }: {
+function StatCard({ label, amount, count, countLabel, iconBg, icon, trend }: {
   label: string; amount: number; count: number; countLabel: string
-  icon: React.ReactNode; gradient: string; trend?: string
+  icon: React.ReactNode; iconBg: string; trend?: string
 }) {
   return (
-    <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-      <CardContent className="p-0">
-        <div className={cn("p-4 text-white", gradient)}>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-white/80 text-xs font-semibold uppercase tracking-wide">{label}</p>
-            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">{icon}</div>
-          </div>
-          <p className="text-2xl font-black tracking-tight">{formatCurrency(amount)}</p>
+    <div className="relative overflow-hidden rounded-xl bg-white px-4 py-3 border border-slate-100 border-t-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200" style={{}}>
+      <div className="flex items-center justify-between mb-2">
+        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shadow-sm", iconBg)}>
+          {icon}
         </div>
-        <div className="px-4 py-2.5 bg-white flex items-center justify-between">
-          <span className="text-xs text-slate-500">{count} {countLabel}</span>
-          {trend && <span className="text-[10px] font-semibold text-slate-400">{trend}</span>}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+      <p className="text-xl font-bold text-slate-900 leading-none tracking-tight mb-1 truncate">{formatCurrency(amount)}</p>
+      <p className="text-[11px] font-semibold text-slate-500">{label}</p>
+      <p className="text-[10px] text-slate-400 mt-0.5">{count} {countLabel}{trend ? ` · ${trend}` : ""}</p>
+    </div>
   )
 }
 
@@ -654,55 +649,54 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="space-y-4">
 
         {/* ── Page Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Expenses</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Track and manage all shop expenses — daily, monthly & yearly</p>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">Expenses</h1>
+            <p className="text-xs text-slate-500">Track and manage all shop expenses — daily, monthly & yearly</p>
           </div>
           <Button onClick={handleOpenAdd}
-            className="bg-rose-600 hover:bg-rose-700 gap-2 font-semibold shadow-lg shadow-rose-600/20">
-            <Plus className="h-4 w-4" /> Add Expense
+            className="bg-rose-600 hover:bg-rose-700 gap-1.5 h-8 text-xs px-3">
+            <Plus className="h-3.5 w-3.5" /> Add Expense
           </Button>
         </div>
 
         {/* ── Stats Row ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 gap-2.5">
           <StatCard
             label="Today's Expenses" amount={stats.today.amount} count={stats.today.count}
             countLabel="transactions" icon={<TrendingDown className="h-4 w-4 text-white" />}
-            gradient="bg-gradient-to-br from-rose-500 to-pink-600"
+            iconBg="bg-rose-500"
           />
           <StatCard
             label="This Month" amount={stats.month.amount} count={stats.month.count}
             countLabel="expenses" icon={<Calendar className="h-4 w-4 text-white" />}
-            gradient="bg-gradient-to-br from-blue-600 to-indigo-600"
-            trend="Mar 2026"
+            iconBg="bg-blue-600"
+            trend={format(_now, "MMM yyyy")}
           />
           <StatCard
             label="This Year" amount={stats.year.amount} count={stats.year.count}
             countLabel="expenses" icon={<BarChart3 className="h-4 w-4 text-white" />}
-            gradient="bg-gradient-to-br from-violet-600 to-purple-700"
-            trend="Jan–Mar 2026"
+            iconBg="bg-violet-600"
+            trend={THIS_YEAR}
           />
           <StatCard
             label="Pending Payment" amount={stats.pending.amount} count={stats.pending.count}
             countLabel="unpaid" icon={<Clock className="h-4 w-4 text-white" />}
-            gradient="bg-gradient-to-br from-amber-500 to-orange-600"
+            iconBg="bg-amber-500"
           />
         </div>
 
         {/* ── Two-column layout: Table (left) + Breakdown (right) ── */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-4 items-start">
 
           {/* ── Left: Table area ── */}
-          <div className="space-y-4">
+          <div className="space-y-3">
 
             {/* Tabs */}
-            <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm overflow-x-auto">
+            <div className="flex gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm overflow-x-auto">
               {TABS.map(({ key, label, count }) => (
                 <button key={key} type="button" onClick={() => setTab(key)}
                   className={cn(
@@ -726,21 +720,21 @@ export default function ExpensesPage() {
                 <div className="flex items-center gap-2">
                   {/* Search */}
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <Input value={search} onChange={e => setSearch(e.target.value)}
-                      placeholder="Search title, category, notes..." className="pl-9 h-9 text-sm" />
+                      placeholder="Search title, category, notes..." className="pl-8 h-8 text-xs" />
                   </div>
                   {/* Toggle filters */}
                   <Button variant="outline" size="sm" onClick={() => setShowFilters(v => !v)}
-                    className={cn("gap-1.5 h-9", hasActiveFilters && "border-rose-300 text-rose-600 bg-rose-50")}>
-                    <Filter className="h-3.5 w-3.5" />
+                    className={cn("gap-1.5 h-8 text-xs", hasActiveFilters && "border-rose-300 text-rose-600 bg-rose-50")}>
+                    <Filter className="h-3 w-3" />
                     Filters
                     {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />}
                     {showFilters ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   </Button>
                   {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 h-9 text-slate-500">
-                      <RotateCcw className="h-3.5 w-3.5" /> Reset
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 h-8 text-xs text-slate-500">
+                      <RotateCcw className="h-3 w-3" /> Reset
                     </Button>
                   )}
                 </div>
@@ -801,10 +795,10 @@ export default function ExpensesPage() {
 
               {/* Table rows */}
               {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                  <TrendingDown className="h-10 w-10 mb-3 opacity-30" />
-                  <p className="font-semibold text-sm">No expenses found</p>
-                  <p className="text-xs mt-1">Try adjusting your filters or add a new expense</p>
+                <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                  <TrendingDown className="h-7 w-7 mb-2 opacity-30" />
+                  <p className="font-semibold text-xs">No expenses found</p>
+                  <p className="text-[10px] mt-0.5">Try adjusting your filters or add a new expense</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-50">
@@ -812,7 +806,7 @@ export default function ExpensesPage() {
                     const pm = PAYMENT_META[exp.paymentMethod]
                     return (
                       <div key={exp.id}
-                        className="flex flex-col sm:grid sm:grid-cols-[1fr_auto_auto_auto_auto] gap-2 sm:gap-0 px-4 py-3 hover:bg-slate-50/80 transition-colors sm:items-center">
+                        className="flex flex-col sm:grid sm:grid-cols-[1fr_auto_auto_auto_auto] gap-1.5 sm:gap-0 px-3 py-2 hover:bg-slate-50/80 transition-colors sm:items-center">
 
                         {/* Title + meta */}
                         <div className="min-w-0 pr-3 space-y-1">
@@ -873,7 +867,7 @@ export default function ExpensesPage() {
 
               {/* Table footer summary */}
               {filtered.length > 0 && (
-                <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-slate-500">{filtered.length} expense{filtered.length !== 1 ? "s" : ""} shown</span>
                   <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                     <span className="text-xs text-slate-500">
@@ -893,19 +887,19 @@ export default function ExpensesPage() {
           </div>
 
           {/* ── Right: Category Breakdown ── */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Monthly breakdown */}
             <Card className="border-slate-200 shadow-sm">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Monthly Breakdown</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">March 2026 — paid only</p>
+                  <p className="text-xs font-bold text-slate-800">Monthly Breakdown</p>
+                  <p className="text-[10px] text-slate-400">{format(_now, "MMMM yyyy")} — paid only</p>
                 </div>
-                <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
-                  <BarChart3 className="h-4 w-4 text-blue-600" />
+                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <BarChart3 className="h-3.5 w-3.5 text-blue-600" />
                 </div>
               </div>
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-3 space-y-2">
                 {categoryBreakdown.length === 0 ? (
                   <p className="text-xs text-slate-400 text-center py-4">No data for this month</p>
                 ) : (
@@ -942,10 +936,10 @@ export default function ExpensesPage() {
 
             {/* Recurring expenses summary */}
             <Card className="border-slate-200 shadow-sm">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Active Recurring</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Monthly + yearly commitments</p>
+                  <p className="text-xs font-bold text-slate-800">Active Recurring</p>
+                  <p className="text-[10px] text-slate-400">Monthly + yearly commitments</p>
                 </div>
                 <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center">
                   <Repeat2 className="h-4 w-4 text-violet-600" />
@@ -991,7 +985,7 @@ export default function ExpensesPage() {
             {/* Pending list */}
             {stats.pending.count > 0 && (
               <Card className="border-amber-200 shadow-sm bg-amber-50/50">
-                <div className="px-4 py-3 border-b border-amber-200 flex items-center gap-2">
+                <div className="px-3 py-2 border-b border-amber-200 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-amber-600" />
                   <p className="text-sm font-bold text-amber-800">Pending Payments</p>
                   <span className="ml-auto text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
@@ -1021,7 +1015,6 @@ export default function ExpensesPage() {
             )}
           </div>
         </div>
-      </div>
 
       {/* Drawer + Delete dialog */}
       <ExpenseDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editing} onSave={handleSave} />

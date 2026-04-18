@@ -105,126 +105,124 @@ function MobileCard({
   }
 
   return (
-    <Card className="relative overflow-hidden border border-slate-200/80 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-900/8 transition-all duration-250 hover:-translate-y-1 bg-white group rounded-2xl">
+    <Card className="relative overflow-hidden border border-slate-200/80 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/8 transition-all duration-200 hover:-translate-y-0.5 bg-white group rounded-xl">
 
       {/* ── Image / Hero section ───────────────────────────────────────── */}
-      <div className="relative h-44 overflow-hidden bg-linear-to-br from-slate-50 via-blue-50/40 to-slate-100">
+      <div className="relative h-28 overflow-hidden bg-linear-to-br from-slate-50 via-blue-50/40 to-slate-100">
         {mobile.image ? (
           <Image
             src={mobile.image}
             alt={`${mobile.brand} ${mobile.model}`}
             fill
-            className="object-contain p-4 drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+            className="object-contain p-3 drop-shadow-md group-hover:scale-105 transition-transform duration-300"
             sizes="(max-width: 768px) 50vw, 25vw"
           />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
-              <Smartphone className="w-8 h-8 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-600/30">
+              <Smartphone className="w-5 h-5 text-white" />
             </div>
           </div>
         )}
 
-        {/* Brand badge — top left */}
-        <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold bg-white/90 backdrop-blur-sm text-slate-700 shadow-sm border border-slate-200/60">
-          {mobile.brand}
-        </span>
-
-        {/* Device type badge — below brand */}
-        <span className={cn(
-          "absolute top-12 left-3 z-10 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold shadow-sm",
-          mobile.deviceType === "iphone"
-            ? "bg-slate-900 text-white"
-            : "bg-green-600 text-white"
-        )}>
-          {mobile.deviceType === "iphone" ? " iPhone" : " Android"}
-        </span>
+        {/* Brand + OS badges — top left */}
+        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold bg-white/90 backdrop-blur-sm text-slate-700 shadow-sm border border-slate-200/60">
+            {mobile.brand}
+          </span>
+          <span className={cn(
+            "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold shadow-sm",
+            mobile.deviceType === "iphone" ? "bg-slate-900 text-white" : "bg-green-600 text-white"
+          )}>
+            {mobile.deviceType === "iphone" ? "iPhone" : "Android"}
+          </span>
+        </div>
 
         {/* Margin badge — top right */}
-        <span className="absolute top-3 right-3 z-10 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold bg-emerald-500 text-white shadow-sm shadow-emerald-600/30">
-          <TrendingUp className="w-3 h-3" />
+        <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+          <TrendingUp className="w-2.5 h-2.5" />
           {margin.toFixed(1)}%
         </span>
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────── */}
-      <div className="p-4 space-y-3.5">
+      <div className="p-3 space-y-2">
 
         {/* Model name + specs */}
         <div>
-          <h3 className="font-bold text-slate-900 text-[15px] leading-snug truncate">
+          <h3 className="font-bold text-slate-900 text-[13px] leading-snug truncate">
             {mobile.model}
           </h3>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-medium tracking-wide">
+          <p className="text-[10px] text-slate-400 font-medium tracking-wide">
             {mobile.storage} / {mobile.ram} &middot; {mobile.color}
           </p>
         </div>
 
         {/* IMEI row */}
-        <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest shrink-0">IMEI</span>
-          <span className="text-xs text-slate-600 font-mono truncate flex-1">
+        <div className="flex items-center gap-1.5 bg-slate-50 rounded-md px-2 py-1.5 border border-slate-100">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">IMEI</span>
+          <span className="text-[10px] text-slate-600 font-mono truncate flex-1">
             {mobile.imei.slice(0, 8)}…{mobile.imei.slice(-4)}
           </span>
           <button
             onClick={handleCopyImei}
-            className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors flex-shrink-0"
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors flex-shrink-0"
             title="Copy full IMEI"
           >
-            <Copy className="w-3.5 h-3.5" />
+            <Copy className="w-3 h-3" />
           </button>
         </div>
 
         {/* Price block */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Buy</p>
-            <p className="text-sm font-semibold text-slate-600">{formatCurrency(mobile.purchasePrice)}</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Buy</p>
+            <p className="text-[11px] font-semibold text-slate-600 truncate">{formatCurrency(mobile.purchasePrice)}</p>
           </div>
-          <div className="rounded-xl bg-blue-600 px-3 py-2.5 shadow-sm shadow-blue-600/20">
-            <p className="text-[10px] font-bold text-blue-200 uppercase tracking-wider mb-0.5">Sell</p>
-            <p className="text-sm font-bold text-white">{formatCurrency(mobile.sellingPrice)}</p>
+          <div className="rounded-lg bg-blue-600 px-2.5 py-1.5 shadow-sm shadow-blue-600/20">
+            <p className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Sell</p>
+            <p className="text-[11px] font-bold text-white truncate">{formatCurrency(mobile.sellingPrice)}</p>
           </div>
         </div>
 
         {/* Stock badge */}
         <div className="flex items-center justify-between">
-          <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold", stockBadgeStyle[stockStatus])}>
+          <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", stockBadgeStyle[stockStatus])}>
             <span className={cn("w-1.5 h-1.5 rounded-full", stockDotStyle[stockStatus])} />
             {stockStatus}
           </span>
-          <span className="text-xs font-semibold text-slate-500 bg-slate-100 rounded-full px-2.5 py-1">
+          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
             {mobile.stock} units
           </span>
         </div>
 
         {/* Action buttons */}
-        <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-100">
+        <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-100">
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg gap-1"
+            className="h-7 text-[11px] font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md gap-1 px-1"
             onClick={() => onView(mobile)}
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Eye className="w-3 h-3" />
             View
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg gap-1"
+            className="h-7 text-[11px] font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md gap-1 px-1"
             onClick={() => onEdit(mobile)}
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-3 h-3" />
             Edit
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs font-medium text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg gap-1"
+            className="h-7 text-[11px] font-medium text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md gap-1 px-1"
             onClick={() => onDelete(mobile)}
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3 h-3" />
             Delete
           </Button>
         </div>
@@ -2450,7 +2448,7 @@ export default function MobilesPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 max-w-screen-2xl mx-auto">
+      <div className="space-y-4 max-w-screen-2xl mx-auto">
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -2462,7 +2460,7 @@ export default function MobilesPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-screen-2xl mx-auto">
+    <div className="space-y-4 max-w-screen-2xl mx-auto">
       {/* Header */}
       <PageHeader
         title="Mobile Phones"
@@ -2481,7 +2479,7 @@ export default function MobilesPage() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
         <StatCard
           title="Total Models"
           value={String(stats.total)}
@@ -2621,7 +2619,7 @@ export default function MobilesPage() {
               action={{ label: "Add Mobile Phone", onClick: handleAdd }}
             />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {filtered.map(mobile => (
                 <MobileCard
                   key={mobile.id}

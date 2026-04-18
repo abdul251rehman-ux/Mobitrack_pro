@@ -16,36 +16,32 @@ interface Category {
   itemCount: number
   createdAt: string
 }
-import { PageHeader } from "@/components/shared/page-header"
-import { StatCard } from "@/components/shared/stat-card"
+
 import { DataTable } from "@/components/shared/data-table"
-import { StatusBadge } from "@/components/shared/status-badge"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { PageWrapper } from "@/components/layout/page-wrapper"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 import { formatDate } from "@/lib/utils"
 
-// ─── Type badge helper ─────────────────────────────────────────────────────────
-function TypeBadge({ type }: { type: Category["type"] }) {
-  const styles = {
-    Mobile: "border-blue-200 text-blue-700 bg-blue-50",
-    Accessory: "border-slate-200 text-slate-700 bg-slate-50",
-    Both: "border-blue-200 text-blue-600 bg-blue-50",
+// ─── Type chip ────────────────────────────────────────────────────────────────
+function TypeChip({ type }: { type: Category["type"] }) {
+  const cfg = {
+    Mobile:    "bg-blue-50 text-blue-700 border-blue-200",
+    Accessory: "bg-slate-50 text-slate-600 border-slate-200",
+    Both:      "bg-violet-50 text-violet-700 border-violet-200",
   }
   return (
-    <Badge variant="outline" className={`text-xs ${styles[type]}`}>
+    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${cfg[type]}`}>
       {type}
-    </Badge>
+    </span>
   )
 }
 
@@ -58,19 +54,17 @@ export default function CategoriesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
   const [mobileSearch, setMobileSearch] = useState("")
 
-  // form state
   const [formName, setFormName] = useState("")
   const [formType, setFormType] = useState<Category["type"]>("Mobile")
   const [formDesc, setFormDesc] = useState("")
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
-  // ── Fetch categories from Supabase ──────────────────────────────────────────
   async function fetchCategories() {
     try {
       const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('created_at', { ascending: false })
+        .from("categories")
+        .select("*")
+        .order("created_at", { ascending: false })
       if (error) throw error
       const mapped: Category[] = (data ?? []).map((c: Record<string, unknown>) => ({
         id: c.id as string,
@@ -88,80 +82,47 @@ export default function CategoriesPage() {
     }
   }
 
-  useEffect(() => {
-    fetchCategories()
-  }, [])
+  useEffect(() => { fetchCategories() }, [])
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
-    total: list.length,
-    mobile: list.filter((c) => c.type === "Mobile").length,
+    total:     list.length,
+    mobile:    list.filter((c) => c.type === "Mobile").length,
     accessory: list.filter((c) => c.type === "Accessory").length,
-    both: list.filter((c) => c.type === "Both").length,
+    both:      list.filter((c) => c.type === "Both").length,
     totalItems: list.reduce((s, c) => s + c.itemCount, 0),
   }), [list])
 
-  // ── Open dialog ────────────────────────────────────────────────────────────
   function openAdd() {
-    setEditTarget(null)
-    setFormName("")
-    setFormType("Mobile")
-    setFormDesc("")
-    setFormErrors({})
+    setEditTarget(null); setFormName(""); setFormType("Mobile"); setFormDesc(""); setFormErrors({})
     setDialogOpen(true)
   }
-
   function openEdit(cat: Category) {
-    setEditTarget(cat)
-    setFormName(cat.name)
-    setFormType(cat.type)
-    setFormDesc(cat.description)
-    setFormErrors({})
+    setEditTarget(cat); setFormName(cat.name); setFormType(cat.type); setFormDesc(cat.description); setFormErrors({})
     setDialogOpen(true)
   }
 
-  // ── Validate ───────────────────────────────────────────────────────────────
   function validate() {
     const errs: Record<string, string> = {}
     if (!formName.trim()) errs.name = "Name is required"
-    else if (
-      list.some(
-        (c) =>
-          c.name.toLowerCase() === formName.trim().toLowerCase() &&
-          c.id !== editTarget?.id
-      )
-    )
+    else if (list.some((c) => c.name.toLowerCase() === formName.trim().toLowerCase() && c.id !== editTarget?.id))
       errs.name = "Category name already exists"
     setFormErrors(errs)
     return Object.keys(errs).length === 0
   }
 
-  // ── Save ───────────────────────────────────────────────────────────────────
   async function handleSave() {
     if (!validate()) return
     try {
       if (editTarget) {
-        const { error } = await supabase
-          .from('categories')
-          .update({
-            name: formName.trim(),
-            type: formType,
-            description: formDesc.trim(),
-          })
-          .eq('id', editTarget.id)
+        const { error } = await supabase.from("categories")
+          .update({ name: formName.trim(), type: formType, description: formDesc.trim() })
+          .eq("id", editTarget.id)
         if (error) throw error
         toast.success("Category updated successfully")
       } else {
         const tenantId = await getTenantId()
-        const { error } = await supabase
-          .from('categories')
-          .insert({
-            tenant_id: tenantId,
-            name: formName.trim(),
-            type: formType,
-            description: formDesc.trim(),
-            item_count: 0,
-          })
+        const { error } = await supabase.from("categories")
+          .insert({ tenant_id: tenantId, name: formName.trim(), type: formType, description: formDesc.trim(), item_count: 0 })
         if (error) throw error
         toast.success("Category added successfully")
       }
@@ -172,14 +133,10 @@ export default function CategoriesPage() {
     }
   }
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
   async function handleDelete() {
     if (!deleteTarget) return
     try {
-      const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', deleteTarget.id)
+      const { error } = await supabase.from("categories").delete().eq("id", deleteTarget.id)
       if (error) throw error
       toast.success(`"${deleteTarget.name}" deleted`)
       setDeleteTarget(null)
@@ -189,30 +146,29 @@ export default function CategoriesPage() {
     }
   }
 
-  // ── Columns ────────────────────────────────────────────────────────────────
   const columns: ColumnDef<Category>[] = useMemo(() => [
     {
       accessorKey: "name",
       header: "Category Name",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-            <Tag className="w-4 h-4 text-blue-600" />
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
+            <Tag className="w-3.5 h-3.5 text-blue-600" />
           </div>
-          <span className="font-semibold text-slate-800">{row.original.name}</span>
+          <span className="text-xs font-semibold text-slate-800">{row.original.name}</span>
         </div>
       ),
     },
     {
       accessorKey: "type",
       header: "Type",
-      cell: ({ row }) => <TypeBadge type={row.original.type} />,
+      cell: ({ row }) => <TypeChip type={row.original.type} />,
     },
     {
       accessorKey: "description",
       header: "Description",
       cell: ({ row }) => (
-        <span className="text-slate-500 text-sm line-clamp-1 max-w-xs">
+        <span className="text-xs text-slate-400 line-clamp-1 max-w-56">
           {row.original.description || "—"}
         </span>
       ),
@@ -221,7 +177,7 @@ export default function CategoriesPage() {
       accessorKey: "itemCount",
       header: "Items",
       cell: ({ row }) => (
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 text-sm font-semibold">
+        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
           {row.original.itemCount}
         </span>
       ),
@@ -230,225 +186,169 @@ export default function CategoriesPage() {
       accessorKey: "createdAt",
       header: "Created",
       cell: ({ row }) => (
-        <span className="text-slate-500 text-sm">{formatDate(row.original.createdAt)}</span>
+        <span className="text-xs text-slate-400">{formatDate(row.original.createdAt)}</span>
       ),
     },
     {
       id: "actions",
       header: "Actions",
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
+        <div className="flex items-center gap-0.5">
+          <button
             onClick={() => openEdit(row.original)}
-            className="hover:text-blue-600 hover:bg-blue-50"
-            title="Edit category"
+            className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+            title="Edit"
           >
             <Pencil className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          </button>
+          <button
             onClick={() => setDeleteTarget(row.original)}
-            className="hover:text-red-500 hover:bg-red-50"
-            title="Delete category"
+            className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+            title="Delete"
           >
             <Trash2 className="w-3.5 h-3.5" />
-          </Button>
+          </button>
         </div>
       ),
     },
   ], [])
 
+  const statCards = [
+    { title: "Total Categories",    value: stats.total,     sub: `${stats.totalItems} total items`, Icon: Layers,     iconBg: "bg-blue-500" },
+    { title: "Mobile Categories",   value: stats.mobile,    sub: "For mobile phones",               Icon: Smartphone, iconBg: "bg-sky-500"  },
+    { title: "Accessory Categories",value: stats.accessory, sub: "For accessories",                 Icon: Package,    iconBg: "bg-slate-500"},
+    { title: "Shared (Both)",       value: stats.both,      sub: "Used for both types",             Icon: Tag,        iconBg: "bg-violet-500"},
+  ]
+
   if (loading) {
     return (
-      <PageWrapper>
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-slate-500">Loading categories...</p>
-          </div>
-        </div>
-      </PageWrapper>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
   return (
-    <PageWrapper>
-      <PageHeader
-        title="Categories"
-        description="Manage product categories for mobiles and accessories"
-        action={
-          <Button className="gap-2" onClick={openAdd}>
-            <Plus className="w-4 h-4" />
-            Add Category
-          </Button>
-        }
-      />
+    <div className="p-4 space-y-3">
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard title="Total Categories" value={String(stats.total)} icon={Layers} subtext={`${stats.totalItems} total items`} />
-        <StatCard title="Mobile Categories" value={String(stats.mobile)} icon={Smartphone} subtext="For mobile phones" />
-        <StatCard title="Accessory Categories" value={String(stats.accessory)} icon={Package} subtext="For accessories" />
-        <StatCard title="Shared (Both)" value={String(stats.both)} icon={Tag} subtext="Used for both types" />
+      {/* ── Compact header ─────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+            <Layers className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-slate-900 leading-none">Categories</h1>
+            <p className="text-[10px] text-slate-400 mt-0.5">Manage product categories for mobiles and accessories</p>
+          </div>
+        </div>
+        <Button onClick={openAdd} size="sm" className="h-8 text-xs gap-1.5 px-3">
+          <Plus className="w-3.5 h-3.5" />
+          Add Category
+        </Button>
       </div>
 
-      {/* Mobile Cards (md:hidden) */}
-      <div className="md:hidden space-y-3">
-        {/* Mobile search */}
+      {/* ── 4 stat cards in one row ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-2.5">
+        {statCards.map((card) => (
+          <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none">{card.title}</p>
+              <div className={`w-6 h-6 rounded-md ${card.iconBg} flex items-center justify-center shrink-0`}>
+                <card.Icon className="w-3.5 h-3.5 text-white" />
+              </div>
+            </div>
+            <p className="text-lg font-bold text-slate-900 leading-none">{card.value}</p>
+            <p className="text-[10px] text-slate-400">{card.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Mobile cards (md:hidden) ────────────────────────────────────────── */}
+      <div className="md:hidden space-y-2">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Search categories..."
             value={mobileSearch}
             onChange={(e) => setMobileSearch(e.target.value)}
-            className="w-full pl-9 pr-4 h-10 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
           />
         </div>
-
-        {/* Cards */}
         {list
           .filter((c) => c.name.toLowerCase().includes(mobileSearch.toLowerCase()))
           .map((cat) => {
-            const accentColor =
-              cat.type === "Mobile"
-                ? "bg-blue-500"
-                : cat.type === "Accessory"
-                ? "bg-slate-400"
-                : "bg-violet-500"
-
-            const iconBg =
-              cat.type === "Mobile"
-                ? "bg-blue-100"
-                : cat.type === "Accessory"
-                ? "bg-slate-100"
-                : "bg-violet-100"
-
-            const iconColor =
-              cat.type === "Mobile"
-                ? "text-blue-600"
-                : cat.type === "Accessory"
-                ? "text-slate-600"
-                : "text-violet-600"
-
+            const accentBg = cat.type === "Mobile" ? "bg-blue-500" : cat.type === "Accessory" ? "bg-slate-400" : "bg-violet-500"
             return (
-              <div
-                key={cat.id}
-                className="flex rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
-              >
-                {/* Left accent strip */}
-                <div className={`w-1 shrink-0 ${accentColor}`} />
-
-                {/* Card body */}
-                <div className="flex-1 p-3 min-w-0">
-                  {/* Row 1: Icon + Name + TypeBadge */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center shrink-0`}>
-                      <Tag className={`w-4 h-4 ${iconColor}`} />
+              <div key={cat.id} className="flex rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className={`w-1 shrink-0 ${accentBg}`} />
+                <div className="flex-1 p-2.5 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
+                      <Tag className="w-3.5 h-3.5 text-blue-600" />
                     </div>
-                    <span className="font-semibold text-slate-800 text-sm truncate flex-1">
-                      {cat.name}
-                    </span>
-                    <TypeBadge type={cat.type} />
+                    <span className="text-xs font-semibold text-slate-800 truncate flex-1">{cat.name}</span>
+                    <TypeChip type={cat.type} />
                   </div>
-
-                  {/* Row 2: Description */}
                   {cat.description && (
-                    <p className="text-xs text-slate-500 line-clamp-2 mb-2 ml-10">
-                      {cat.description}
-                    </p>
+                    <p className="text-[10px] text-slate-400 line-clamp-1 ml-8 mb-1">{cat.description}</p>
                   )}
-
-                  {/* Row 3: Items + Date */}
-                  <div className="flex items-center gap-3 ml-10 mb-2.5">
-                    <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
-                      <Hash className="w-3 h-3 text-slate-400" />
-                      {cat.itemCount} items
+                  <div className="flex items-center gap-3 ml-8 mb-2">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                      <Hash className="w-3 h-3" />{cat.itemCount} items
                     </span>
-                    <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                      <Calendar className="w-3 h-3" />
-                      {formatDate(cat.createdAt)}
+                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                      <Calendar className="w-3 h-3" />{formatDate(cat.createdAt)}
                     </span>
                   </div>
-
-                  {/* Row 4: Actions */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-8 text-xs gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
-                      onClick={() => openEdit(cat)}
-                    >
-                      <Pencil className="w-3 h-3" />
-                      Edit
+                  <div className="flex gap-1.5">
+                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => openEdit(cat)}>
+                      <Pencil className="w-3 h-3" />Edit
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-8 text-xs gap-1.5 text-red-500 border-red-200 hover:bg-red-50"
-                      onClick={() => setDeleteTarget(cat)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      Delete
+                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-red-500 border-red-200 hover:bg-red-50" onClick={() => setDeleteTarget(cat)}>
+                      <Trash2 className="w-3 h-3" />Delete
                     </Button>
                   </div>
                 </div>
               </div>
             )
           })}
-
         {list.filter((c) => c.name.toLowerCase().includes(mobileSearch.toLowerCase())).length === 0 && (
-          <div className="text-center py-10 text-slate-400 text-sm">No categories found</div>
+          <div className="text-center py-8 text-xs text-slate-400">No categories found</div>
         )}
       </div>
 
-      {/* Desktop Table (hidden md:block) */}
+      {/* ── Desktop table ───────────────────────────────────────────────────── */}
       <div className="hidden md:block">
-        <DataTable
-          columns={columns}
-          data={list}
-          searchKey="name"
-          searchPlaceholder="Search categories..."
-        />
+        <DataTable columns={columns} data={list} searchKey="name" searchPlaceholder="Search categories..." />
       </div>
 
-      {/* Add / Edit Dialog */}
+      {/* ── Add / Edit Dialog ───────────────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{editTarget ? "Edit Category" : "Add New Category"}</DialogTitle>
-            <DialogDescription>
-              {editTarget ? "Update the category details below." : "Fill in the details to create a new category."}
-            </DialogDescription>
+            <DialogTitle className="text-sm font-bold">
+              {editTarget ? "Edit Category" : "Add New Category"}
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="cat-name">
-                Name <span className="text-red-500">*</span>
-              </Label>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <Label className="text-xs">Name <span className="text-red-500">*</span></Label>
               <Input
-                id="cat-name"
                 placeholder="e.g. Flagship, Cases & Covers"
                 value={formName}
-                onChange={(e) => {
-                  setFormName(e.target.value)
-                  if (formErrors.name) setFormErrors((p) => ({ ...p, name: "" }))
-                }}
-                className={formErrors.name ? "border-red-400" : ""}
+                onChange={(e) => { setFormName(e.target.value); if (formErrors.name) setFormErrors((p) => ({ ...p, name: "" })) }}
+                className={`h-8 text-xs ${formErrors.name ? "border-red-400" : ""}`}
               />
-              {formErrors.name && (
-                <p className="text-xs text-red-500">{formErrors.name}</p>
-              )}
+              {formErrors.name && <p className="text-[10px] text-red-500">{formErrors.name}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Type</Label>
+            <div className="space-y-1">
+              <Label className="text-xs">Type</Label>
               <Select value={formType} onValueChange={(v) => setFormType(v as Category["type"])}>
-                <SelectTrigger>
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -459,34 +359,32 @@ export default function CategoriesPage() {
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="cat-desc">
-                Description{" "}
-                <span className="text-slate-400 font-normal text-xs">(optional)</span>
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Description <span className="text-slate-400 font-normal">(optional)</span>
               </Label>
               <Textarea
-                id="cat-desc"
                 placeholder="Brief description of this category..."
                 value={formDesc}
                 onChange={(e) => setFormDesc(e.target.value)}
                 rows={2}
-                className="resize-none"
+                className="resize-none text-xs"
               />
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
               {editTarget ? "Save Changes" : "Add Category"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
+      {/* ── Delete Confirm ──────────────────────────────────────────────────── */}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -496,6 +394,6 @@ export default function CategoriesPage() {
         cancelLabel="Cancel"
         onConfirm={handleDelete}
       />
-    </PageWrapper>
+    </div>
   )
 }

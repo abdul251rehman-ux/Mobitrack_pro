@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
-import { Plus, Eye, Printer, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText } from "lucide-react"
+import React, { useState, useMemo, useEffect } from "react"
+import { Plus, Eye, Printer, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { startOfDay, startOfWeek, startOfMonth, isAfter, parseISO } from "date-fns"
@@ -27,12 +27,16 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { PAYMENT_METHODS } from "@/lib/constants"
 
 // ── Payment method icon map ───────────────────────────────────────────────────
-const PAYMENT_ICONS: Record<string, string> = {
-  Cash: "💵",
-  Card: "💳",
-  JazzCash: "📱",
-  EasyPaisa: "📱",
-  "Bank Transfer": "🏦",
+const PAYMENT_ICONS: Record<string, React.ElementType> = {
+  Cash: Banknote,
+  Card: CreditCard,
+  JazzCash: Smartphone,
+  EasyPaisa: Wallet,
+  "Bank Transfer": Building2,
+}
+function PaymentIcon({ method }: { method: string }) {
+  const Icon = PAYMENT_ICONS[method] ?? CreditCard
+  return <Icon className="w-3.5 h-3.5 text-slate-500" />
 }
 
 // ── Today reference (dynamic) ─────────────────────────────────────────────────
@@ -293,7 +297,7 @@ export default function SalesPage() {
         const method = row.original.paymentMethod
         return (
           <span className="flex items-center gap-1.5 text-sm text-slate-700">
-            <span>{PAYMENT_ICONS[method] ?? "💳"}</span>
+            <PaymentIcon method={method} />
             <span>{method}</span>
           </span>
         )
@@ -353,7 +357,7 @@ export default function SalesPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Page Header */}
       <PageHeader
         title="Sales"
@@ -375,8 +379,8 @@ export default function SalesPage() {
         }
       />
 
-      {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+      {/* Summary Stat Cards — 4 in one row */}
+      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
         <StatCard
           title="Today's Sales"
           value={formatCurrency(stats.todayTotal)}
@@ -418,58 +422,51 @@ export default function SalesPage() {
       <>
 
       {/* Filter Bar */}
-      <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filters</span>
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <div className="flex items-center gap-1.5 mb-2.5">
+          <Filter className="w-3 h-3 text-slate-400" />
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Filters</span>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-2">
           {/* Customer search */}
-          <div className="flex flex-col gap-1.5 min-w-0 flex-1 w-full sm:w-auto">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Customer</label>
+          <div className="flex flex-col gap-1 min-w-0 flex-1 w-full sm:w-auto">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer</label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
               <Input
                 placeholder="Search customer name..."
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
-                className="pl-8 h-9 text-sm"
+                className="pl-7 h-8 text-xs"
               />
             </div>
           </div>
 
           {/* Date range */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Date Range</label>
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="h-9 text-sm w-32 sm:w-36"
-              />
-              <span className="text-slate-300 text-sm font-light">—</span>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="h-9 text-sm w-32 sm:w-36"
-              />
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Date Range</label>
+            <div className="flex items-center gap-1">
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 text-xs w-32" />
+              <span className="text-slate-300 text-xs">—</span>
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 text-xs w-32" />
             </div>
           </div>
 
           {/* Payment method */}
-          <div className="flex flex-col gap-1.5 w-full sm:w-auto sm:min-w-[150px]">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Payment</label>
+          <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[140px]">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Payment</label>
             <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="All methods" />
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="All Methods" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Methods</SelectItem>
                 {PAYMENT_METHODS.map((m) => (
                   <SelectItem key={m} value={m}>
-                    {PAYMENT_ICONS[m]} {m}
+                    <span className="flex items-center gap-1.5">
+                      <PaymentIcon method={m} />
+                      {m}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -477,11 +474,11 @@ export default function SalesPage() {
           </div>
 
           {/* Status */}
-          <div className="flex flex-col gap-1.5 w-full sm:w-auto sm:min-w-[130px]">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</label>
+          <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[120px]">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="All statuses" />
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
@@ -493,13 +490,8 @@ export default function SalesPage() {
           </div>
 
           {/* Reset */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 self-end text-slate-600 hover:text-red-600 hover:border-red-300"
-            onClick={handleReset}
-          >
-            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+          <Button variant="outline" size="sm" className="h-8 self-end text-xs text-slate-600 hover:text-red-600 hover:border-red-300" onClick={handleReset}>
+            <RotateCcw className="w-3 h-3 mr-1" />
             Reset
           </Button>
         </div>
@@ -557,8 +549,8 @@ export default function SalesPage() {
                     <Calendar className="w-3 h-3 text-slate-400" />
                     {formatDate(sale.date)}
                   </span>
-                  <span className="text-xs text-slate-600">
-                    {PAYMENT_ICONS[sale.paymentMethod] ?? "💳"} {sale.paymentMethod}
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                    <PaymentIcon method={sale.paymentMethod} /> {sale.paymentMethod}
                   </span>
                 </div>
 
@@ -652,8 +644,8 @@ export default function SalesPage() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 mb-0.5">Payment Method</p>
-                  <p className="font-semibold text-slate-800">
-                    {PAYMENT_ICONS[viewSale.paymentMethod]} {viewSale.paymentMethod}
+                  <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <PaymentIcon method={viewSale.paymentMethod} /> {viewSale.paymentMethod}
                   </p>
                 </div>
               </div>

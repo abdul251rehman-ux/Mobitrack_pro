@@ -14,14 +14,11 @@ import {
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
 import { Supplier, Purchase } from "@/data/types"
-import { PageWrapper } from "@/components/layout/page-wrapper"
-import { PageHeader } from "@/components/shared/page-header"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -57,23 +54,10 @@ type SupplierForm = z.infer<typeof supplierSchema>
 function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5" title={`${rating} / 5`}>
-      {[1, 2, 3, 4, 5].map((star) => {
-        const filled = rating >= star
-        const half   = !filled && rating >= star - 0.5
-        return (
-          <span
-            key={star}
-            className={
-              filled ? "text-amber-400 text-sm" :
-              half   ? "text-amber-300 text-sm" :
-                       "text-slate-200 text-sm"
-            }
-          >
-            ★
-          </span>
-        )
-      })}
-      <span className="ml-1 text-xs font-medium text-slate-500">{rating.toFixed(1)}</span>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <span key={star} className={rating >= star ? "text-amber-400 text-xs" : rating >= star - 0.5 ? "text-amber-300 text-xs" : "text-slate-200 text-xs"}>★</span>
+      ))}
+      <span className="ml-1 text-[10px] font-medium text-slate-400">{rating.toFixed(1)}</span>
     </div>
   )
 }
@@ -107,117 +91,81 @@ function SupplierCard({
     .split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 hover:shadow-xl hover:shadow-slate-200/60 transition-all duration-300 hover:-translate-y-1 flex flex-col overflow-hidden">
-      {/* Gradient header */}
-      <div className={`bg-linear-to-br ${headerGradient} h-20 relative overflow-hidden flex items-end px-5 pb-0`}>
-        <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
-        <div className="absolute -bottom-6 -left-2 w-16 h-16 rounded-full bg-white/10 pointer-events-none" />
-        {/* Initials avatar */}
-        <div className="relative z-10 w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center translate-y-6 shadow-lg">
-          <span className="text-white font-bold text-base">{initials}</span>
-        </div>
-        {/* Status badge */}
-        <div className="ml-auto mb-2 relative z-10">
-          <StatusBadge status={supplier.status} className="bg-white/90 border-white/50 text-slate-700" />
-        </div>
-      </div>
+    <div className="bg-white rounded-xl border border-slate-200 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 flex flex-col overflow-hidden">
 
-      {/* Name below header */}
-      <div className="pt-8 px-5 pb-3">
-        <h3 className="font-bold text-slate-900 text-base leading-tight truncate">
-          {supplier.companyName}
-        </h3>
-        <p className="text-sm text-slate-500 mt-0.5">{supplier.contactPerson}</p>
-      </div>
-
-      {/* Contact Info */}
-      <div className="px-5 pb-3 space-y-1.5">
-        <button
-          onClick={() => copyToClipboard(supplier.phone, "Phone")}
-          className="w-full flex items-center gap-2 text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg px-2 py-1 -mx-2 transition-colors group"
-        >
-          <Phone className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 shrink-0" />
-          <span className="truncate">{supplier.phone}</span>
-          <Copy className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-        </button>
-        <button
-          onClick={() => copyToClipboard(supplier.email, "Email")}
-          className="w-full flex items-center gap-2 text-sm text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg px-2 py-1 -mx-2 transition-colors group"
-        >
-          <Mail className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 shrink-0" />
-          <span className="truncate">{supplier.email}</span>
-          <Copy className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-        </button>
-        <div className="flex items-start gap-2 text-sm text-slate-500 px-2">
-          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-          <span className="truncate">{supplier.city} — {supplier.address}</span>
+      {/* ── Card Header ── */}
+      <div className={`bg-linear-to-r ${headerGradient} px-3 pt-3 pb-4`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="w-9 h-9 rounded-lg bg-white/20 border border-white/30 flex items-center justify-center shadow-sm shrink-0">
+            <span className="text-white font-bold text-xs">{initials}</span>
+          </div>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${supplier.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
+            {supplier.status}
+          </span>
+        </div>
+        <div className="mt-2">
+          <h3 className="font-bold text-white text-sm leading-tight truncate">{supplier.companyName}</h3>
+          <p className="text-white/70 text-[10px] mt-0.5 truncate">{supplier.contactPerson}</p>
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="mx-5 border-t border-slate-100" />
-
-      {/* Stats */}
-      <div className="px-5 py-3 grid grid-cols-2 gap-3">
-        <div className="bg-slate-50 rounded-xl p-2.5">
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">
-            Total Purchases
-          </p>
-          <p className="text-sm font-bold text-slate-800 truncate">
-            {formatCurrency(supplier.totalPurchases)}
-          </p>
+      {/* ── Contact Info ── */}
+      <div className="px-3 py-2.5 border-b border-slate-100">
+        <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+          <button onClick={() => copyToClipboard(supplier.phone, "Phone")}
+            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-md px-1.5 py-1.5 transition-colors group min-w-0">
+            <div className="w-5 h-5 rounded bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center shrink-0">
+              <Phone className="w-2.5 h-2.5 text-slate-500 group-hover:text-blue-600" />
+            </div>
+            <span className="truncate font-medium">{supplier.phone}</span>
+          </button>
+          <button onClick={() => copyToClipboard(supplier.email, "Email")}
+            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-md px-1.5 py-1.5 transition-colors group min-w-0">
+            <div className="w-5 h-5 rounded bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center shrink-0">
+              <Mail className="w-2.5 h-2.5 text-slate-500 group-hover:text-blue-600" />
+            </div>
+            <span className="truncate">{supplier.email || "—"}</span>
+          </button>
         </div>
-        <div className={`rounded-xl p-2.5 ${supplier.outstandingBalance > 0 ? "bg-red-50" : "bg-slate-50"}`}>
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-0.5">
-            Outstanding
-          </p>
-          <p className={`text-sm font-bold truncate ${supplier.outstandingBalance > 0 ? "text-red-600" : "text-slate-800"}`}>
-            {supplier.outstandingBalance > 0
-              ? formatCurrency(supplier.outstandingBalance)
-              : "—"}
+        <div className="flex items-center gap-1.5 px-1.5 py-1">
+          <div className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center shrink-0">
+            <MapPin className="w-2.5 h-2.5 text-slate-500" />
+          </div>
+          <span className="text-xs text-slate-500 truncate">{supplier.city}{supplier.address ? ` — ${supplier.address}` : ""}</span>
+        </div>
+      </div>
+
+      {/* ── Stats ── */}
+      <div className="px-3 py-2.5 grid grid-cols-2 gap-2 border-b border-slate-100">
+        <div>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Purchases</p>
+          <p className="text-sm font-bold text-slate-800">{formatCurrency(supplier.totalPurchases)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Outstanding</p>
+          <p className={`text-sm font-bold ${supplier.outstandingBalance > 0 ? "text-red-600" : "text-slate-400"}`}>
+            {supplier.outstandingBalance > 0 ? formatCurrency(supplier.outstandingBalance) : "—"}
           </p>
         </div>
       </div>
 
-      {/* Rating */}
-      <div className="px-5 pb-3">
+      {/* ── Footer ── */}
+      <div className="px-3 py-2 flex items-center justify-between gap-2">
         <StarRating rating={supplier.rating} />
-      </div>
-
-      {/* Divider */}
-      <div className="mx-5 border-t border-slate-100" />
-
-      {/* Actions */}
-      <div className="px-5 py-3 flex items-center justify-between gap-2 mt-auto">
-        <Link href={`/suppliers/${supplier.id}`} className="flex-1">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            View Details
-          </Button>
-        </Link>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-            onClick={() => onEdit(supplier)}
-            title="Edit supplier"
-          >
-            <Pencil className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-slate-400 hover:text-red-600 hover:bg-red-50"
-            onClick={() => onDelete(supplier)}
-            title="Delete supplier"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <Link href={`/suppliers/${supplier.id}`}>
+            <button className="flex items-center gap-1 h-7 px-2.5 text-[10px] font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 rounded-lg transition-colors">
+              <Eye className="w-3 h-3" />View
+            </button>
+          </Link>
+          <button onClick={() => onEdit(supplier)} title="Edit"
+            className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button onClick={() => onDelete(supplier)} title="Delete"
+            className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+            <Trash2 className="w-3 h-3" />
+          </button>
         </div>
       </div>
     </div>
@@ -282,155 +230,67 @@ function SupplierFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-slate-900">
+          <DialogTitle className="text-base font-bold text-slate-900">
             {editing ? "Edit Supplier" : "Add New Supplier"}
           </DialogTitle>
-          <DialogDescription className="text-slate-500">
-            {editing
-              ? `Updating details for ${editing.companyName}`
-              : "Fill in the supplier details below"}
+          <DialogDescription className="text-xs text-slate-500">
+            {editing ? `Updating details for ${editing.companyName}` : "Fill in the supplier details below"}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
-          {/* Company Name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="companyName">Company Name <span className="text-red-500">*</span></Label>
-            <Input
-              id="companyName"
-              placeholder="e.g. Cell City Electronics"
-              {...register("companyName")}
-              className={errors.companyName ? "border-red-400" : ""}
-            />
-            {errors.companyName && (
-              <p className="text-xs text-red-500">{errors.companyName.message}</p>
-            )}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 mt-1">
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="companyName">Company Name <span className="text-red-500">*</span></Label>
+            <Input id="companyName" placeholder="e.g. Cell City Electronics" {...register("companyName")} className={`h-8 text-xs ${errors.companyName ? "border-red-400" : ""}`} />
+            {errors.companyName && <p className="text-xs text-red-500">{errors.companyName.message}</p>}
           </div>
-
-          {/* Contact Person */}
-          <div className="space-y-1.5">
-            <Label htmlFor="contactPerson">Contact Person <span className="text-red-500">*</span></Label>
-            <Input
-              id="contactPerson"
-              placeholder="e.g. Muhammad Tariq"
-              {...register("contactPerson")}
-              className={errors.contactPerson ? "border-red-400" : ""}
-            />
-            {errors.contactPerson && (
-              <p className="text-xs text-red-500">{errors.contactPerson.message}</p>
-            )}
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="contactPerson">Contact Person <span className="text-red-500">*</span></Label>
+            <Input id="contactPerson" placeholder="e.g. Muhammad Tariq" {...register("contactPerson")} className={`h-8 text-xs ${errors.contactPerson ? "border-red-400" : ""}`} />
+            {errors.contactPerson && <p className="text-xs text-red-500">{errors.contactPerson.message}</p>}
           </div>
-
-          {/* Phone + Email */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
-              <Input
-                id="phone"
-                placeholder="+92 300 1234567"
-                {...register("phone")}
-                className={errors.phone ? "border-red-400" : ""}
-              />
-              {errors.phone && (
-                <p className="text-xs text-red-500">{errors.phone.message}</p>
-              )}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
+              <Input id="phone" placeholder="+92 300 1234567" {...register("phone")} className={`h-8 text-xs ${errors.phone ? "border-red-400" : ""}`} />
+              {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="contact@company.pk"
-                {...register("email")}
-                className={errors.email ? "border-red-400" : ""}
-              />
-              {errors.email && (
-                <p className="text-xs text-red-500">{errors.email.message}</p>
-              )}
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="email">Email <span className="text-red-500">*</span></Label>
+              <Input id="email" type="email" placeholder="contact@company.pk" {...register("email")} className={`h-8 text-xs ${errors.email ? "border-red-400" : ""}`} />
+              {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
             </div>
           </div>
-
-          {/* Address */}
-          <div className="space-y-1.5">
-            <Label htmlFor="address">Address <span className="text-red-500">*</span></Label>
-            <Input
-              id="address"
-              placeholder="Shop 14, Hall Road Electronics Market"
-              {...register("address")}
-              className={errors.address ? "border-red-400" : ""}
-            />
-            {errors.address && (
-              <p className="text-xs text-red-500">{errors.address.message}</p>
-            )}
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="address">Address <span className="text-red-500">*</span></Label>
+            <Input id="address" placeholder="Shop 14, Hall Road Electronics Market" {...register("address")} className={`h-8 text-xs ${errors.address ? "border-red-400" : ""}`} />
+            {errors.address && <p className="text-xs text-red-500">{errors.address.message}</p>}
           </div>
-
-          {/* City */}
-          <div className="space-y-1.5">
-            <Label>City <span className="text-red-500">*</span></Label>
-            <Select
-              value={cityValue}
-              onValueChange={(v) => setValue("city", v as SupplierForm["city"])}
-            >
-              <SelectTrigger className={errors.city ? "border-red-400" : ""}>
-                <SelectValue placeholder="Select city" />
-              </SelectTrigger>
-              <SelectContent>
-                {CITIES.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
+          <div className="space-y-1">
+            <Label className="text-xs">City <span className="text-red-500">*</span></Label>
+            <Select value={cityValue} onValueChange={(v) => setValue("city", v as SupplierForm["city"])}>
+              <SelectTrigger className={`h-8 text-xs ${errors.city ? "border-red-400" : ""}`}><SelectValue placeholder="Select city" /></SelectTrigger>
+              <SelectContent>{CITIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}</SelectContent>
             </Select>
-            {errors.city && (
-              <p className="text-xs text-red-500">{errors.city.message}</p>
-            )}
+            {errors.city && <p className="text-xs text-red-500">{errors.city.message}</p>}
           </div>
-
-          {/* Notes */}
-          <div className="space-y-1.5">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              placeholder="Any additional notes about this supplier..."
-              rows={3}
-              {...register("notes")}
-            />
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="notes">Notes</Label>
+            <Textarea id="notes" placeholder="Any additional notes..." rows={2} {...register("notes")} className="text-xs" />
           </div>
-
-          {/* Status */}
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
             <div>
-              <p className="text-sm font-medium text-slate-700">Account Status</p>
-              <p className="text-xs text-slate-400">
-                {statusValue === "Active" ? "Supplier is active and can receive orders" : "Supplier is inactive"}
-              </p>
+              <p className="text-xs font-medium text-slate-700">Account Status</p>
+              <p className="text-[10px] text-slate-400">{statusValue === "Active" ? "Active — can receive orders" : "Inactive"}</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-medium ${statusValue === "Active" ? "text-emerald-600" : "text-slate-400"}`}>
-                {statusValue}
-              </span>
-              <Switch
-                checked={statusValue === "Active"}
-                onCheckedChange={(checked) =>
-                  setValue("status", checked ? "Active" : "Inactive")
-                }
-              />
+              <span className={`text-xs font-medium ${statusValue === "Active" ? "text-emerald-600" : "text-slate-400"}`}>{statusValue}</span>
+              <Switch checked={statusValue === "Active"} onCheckedChange={(checked) => setValue("status", checked ? "Active" : "Inactive")} />
             </div>
           </div>
-
-          {/* Footer Buttons */}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]"
-            >
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" size="sm" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[100px]">
               {editing ? "Save Changes" : "Add Supplier"}
             </Button>
           </div>
@@ -594,68 +454,43 @@ export default function SuppliersPage() {
 
   if (loading) {
     return (
-      <PageWrapper>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-        </div>
-      </PageWrapper>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
     )
   }
 
   return (
-    <PageWrapper>
-      {/* ── Header ───────────────────────────────────────────────────────── */}
-      <PageHeader
-        title="Suppliers"
-        description="Manage your supplier network and purchase relationships"
-        badge={
-          <Badge
-            variant="secondary"
-            className="bg-blue-100 text-blue-700 font-semibold px-2.5"
-          >
-            {supplierList.length}
-          </Badge>
-        }
-        action={
-          <Button
-            onClick={handleAddClick}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add Supplier
-          </Button>
-        }
-      />
-
-      {/* ── Filter Bar ───────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
-        {/* Search */}
-        <div className="relative flex-1 min-w-0 w-full sm:w-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input
-            placeholder="Search suppliers..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-base font-bold text-slate-900">Suppliers</h1>
+          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">{supplierList.length}</span>
         </div>
+        <button onClick={handleAddClick} className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm">
+          <Plus className="w-3.5 h-3.5" />Add Supplier
+        </button>
+      </div>
 
-        {/* City filter */}
+      {/* Filter Bar */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-slate-200">
+        <div className="relative shrink-0 w-48">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <Input placeholder="Search suppliers..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-8 text-xs" />
+        </div>
         <Select value={cityFilter} onValueChange={setCityFilter}>
-          <SelectTrigger className="w-full sm:w-40 h-9 text-sm">
+          <SelectTrigger className="w-32 h-8 text-xs shrink-0">
             <SelectValue placeholder="All Cities" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Cities</SelectItem>
-            {uniqueCities.map((c) => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
-            ))}
+            {uniqueCities.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
           </SelectContent>
         </Select>
-
-        {/* Status filter */}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+          <SelectTrigger className="w-28 h-8 text-xs shrink-0">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -664,10 +499,8 @@ export default function SuppliersPage() {
             <SelectItem value="Inactive">Inactive</SelectItem>
           </SelectContent>
         </Select>
-
-        {/* Rating filter */}
         <Select value={ratingFilter} onValueChange={setRatingFilter}>
-          <SelectTrigger className="w-full sm:w-40 h-9 text-sm">
+          <SelectTrigger className="w-32 h-8 text-xs shrink-0">
             <SelectValue placeholder="Rating" />
           </SelectTrigger>
           <SelectContent>
@@ -677,66 +510,42 @@ export default function SuppliersPage() {
             <SelectItem value="3plus">★★★ 3+ Stars</SelectItem>
           </SelectContent>
         </Select>
-
-        {/* Result count */}
-        <span className="text-sm text-slate-400 ml-auto whitespace-nowrap">
-          {filtered.length} of {supplierList.length} suppliers
-        </span>
+        <span className="text-[10px] text-slate-400 ml-auto whitespace-nowrap">{filtered.length} of {supplierList.length} suppliers</span>
       </div>
 
-      {/* ── Grid ─────────────────────────────────────────────────────────── */}
+      {/* Grid */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <Building2 className="w-12 h-12 text-slate-200 mb-4" />
-          <h3 className="text-base font-semibold text-slate-500 mb-1">No suppliers found</h3>
-          <p className="text-sm text-slate-400">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Building2 className="w-10 h-10 text-slate-200 mb-3" />
+          <h3 className="text-sm font-semibold text-slate-500 mb-1">No suppliers found</h3>
+          <p className="text-xs text-slate-400">
             Try adjusting your filters or{" "}
-            <button
-              onClick={handleAddClick}
-              className="text-blue-600 hover:underline font-medium"
-            >
-              add a new supplier
-            </button>
+            <button onClick={handleAddClick} className="text-blue-600 hover:underline font-medium">add a new supplier</button>
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map((s) => (
-            <SupplierCard
-              key={s.id}
-              supplier={s}
-              onEdit={handleEditClick}
-              onDelete={handleDeleteClick}
-            />
+            <SupplierCard key={s.id} supplier={s} onEdit={handleEditClick} onDelete={handleDeleteClick} />
           ))}
         </div>
       )}
 
-      {/* ── Add / Edit Dialog ─────────────────────────────────────────────── */}
       <SupplierFormDialog
         open={formOpen}
-        onOpenChange={(v) => {
-          setFormOpen(v)
-          if (!v) setEditingSupplier(null)
-        }}
+        onOpenChange={(v) => { setFormOpen(v); if (!v) setEditingSupplier(null) }}
         editing={editingSupplier}
         onSave={handleSave}
       />
-
-      {/* ── Delete Confirmation ───────────────────────────────────────────── */}
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete Supplier"
-        description={
-          deleteTarget
-            ? `Are you sure you want to delete "${deleteTarget.companyName}"? This action cannot be undone.`
-            : "Are you sure?"
-        }
+        description={deleteTarget ? `Are you sure you want to delete "${deleteTarget.companyName}"? This action cannot be undone.` : "Are you sure?"}
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={handleConfirmDelete}
       />
-    </PageWrapper>
+    </div>
   )
 }

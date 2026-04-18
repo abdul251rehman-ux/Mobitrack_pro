@@ -496,7 +496,7 @@ export default function NewPurchasePage() {
           className="h-7 text-xs flex-1" />
         <Button size="sm" className="h-7 px-2 text-[10px]" disabled={!(newVal[k] || "").trim()}
           onClick={async () => { const ok = await onAdd((newVal[k] || "").trim()); if (ok) closeNew(k) }}>Save</Button>
-        <Button size="sm" variant="ghost" className="h-7 px-1.5 text-[10px]" onClick={() => closeNew(k)}>✕</Button>
+        <Button size="sm" variant="ghost" className="h-7 w-7 px-0" onClick={() => closeNew(k)}><XIcon className="w-3 h-3" /></Button>
       </div>
     )
   }
@@ -514,26 +514,26 @@ export default function NewPurchasePage() {
       <PageHeader title="Create New Purchase" description="Record a new stock purchase from a supplier"
         action={<Link href="/purchases"><Button variant="outline" className="gap-2"><ChevronLeft className="w-4 h-4" /> Back</Button></Link>} />
 
-      <div className="space-y-6">
+      <div className="space-y-3">
 
           {/* ═══ Purchase Items (with Supplier inline) ════════════════════ */}
           <Card className="shadow-sm border-slate-200">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                  <Package className="w-4.5 h-4.5 text-blue-600" />
+            <CardHeader className="px-4 pt-3 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <Package className="w-3.5 h-3.5 text-blue-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-[15px] font-semibold text-slate-900">Purchase Items</CardTitle>
-                  <CardDescription className="text-xs text-slate-500 mt-0.5">Add individual mobile phones or accessories</CardDescription>
+                  <CardTitle className="text-sm font-semibold text-slate-900">Purchase Items</CardTitle>
+                  <CardDescription className="text-xs text-slate-500">Add individual mobile phones or accessories</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="px-4 pb-4 space-y-3">
 
               {/* ── Added Items ─────────────────────────────────────────── */}
               {lineItems.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Added Items ({lineItems.length})</p>
                   {lineItems.map(item => (
                     <div key={item.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 flex items-center gap-3">
@@ -576,20 +576,20 @@ export default function NewPurchasePage() {
               )}
 
               {/* Tab Switcher */}
-              <div className="flex rounded-lg bg-slate-100 p-1 gap-1">
+              <div className="flex rounded-lg bg-slate-100 p-0.5 gap-0.5">
                 <button type="button" onClick={() => setItemTab("Mobile")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${itemTab === "Mobile" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}>
-                  <Smartphone className="w-4 h-4" /> Mobile Phone
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${itemTab === "Mobile" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}>
+                  <Smartphone className="w-3.5 h-3.5" /> Mobile Phone
                 </button>
                 <button type="button" onClick={() => setItemTab("Accessory")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${itemTab === "Accessory" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}>
-                  <Headphones className="w-4 h-4" /> Accessory
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-all ${itemTab === "Accessory" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800"}`}>
+                  <Headphones className="w-3.5 h-3.5" /> Accessory
                 </button>
               </div>
 
               {/* ── Mobile Form ──────────────────────────────────────────── */}
               {itemTab === "Mobile" && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-4 overflow-x-hidden">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-3 overflow-x-hidden">
                   {/* New / Used toggle */}
                   <div className="flex rounded-lg bg-slate-200/70 p-0.5 gap-0.5">
                     <button type="button" onClick={() => { setPhoneCondition("new"); resetMobileForm() }}
@@ -621,55 +621,55 @@ export default function NewPurchasePage() {
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                         <Smartphone className="w-3.5 h-3.5 text-blue-500" /> Add Android Phone
                       </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                        <div className="space-y-1.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Brand <span className="text-red-500">*</span></Label>
                           <Select value={mBrand} onValueChange={setMBrand}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Brand" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Brand" /></SelectTrigger>
                             <SelectContent>{brands.filter(b => b !== "Apple").map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="mBrand" placeholder="e.g. Huawei" onAdd={async n => { const ok = await handleAddBrand(n); if (ok) setMBrand(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Model <span className="text-red-500">*</span></Label>
-                          <Input placeholder="e.g. Galaxy A54" value={mModel} onChange={e => setMModel(e.target.value)} className="h-9 text-sm bg-white" />
+                          <Input placeholder="e.g. Galaxy A54" value={mModel} onChange={e => setMModel(e.target.value)} className="h-8 text-xs bg-white" />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Color</Label>
                           <Select value={mColor} onValueChange={setMColor}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Color" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Color" /></SelectTrigger>
                             <SelectContent>{colors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="mColor" placeholder="e.g. Midnight" onAdd={async n => { const ok = await handleAddColor(n); if (ok) setMColor(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Storage</Label>
                           <Select value={mStorage} onValueChange={setMStorage}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Storage" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Storage" /></SelectTrigger>
                             <SelectContent>{storageOpts.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="mStorage" placeholder="e.g. 512GB" onAdd={async n => { const ok = await handleAddStorage(n); if (ok) setMStorage(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">RAM</Label>
                           <Select value={mRam} onValueChange={setMRam}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="RAM" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="RAM" /></SelectTrigger>
                             <SelectContent>{ramOpts.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="mRam" placeholder="e.g. 12GB" onAdd={async n => { const ok = await handleAddRam(n); if (ok) setMRam(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Category</Label>
                           <Select value={mCategory} onValueChange={setMCategory}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Category" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Category" /></SelectTrigger>
                             <SelectContent>{mobileCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="mCat" placeholder="e.g. Gaming" onAdd={async n => { const ok = await handleAddCategory(n, "Mobile"); if (ok) setMCategory(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Condition</Label>
                           <Select value={mCondition} onValueChange={setMCondition}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {conditions.length > 0 ? conditions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) : (
                                 <><SelectItem value="New">New</SelectItem><SelectItem value="Refurbished">Refurbished</SelectItem><SelectItem value="Used">Used</SelectItem></>
@@ -677,19 +677,19 @@ export default function NewPurchasePage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Hash className="w-3 h-3" /> IMEI <span className="text-red-500">*</span></Label>
-                          <Input placeholder="15-digit IMEI" value={mImei} onChange={e => setMImei(e.target.value.replace(/\D/g, "").slice(0, 15))} className="h-9 text-sm bg-white font-mono" maxLength={15} />
+                          <Input placeholder="15-digit IMEI" value={mImei} onChange={e => setMImei(e.target.value.replace(/\D/g, "").slice(0, 15))} className="h-8 text-xs bg-white font-mono" maxLength={15} />
                           <p className="text-[10px] text-slate-400">Dial *#06# to find IMEI</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="space-y-1.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Building2 className="w-3 h-3" /> Supplier <span className="text-red-500">*</span></Label>
                           <div className="relative">
                             <Input placeholder="Search supplier..." value={supplierSearch}
                               onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
-                              onFocus={() => setSupplierDropdownOpen(true)} className="h-9 text-sm bg-white" />
+                              onFocus={() => setSupplierDropdownOpen(true)} className="h-8 text-xs bg-white" />
                             {supplierDropdownOpen && (
                               <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                                 {filteredSuppliers.length === 0 ? (
@@ -707,16 +707,16 @@ export default function NewPurchasePage() {
                           </div>
                           {supplierDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setSupplierDropdownOpen(false)} />}
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Buy Price (Rs) <span className="text-red-500">*</span></Label>
-                          <Input type="number" min={0} placeholder="0" value={mBuyPrice} onChange={e => setMBuyPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                          <Input type="number" min={0} placeholder="0" value={mBuyPrice} onChange={e => setMBuyPrice(e.target.value)} className="h-8 text-xs bg-white" />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Sell Price (Rs)</Label>
-                          <Input type="number" min={0} placeholder="0" value={mSellPrice} onChange={e => setMSellPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                          <Input type="number" min={0} placeholder="0" value={mSellPrice} onChange={e => setMSellPrice(e.target.value)} className="h-8 text-xs bg-white" />
                         </div>
                         {/* Image Upload */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><ImageIcon className="w-3 h-3" /> Image</Label>
                           {mImageUrl ? (
                             <div className="relative h-9 flex items-center gap-2 px-2 rounded-md border border-slate-200 bg-white">
@@ -743,35 +743,35 @@ export default function NewPurchasePage() {
                         <svg className="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" /></svg>
                         Add iPhone
                       </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                        <div className="space-y-1.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">iPhone Model <span className="text-red-500">*</span></Label>
                           <Select value={mModel} onValueChange={setMModel}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Select model" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Select model" /></SelectTrigger>
                             <SelectContent>{iphoneModels.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="iphoneModel" placeholder="e.g. iPhone 15 Pro" onAdd={async n => { const ok = await handleAddIphoneModel(n); if (ok) setMModel(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Color</Label>
                           <Select value={mColor} onValueChange={setMColor}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Color" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Color" /></SelectTrigger>
                             <SelectContent>{colors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="iColor" placeholder="e.g. Space Black" onAdd={async n => { const ok = await handleAddColor(n); if (ok) setMColor(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Storage</Label>
                           <Select value={mStorage} onValueChange={setMStorage}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Storage" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Storage" /></SelectTrigger>
                             <SelectContent>{storageOpts.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="iStorage" placeholder="e.g. 256GB" onAdd={async n => { const ok = await handleAddStorage(n); if (ok) setMStorage(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Condition</Label>
                           <Select value={mCondition} onValueChange={setMCondition}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {conditions.length > 0 ? conditions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) : (
                                 <><SelectItem value="New">New</SelectItem><SelectItem value="Refurbished">Refurbished</SelectItem><SelectItem value="Used">Used</SelectItem></>
@@ -779,31 +779,31 @@ export default function NewPurchasePage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Battery className="w-3 h-3" /> Battery Health (%)</Label>
-                          <Input type="number" min={0} max={100} placeholder="e.g. 87" value={mBatteryHealth} onChange={e => setMBatteryHealth(e.target.value)} className="h-9 text-sm bg-white" />
+                          <Input type="number" min={0} max={100} placeholder="e.g. 87" value={mBatteryHealth} onChange={e => setMBatteryHealth(e.target.value)} className="h-8 text-xs bg-white" />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Category</Label>
                           <Select value={mCategory} onValueChange={setMCategory}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Category" /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Category" /></SelectTrigger>
                             <SelectContent>{mobileCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                           </Select>
                           <InlineAdd k="iCat" placeholder="e.g. Flagship" onAdd={async n => { const ok = await handleAddCategory(n, "Mobile"); if (ok) setMCategory(n); return ok }} />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Hash className="w-3 h-3" /> IMEI <span className="text-red-500">*</span></Label>
-                          <Input placeholder="15-digit IMEI" value={mImei} onChange={e => setMImei(e.target.value.replace(/\D/g, "").slice(0, 15))} className="h-9 text-sm bg-white font-mono" maxLength={15} />
+                          <Input placeholder="15-digit IMEI" value={mImei} onChange={e => setMImei(e.target.value.replace(/\D/g, "").slice(0, 15))} className="h-8 text-xs bg-white font-mono" maxLength={15} />
                           <p className="text-[10px] text-slate-400">Dial *#06# to find IMEI</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="space-y-1.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Building2 className="w-3 h-3" /> Supplier <span className="text-red-500">*</span></Label>
                           <div className="relative">
                             <Input placeholder="Search supplier..." value={supplierSearch}
                               onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
-                              onFocus={() => setSupplierDropdownOpen(true)} className="h-9 text-sm bg-white" />
+                              onFocus={() => setSupplierDropdownOpen(true)} className="h-8 text-xs bg-white" />
                             {supplierDropdownOpen && (
                               <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                                 {filteredSuppliers.length === 0 ? (
@@ -821,16 +821,16 @@ export default function NewPurchasePage() {
                           </div>
                           {supplierDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setSupplierDropdownOpen(false)} />}
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Buy Price (Rs) <span className="text-red-500">*</span></Label>
-                          <Input type="number" min={0} placeholder="0" value={mBuyPrice} onChange={e => setMBuyPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                          <Input type="number" min={0} placeholder="0" value={mBuyPrice} onChange={e => setMBuyPrice(e.target.value)} className="h-8 text-xs bg-white" />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600">Sell Price (Rs)</Label>
-                          <Input type="number" min={0} placeholder="0" value={mSellPrice} onChange={e => setMSellPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                          <Input type="number" min={0} placeholder="0" value={mSellPrice} onChange={e => setMSellPrice(e.target.value)} className="h-8 text-xs bg-white" />
                         </div>
                         {/* Image Upload */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><ImageIcon className="w-3 h-3" /> Image</Label>
                           {mImageUrl ? (
                             <div className="relative h-9 flex items-center gap-2 px-2 rounded-md border border-slate-200 bg-white">
@@ -854,12 +854,12 @@ export default function NewPurchasePage() {
                   {phoneCondition === "used" && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-3">
                       <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Used Phone Details</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {/* Condition Grade */}
                         <div className="space-y-1">
                           <Label className="text-[11px] font-semibold text-slate-600">Grade <span className="text-red-500">*</span></Label>
                           <Select value={mConditionGrade} onValueChange={setMConditionGrade}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="A+">A+ — Like New</SelectItem>
                               <SelectItem value="A">A — Excellent</SelectItem>
@@ -873,13 +873,13 @@ export default function NewPurchasePage() {
                         {/* Battery Health */}
                         <div className="space-y-1">
                           <Label className="text-[11px] font-semibold text-slate-600">Battery Health %</Label>
-                          <Input type="number" min={0} max={100} placeholder="e.g. 85" value={mBatteryHealth} onChange={e => setMBatteryHealth(e.target.value)} className="h-9 text-sm bg-white" />
+                          <Input type="number" min={0} max={100} placeholder="e.g. 85" value={mBatteryHealth} onChange={e => setMBatteryHealth(e.target.value)} className="h-8 text-xs bg-white" />
                         </div>
                         {/* Screen Condition */}
                         <div className="space-y-1">
                           <Label className="text-[11px] font-semibold text-slate-600">Screen</Label>
                           <Select value={mScreenCondition} onValueChange={setMScreenCondition}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="perfect">Perfect</SelectItem>
                               <SelectItem value="minor_scratches">Minor Scratches</SelectItem>
@@ -892,7 +892,7 @@ export default function NewPurchasePage() {
                         <div className="space-y-1">
                           <Label className="text-[11px] font-semibold text-slate-600">Body</Label>
                           <Select value={mBodyCondition} onValueChange={setMBodyCondition}>
-                            <SelectTrigger className="h-9 text-sm bg-white"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="perfect">Perfect</SelectItem>
                               <SelectItem value="minor_wear">Minor Wear</SelectItem>
@@ -918,28 +918,28 @@ export default function NewPurchasePage() {
                     </div>
                   )}
 
-                  <Button type="button" onClick={handleAddMobile} className={`${phoneCondition === "used" ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"} text-white gap-2 h-9`} size="sm">
-                    <Plus className="w-4 h-4" /> Add to Purchase List
+                  <Button type="button" onClick={handleAddMobile} className={`${phoneCondition === "used" ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"} text-white gap-1.5 h-8 text-xs`} size="sm">
+                    <Plus className="w-3.5 h-3.5" /> Add to Purchase List
                   </Button>
                 </div>
               )}
 
               {/* ── Accessory Form ───────────────────────────────────────── */}
               {itemTab === "Accessory" && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-4 overflow-x-hidden">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-3 overflow-x-hidden">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                     <Headphones className="w-3.5 h-3.5 text-blue-500" /> Add Accessory
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {/* Supplier */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
                         <Building2 className="w-3 h-3" /> Supplier <span className="text-red-500">*</span>
                       </Label>
                       <div className="relative">
                         <Input placeholder="Search supplier..." value={supplierSearch}
                           onChange={e => { setSupplierSearch(e.target.value); setSupplierDropdownOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
-                          onFocus={() => setSupplierDropdownOpen(true)} className="h-9 text-sm bg-white" />
+                          onFocus={() => setSupplierDropdownOpen(true)} className="h-8 text-xs bg-white" />
                         {supplierDropdownOpen && (
                           <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                             {filteredSuppliers.length === 0 ? (
@@ -958,45 +958,45 @@ export default function NewPurchasePage() {
                       {supplierDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setSupplierDropdownOpen(false)} />}
                     </div>
                     {/* Name */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600">Name <span className="text-red-500">*</span></Label>
-                      <Input placeholder="e.g. Galaxy Buds2 Pro" value={aName} onChange={e => setAName(e.target.value)} className="h-9 text-sm bg-white" />
+                      <Input placeholder="e.g. Galaxy Buds2 Pro" value={aName} onChange={e => setAName(e.target.value)} className="h-8 text-xs bg-white" />
                     </div>
                     {/* Brand */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600">Brand</Label>
                       <Select value={aBrand} onValueChange={setABrand}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Select brand" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Select brand" /></SelectTrigger>
                         <SelectContent>{brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                       </Select>
                       <InlineAdd k="aBrand" placeholder="e.g. Anker" onAdd={async n => { const ok = await handleAddBrand(n); if (ok) setABrand(n); return ok }} />
                     </div>
                     {/* Category */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600">Category</Label>
                       <Select value={aCategory} onValueChange={setACategory}>
-                        <SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Select category" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder="Select category" /></SelectTrigger>
                         <SelectContent>{accessoryCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                       </Select>
                       <InlineAdd k="aCat" placeholder="e.g. Earbuds" onAdd={async n => { const ok = await handleAddCategory(n, "Accessory"); if (ok) setACategory(n); return ok }} />
                     </div>
                     {/* Quantity */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600">Quantity <span className="text-red-500">*</span></Label>
-                      <Input type="number" min={1} value={aQty} onChange={e => setAQty(e.target.value)} className="h-9 text-sm bg-white" />
+                      <Input type="number" min={1} value={aQty} onChange={e => setAQty(e.target.value)} className="h-8 text-xs bg-white" />
                     </div>
                     {/* Buy Price */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600">Buy Price (Rs) <span className="text-red-500">*</span></Label>
-                      <Input type="number" min={0} placeholder="0" value={aBuyPrice} onChange={e => setABuyPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                      <Input type="number" min={0} placeholder="0" value={aBuyPrice} onChange={e => setABuyPrice(e.target.value)} className="h-8 text-xs bg-white" />
                     </div>
                     {/* Sell Price */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600">Sell Price (Rs)</Label>
-                      <Input type="number" min={0} placeholder="0" value={aSellPrice} onChange={e => setASellPrice(e.target.value)} className="h-9 text-sm bg-white" />
+                      <Input type="number" min={0} placeholder="0" value={aSellPrice} onChange={e => setASellPrice(e.target.value)} className="h-8 text-xs bg-white" />
                     </div>
                     {/* Image Upload */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><ImageIcon className="w-3 h-3" /> Image</Label>
                       {aImageUrl ? (
                         <div className="relative h-9 flex items-center gap-2 px-2 rounded-md border border-slate-200 bg-white">
@@ -1013,8 +1013,8 @@ export default function NewPurchasePage() {
                       )}
                     </div>
                   </div>
-                  <Button type="button" onClick={handleAddAccessory} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-9" size="sm">
-                    <Plus className="w-4 h-4" /> Add to Purchase List
+                  <Button type="button" onClick={handleAddAccessory} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs" size="sm">
+                    <Plus className="w-3.5 h-3.5" /> Add to Purchase List
                   </Button>
                 </div>
               )}
@@ -1031,50 +1031,50 @@ export default function NewPurchasePage() {
 
           {/* ═══ SECTION 3: Totals & Payment ═══════════════════════════════ */}
           <Card className="shadow-sm border-slate-200">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-                  <CreditCard className="w-4.5 h-4.5 text-emerald-600" />
+            <CardHeader className="px-4 pt-3 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-[15px] font-semibold text-slate-900">Totals & Payment</CardTitle>
-                  <CardDescription className="text-xs text-slate-500 mt-0.5">Review costs and record payment details</CardDescription>
+                  <CardTitle className="text-sm font-semibold text-slate-900">Totals & Payment</CardTitle>
+                  <CardDescription className="text-xs text-slate-500">Review costs and record payment details</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="px-4 pb-4 space-y-3">
               {/* Row 1: All 7 fields in one row */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-slate-700">Subtotal</Label>
-                  <div className="h-9 flex items-center px-3 rounded-lg border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-800">{formatCurrency(subtotal)}</div>
+                  <div className="h-8 flex items-center px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800">{formatCurrency(subtotal)}</div>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-slate-700">Shipping (Rs)</Label>
-                  <Input type="number" min={0} value={shippingCost} onChange={e => setShippingCost(e.target.value)} className="h-9 text-sm" placeholder="0" />
+                  <Input type="number" min={0} value={shippingCost} onChange={e => setShippingCost(e.target.value)} className="h-8 text-xs" placeholder="0" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-slate-700">Tax / Other (Rs)</Label>
-                  <Input type="number" min={0} value={tax} onChange={e => setTax(e.target.value)} className="h-9 text-sm" placeholder="0" />
+                  <Input type="number" min={0} value={tax} onChange={e => setTax(e.target.value)} className="h-8 text-xs" placeholder="0" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-slate-700">Grand Total</Label>
-                  <div className="h-9 flex items-center px-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-sm font-bold text-blue-800">{formatCurrency(grandTotal)}</div>
+                  <div className="h-8 flex items-center px-2.5 rounded-lg border-2 border-blue-300 bg-blue-50 text-xs font-bold text-blue-800">{formatCurrency(grandTotal)}</div>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-slate-700">Paid (Rs)</Label>
-                  <Input type="number" min={0} value={amountPaid} onChange={e => setAmountPaid(e.target.value)} className="h-9 text-sm" placeholder="0" />
+                  <Input type="number" min={0} value={amountPaid} onChange={e => setAmountPaid(e.target.value)} className="h-8 text-xs" placeholder="0" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-slate-700">Balance Due</Label>
-                  <div className={`h-9 flex items-center px-3 rounded-lg border text-sm font-bold ${balanceDue > 0 ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
+                  <div className={`h-8 flex items-center px-2.5 rounded-lg border text-xs font-bold ${balanceDue > 0 ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
                     {balanceDue > 0 ? formatCurrency(balanceDue) : "—"}
                   </div>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs font-medium text-slate-700">Method</Label>
                   <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Cash">Cash</SelectItem>
                       <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
@@ -1089,17 +1089,17 @@ export default function NewPurchasePage() {
               {balanceDue > 0 && (
                 <div className="max-w-xs space-y-1.5">
                   <Label className="text-xs font-medium text-slate-700">Payment Due Date</Label>
-                  <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-9 text-sm" />
+                  <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-8 text-xs" />
                 </div>
               )}
               {/* Row 2: Notes + Record Purchase button */}
-              <div className="flex items-end gap-4">
-                <div className="flex-1 space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-700">Notes <span className="text-xs text-slate-400 font-normal ml-1">(optional)</span></Label>
-                  <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional notes..." className="h-9 text-sm" />
+              <div className="flex items-end gap-3">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs font-medium text-slate-700">Notes <span className="text-[10px] text-slate-400 font-normal ml-1">(optional)</span></Label>
+                  <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional notes..." className="h-8 text-xs" />
                 </div>
-                <Button type="button" onClick={handleSubmit} disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-9 px-6 shrink-0">
-                  <ShoppingCart className="w-4 h-4" /> {submitting ? "Saving..." : "Record Purchase"}
+                <Button type="button" onClick={handleSubmit} disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 px-5 text-xs shrink-0">
+                  <ShoppingCart className="w-3.5 h-3.5" /> {submitting ? "Saving..." : "Record Purchase"}
                 </Button>
               </div>
             </CardContent>

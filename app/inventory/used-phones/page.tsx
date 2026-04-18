@@ -1580,7 +1580,7 @@ export default function UsedPhonesPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -1602,148 +1602,150 @@ export default function UsedPhonesPage() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setShowCalculator(true)}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-200 text-slate-700 text-xs sm:text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
           >
-            <Calculator className="w-4 h-4" /> Trade-In Calc
+            <Calculator className="w-3.5 h-3.5" /> Trade-In Calc
           </button>
           <button
             onClick={() => { setEditPhone(null); setShowAddDialog(true) }}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-blue-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Add Phone
+            <Plus className="w-3.5 h-3.5" /> Add Phone
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
-        {/* Total */}
-        <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-medium text-slate-500">Inventory Summary</p>
-            <Smartphone className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="flex items-end gap-3 sm:gap-4">
-            <div className="flex-shrink-0">
-              <p className="text-2xl sm:text-3xl font-bold text-slate-900">{stats.total}</p>
-              <p className="text-xs text-slate-400">Total devices</p>
+      {/* Stats — Row 1: Inventory summary + 6 grades */}
+      <div className="space-y-2">
+        <div className="grid grid-cols-8 gap-2">
+          {/* Inventory Summary */}
+          <div className="col-span-2 bg-white rounded-xl border border-slate-200 px-3 py-2.5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Inventory</p>
+              <Smartphone className="w-3.5 h-3.5 text-slate-400" />
             </div>
-            <div className="flex-1 grid grid-cols-2 gap-1 text-xs">
-              <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-medium text-center">
-                {phones.filter(p=>p.status==="in_stock").length} in stock
-              </span>
-              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium text-center">
-                {phones.filter(p=>p.status==="under_repair").length} repairing
-              </span>
-              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-center">
-                {phones.filter(p=>p.status==="sold").length} sold
-              </span>
-              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium text-center">
-                {phones.filter(p=>p.status==="listed_online").length} online
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Grade breakdown */}
-        {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
-          const m = GRADE_META[g]
-          const count = stats.gradeCount[g]
-          return (
-            <div
-              key={g}
-              onClick={() => { setGradeFilter(gradeFilter === g ? "" : g); resetPage() }}
-              className={cn(
-                "bg-white rounded-xl border p-3 sm:p-4 cursor-pointer transition-all hover:shadow-md",
-                gradeFilter === g ? cn(m.border, "ring-2", m.ring) : "border-slate-200"
-              )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <GradeBadge grade={g} />
-                <span className="text-xs text-slate-400">Grade</span>
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <p className="text-xl font-bold text-slate-900 leading-none">{stats.total}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Total devices</p>
               </div>
-              <p className="text-xl sm:text-2xl font-bold text-slate-900">{count}</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {phones.filter(p => p.condition_grade === g && p.status === "in_stock").length} available
-              </p>
+              <div className="flex-1 grid grid-cols-2 gap-0.5 text-[10px]">
+                <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-medium text-center">
+                  {phones.filter(p=>p.status==="in_stock").length} in stock
+                </span>
+                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium text-center">
+                  {phones.filter(p=>p.status==="under_repair").length} repair
+                </span>
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-center">
+                  {phones.filter(p=>p.status==="sold").length} sold
+                </span>
+                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium text-center">
+                  {phones.filter(p=>p.status==="listed_online").length} online
+                </span>
+              </div>
             </div>
-          )
-        })}
-      </div>
+          </div>
 
-      {/* Financial summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-slate-500">Total Invested</p>
-            <DollarSign className="w-4 h-4 text-slate-400" />
-          </div>
-          <p className="text-xl font-bold text-slate-900">{formatCurrency(stats.totalInvested)}</p>
-          <p className="text-xs text-slate-400 mt-0.5">Purchase + refurbishment costs</p>
+          {/* Grade breakdown — 6 cards */}
+          {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
+            const m = GRADE_META[g]
+            const count = stats.gradeCount[g]
+            return (
+              <div
+                key={g}
+                onClick={() => { setGradeFilter(gradeFilter === g ? "" : g); resetPage() }}
+                className={cn(
+                  "bg-white rounded-xl border px-2.5 py-2.5 cursor-pointer transition-all hover:shadow-sm",
+                  gradeFilter === g ? cn(m.border, "ring-2", m.ring) : "border-slate-200"
+                )}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <GradeBadge grade={g} />
+                  <span className="text-[9px] text-slate-400">Grade</span>
+                </div>
+                <p className="text-lg font-bold text-slate-900 leading-none">{count}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {phones.filter(p => p.condition_grade === g && p.status === "in_stock").length} avail.
+                </p>
+              </div>
+            )
+          })}
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-slate-500">Revenue from Sold</p>
-            <TrendingUp className="w-4 h-4 text-slate-400" />
+
+        {/* Row 2: Financial summary — 3 cards */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Invested</p>
+              <DollarSign className="w-3.5 h-3.5 text-slate-400" />
+            </div>
+            <p className="text-base font-bold text-slate-900 leading-none">{formatCurrency(stats.totalInvested)}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Purchase + refurb</p>
           </div>
-          <p className="text-xl font-bold text-slate-900">{formatCurrency(stats.revenueSold)}</p>
-          <p className="text-xs text-slate-400 mt-0.5">{phones.filter(p=>p.status==="sold").length} phones sold</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-slate-500">Net Profit (Sold)</p>
-            <ArrowUpRight className="w-4 h-4 text-emerald-500" />
+          <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Revenue</p>
+              <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+            </div>
+            <p className="text-base font-bold text-slate-900 leading-none">{formatCurrency(stats.revenueSold)}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">{phones.filter(p=>p.status==="sold").length} sold</p>
           </div>
-          <p className={cn("text-xl font-bold", stats.profitSold >= 0 ? "text-emerald-700" : "text-red-700")}>
-            {stats.profitSold >= 0 ? "+" : ""}{formatCurrency(stats.profitSold)}
-          </p>
-          <p className="text-xs text-slate-400 mt-0.5">From completed sales</p>
+          <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Profit</p>
+              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />
+            </div>
+            <p className={cn("text-base font-bold leading-none", stats.profitSold >= 0 ? "text-emerald-700" : "text-red-700")}>
+              {stats.profitSold >= 0 ? "+" : ""}{formatCurrency(stats.profitSold)}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Completed sales</p>
+          </div>
         </div>
       </div>
 
       {/* Search + controls */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={e => { setSearch(e.target.value); resetPage() }}
               placeholder="Search by brand, model, color, IMEI..."
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-8 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <button
             onClick={() => setShowFilters(v => !v)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-medium transition-colors",
+              "flex items-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-medium transition-colors",
               showFilters || hasFilters
                 ? "bg-blue-50 border-blue-200 text-blue-700"
                 : "border-slate-200 text-slate-700 hover:bg-slate-50"
             )}
           >
-            <SlidersHorizontal className="w-4 h-4" />
+            <SlidersHorizontal className="w-3.5 h-3.5" />
             Filters
             {hasFilters && (
-              <span className="bg-blue-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="bg-blue-600 text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
                 !
               </span>
             )}
           </button>
           {/* View toggle */}
-          <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
+          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode("grid")}
-              className={cn("p-2.5 transition-colors", viewMode === "grid" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
+              className={cn("p-1.5 transition-colors", viewMode === "grid" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={cn("p-2.5 transition-colors", viewMode === "list" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
+              className={cn("p-1.5 transition-colors", viewMode === "list" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
             >
-              <List className="w-4 h-4" />
+              <List className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
