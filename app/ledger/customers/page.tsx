@@ -7,7 +7,7 @@ import { getCustomers } from "@/lib/api/customers"
 import { getSales } from "@/lib/api/sales"
 import { getPayments } from "@/lib/api/payments"
 import type { Customer, Sale, Payment } from "@/data/types"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 type LedgerEntry = {
@@ -61,14 +61,29 @@ export default function CustomerLedgerPage() {
 
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId)
 
+  // Only show customers who have an outstanding/due balance (credit customers)
+  const creditCustomers = useMemo(() => {
+    return customers.filter((c) => {
+      const custSales = sales.filter((s) => s.customerId === c.id && s.status !== "Refunded")
+      const totalBilled = custSales.reduce((sum, s) => sum + s.total, 0)
+      const totalReceived = custSales.reduce((sum, s) => sum + s.amountReceived, 0)
+      const totalPaid = customerPayments
+        .filter((p) => p.entityId === c.id)
+        .reduce((sum, p) => sum + p.amount, 0)
+      return totalBilled - totalReceived - totalPaid > 0
+    })
+  }, [customers, sales, customerPayments])
+
   // Build all ledger entries — works for all customers or filtered
   const allEntries = useMemo<LedgerEntry[]>(() => {
     const raw: Omit<LedgerEntry, "balance">[] = []
 
+    const creditCustomerIds = new Set(creditCustomers.map((c) => c.id))
+
     // Sales → Debit (customer owes us)
     const filteredSales = selectedCustomerId
       ? sales.filter((s) => s.customerId === selectedCustomerId && s.status !== "Refunded")
-      : sales.filter((s) => s.status !== "Refunded")
+      : sales.filter((s) => s.status !== "Refunded" && s.customerId && creditCustomerIds.has(s.customerId))
 
     filteredSales.forEach((s) =>
       raw.push({
@@ -129,7 +144,7 @@ export default function CustomerLedgerPage() {
     })
 
     return result
-  }, [selectedCustomerId, openingBalance, sales, customerPayments])
+  }, [selectedCustomerId, openingBalance, sales, customerPayments, creditCustomers])
 
   // Apply date filter
   const filtered = useMemo(() => {
@@ -156,6 +171,14 @@ export default function CustomerLedgerPage() {
   }
 
   function buildPrintHtml() {
+    // kept as fallback but no longer used — see handleExportPDF below
+    const custLabel = selectedCustomer ? selectedCustomer.name : "All Customers"
+    return "<!DOCTYPE html><html><head><title>Customer Ledger — " + custLabel + "</title>"
+      + "<style>body{font-family:Arial,sans-serif;padding:30px}</style></head>"
+      + "<body><h1>Customer Ledger</h1></body></html>"
+  }
+
+  function buildPrintHtmlOriginal() {
     const custLabel = selectedCustomer ? selectedCustomer.name : "All Customers"
     const periodLine = dateFrom || dateTo ? "| Period: " + (dateFrom || "Start") + " to " + (dateTo || "Now") : ""
     const colCount = !selectedCustomerId ? 4 : 3
@@ -203,28 +226,87 @@ export default function CustomerLedgerPage() {
       + "</body></html>"
   }
 
-  function handlePrintLedger() {
+  async function handlePrintLedger() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
-    const win = window.open("", "_blank")
-    if (win) { win.document.write(buildPrintHtml()); win.document.close(); win.print() }
+    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = ""
+    try {
+      const { getTenant } = await import("@/lib/api/settings")
+      const tenant = await getTenant()
+      shopName = tenant.name || shopName
+      shopAddress = [tenant.address, tenant.city].filter(Boolean).join(", ")
+      shopPhone = tenant.phone || ""
+    } catch { /* defaults */ }
+    const custLabel = selectedCustomer ? selectedCustomer.name : "All Customers"
+    const periodLine = dateFrom || dateTo ? `  ·  Period: ${dateFrom || "Start"} → ${dateTo || "Now"}` : ""
+    const { generateReportPDF } = await import("@/lib/pdf/report")
+    generateReportPDF({
+      shopName, shopAddress, shopPhone,
+      title: "Customer Ledger",
+      subtitle: custLabel + periodLine + `  ·  ${filtered.length} entries`,
+      columns: [
+        { header: "Date",        dataKey: "date",    width: 22 },
+        ...(!selectedCustomerId ? [{ header: "Customer", dataKey: "customer", width: 32 }] : []),
+        { header: "Reference",   dataKey: "ref",     width: 24 },
+        { header: "Description", dataKey: "desc",    width: 50 },
+        { header: "Debit (Rs)",  dataKey: "debit",   width: 24, halign: "right" as const },
+        { header: "Credit (Rs)", dataKey: "credit",  width: 24, halign: "right" as const },
+        { header: "Balance",     dataKey: "balance", width: 26, halign: "right" as const, bold: true },
+      ],
+      rows: filtered.map(e => ({
+        date:     e.date,
+        customer: e.customerName || "—",
+        ref:      e.reference,
+        desc:     e.description,
+        debit:    e.debit > 0 ? `Rs ${e.debit.toLocaleString("en-PK")}` : "—",
+        credit:   e.credit > 0 ? `Rs ${e.credit.toLocaleString("en-PK")}` : "—",
+        balance:  `Rs ${Math.abs(e.balance).toLocaleString("en-PK")} ${e.balance > 0 ? "Dr" : e.balance < 0 ? "Cr" : ""}`.trim(),
+      })),
+      summary: [
+        { label: "Total Debit",   value: `Rs ${totalDebit.toLocaleString("en-PK")}` },
+        { label: "Total Credit",  value: `Rs ${totalCredit.toLocaleString("en-PK")}` },
+        { label: "Closing Balance", value: `Rs ${Math.abs(closingBalance).toLocaleString("en-PK")} ${closingBalance > 0 ? "Dr" : "Cr"}` },
+      ],
+      filename: `Customer-Ledger-${todayPKT()}`,
+      action: "save",
+    })
+    toast.success("Customer ledger PDF downloaded")
   }
 
-  function handleExportCSV() {
+  async function handleExportCSV() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
-    const headers = ["Date", ...(selectedCustomerId ? [] : ["Customer"]), "Reference", "Description", "Debit", "Credit", "Balance"]
-    const rows = filtered.map((e) => [
-      e.date, ...(selectedCustomerId ? [] : [e.customerName || ""]),
-      e.reference, e.description, e.debit, e.credit, e.balance,
-    ])
-    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => '"' + v + '"').join(","))].join("\n")
-    const blob = new Blob([csv], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "customer-ledger-" + new Date().toISOString().split("T")[0] + ".csv"
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success("Exported " + filtered.length + " entries to CSV")
+    const { exportToExcel } = await import("@/lib/excel-export")
+    const cols = [
+      { key: "date",     header: "Date",         width: 14 },
+      ...(!selectedCustomerId ? [{ key: "customer", header: "Customer", width: 22 }] : []),
+      { key: "ref",      header: "Reference",    width: 18 },
+      { key: "desc",     header: "Description",  width: 40 },
+      { key: "debit",    header: "Debit (Rs)",   width: 16, align: "right" as const, numFmt: "#,##0" },
+      { key: "credit",   header: "Credit (Rs)",  width: 16, align: "right" as const, numFmt: "#,##0" },
+      { key: "balance",  header: "Balance",      width: 20, align: "right" as const },
+    ]
+    exportToExcel(
+      filtered.map(e => ({
+        date:     e.date,
+        customer: e.customerName || "—",
+        ref:      e.reference,
+        desc:     e.description,
+        debit:    e.debit || 0,
+        credit:   e.credit || 0,
+        balance:  `Rs ${Math.abs(e.balance).toLocaleString("en-PK")} ${e.balance > 0 ? "Dr" : e.balance < 0 ? "Cr" : ""}`.trim(),
+      })),
+      `Customer-Ledger-${todayPKT()}`,
+      cols,
+      {
+        sheetName: "Customer Ledger",
+        title: `Customer Ledger — ${selectedCustomer?.name ?? "All Customers"}`,
+        subtitle: `Exported on ${new Date().toLocaleDateString("en-PK")}  ·  ${filtered.length} entries`,
+        summaryRows: [
+          { label: "Total Debit",  value: totalDebit },
+          { label: "Total Credit", value: totalCredit },
+        ],
+      }
+    )
+    toast.success(`Exported ${filtered.length} entries to Excel`)
   }
 
   if (loading) {
@@ -259,14 +341,7 @@ export default function CustomerLedgerPage() {
             className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            CSV
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            Print
+            Excel
           </button>
         </div>
       </div>
@@ -285,8 +360,8 @@ export default function CustomerLedgerPage() {
                 }}
                 className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">All Customers</option>
-                {customers.map((c) => (
+                <option value="">All Credit Customers ({creditCustomers.length})</option>
+                {creditCustomers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name} ({c.phone})
                   </option>

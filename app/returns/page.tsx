@@ -9,8 +9,14 @@ import {
 import { toast } from "sonner"
 
 import { getReturns, createReturn, updateReturnStatus } from "@/lib/api/returns"
+import { getSales } from "@/lib/api/sales"
+import { getFinanceAccounts } from "@/lib/api/finance"
+import type { Sale } from "@/data/types"
+import { supabase } from "@/lib/supabase"
+import { getTenantId } from "@/lib/api/helpers"
 import { Return, ReturnStatus, ReturnReason, ReturnItem } from "@/data/types"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import type { FinanceAccount } from "@/lib/api/types"
+import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -82,8 +88,6 @@ const REASON_COLORS: Record<ReturnReason, string> = {
   Other: "bg-slate-100 text-slate-500 border border-slate-200",
 }
 
-const APPROX_TOTAL_SALES = 45 // approximate total sales for return rate calculation
-
 // ─── New-item template ────────────────────────────────────────────────────────
 
 interface NewReturnItem {
@@ -109,14 +113,20 @@ const EMPTY_ITEM: NewReturnItem = {
 export default function ReturnsPage() {
   // ── Data state ────────────────────────────────────────────────────────────
   const [returnsList, setReturnsList] = useState<Return[]>([])
+  const [salesList, setSalesList] = useState<Sale[]>([])
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true)
-        const data = await getReturns()
+        const [data, sales, accounts] = await Promise.all([getReturns(), getSales(), getFinanceAccounts()])
         setReturnsList(data)
+        setSalesList(sales)
+        setFinanceAccounts(accounts)
+        const def = accounts.find(a => a.isDefaultCash) ?? accounts[0]
+        if (def) setNewAccountId(def.id)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to fetch returns")
       } finally {
@@ -142,7 +152,9 @@ export default function ReturnsPage() {
   const [newCustomerName, setNewCustomerName] = useState("")
   const [newCustomerPhone, setNewCustomerPhone] = useState("")
   const [newReason, setNewReason] = useState<ReturnReason>("Defective")
+  const [newRefundType, setNewRefundType] = useState<"cash" | "store_credit">("cash")
   const [newRefundMethod, setNewRefundMethod] = useState("Cash")
+  const [newAccountId, setNewAccountId] = useState("")
   const [newRestock, setNewRestock] = useState(true)
   const [newNotes, setNewNotes] = useState("")
   const [newItems, setNewItems] = useState<NewReturnItem[]>([{ ...EMPTY_ITEM }])
@@ -154,9 +166,10 @@ export default function ReturnsPage() {
     const totalRefunded = returnsList
       .filter((r) => r.status === "Completed" || r.status === "Approved")
       .reduce((acc, r) => acc + r.refundAmount, 0)
-    const returnRate = APPROX_TOTAL_SALES > 0 ? ((total / APPROX_TOTAL_SALES) * 100).toFixed(1) : "0"
-    return { total, pending, totalRefunded, returnRate }
-  }, [returnsList])
+    const totalSales = salesList.length
+    const returnRate = totalSales > 0 ? ((total / totalSales) * 100).toFixed(1) : "0"
+    return { total, pending, totalRefunded, returnRate, totalSales }
+  }, [returnsList, salesList])
 
   // ── Filtered data ─────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -191,19 +204,38 @@ export default function ReturnsPage() {
     setNewCustomerName("")
     setNewCustomerPhone("")
     setNewReason("Defective")
+    setNewRefundType("cash")
     setNewRefundMethod("Cash")
+    const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]
+    if (def) setNewAccountId(def.id)
     setNewRestock(true)
     setNewNotes("")
     setNewItems([{ ...EMPTY_ITEM }])
   }
 
   function lookupInvoice() {
-    // Simulate invoice lookup against known returns data
-    const match = returnsList.find((r) => r.invoiceNumber === newInvoice)
+    const match = salesList.find(
+      (s) => s.invoiceNumber?.toLowerCase() === newInvoice.trim().toLowerCase()
+    )
     if (match) {
       setNewCustomerName(match.customerName)
       setNewCustomerPhone(match.customerPhone)
-      toast.success("Invoice found — customer info populated")
+      // Pre-populate items from the original sale
+      if (match.items && match.items.length > 0) {
+        setNewItems(
+          match.items.map((si) => ({
+            productName: si.productName,
+            productType: (si.productType === "UsedPhone" ? "Mobile" : si.productType) as "Mobile" | "Accessory",
+            quantity: si.quantity,
+            unitPrice: si.unitPrice,
+            condition: "Good" as ReturnItem["condition"],
+            imei: "",
+          }))
+        )
+        toast.success(`Invoice found — ${match.items.length} item(s) pre-filled from sale`)
+      } else {
+        toast.success("Invoice found — customer info populated")
+      }
     } else {
       toast.error("Invoice not found — please enter customer details manually")
     }
@@ -260,7 +292,7 @@ export default function ReturnsPage() {
     const newReturn: Return = {
       id: `ret-${String(nextNum).padStart(3, "0")}`,
       returnNumber: `RET-2026-${String(nextNum).padStart(4, "0")}`,
-      date: new Date().toISOString().split("T")[0],
+      date: todayPKT(),
       saleId: `sale-lookup-${newInvoice}`,
       invoiceNumber: newInvoice,
       customerId: `cust-new-${Date.now()}`,
@@ -291,7 +323,7 @@ export default function ReturnsPage() {
           reason: newReturn.reason,
           subtotal: newReturn.subtotal,
           refundAmount: newReturn.refundAmount,
-          refundMethod: newReturn.refundMethod,
+          refundMethod: newRefundType === "store_credit" ? "Store Credit" : newRefundMethod,
           status: newReturn.status,
           restockItems: newReturn.restockItems,
           processedBy: newReturn.processedBy,
@@ -301,10 +333,42 @@ export default function ReturnsPage() {
         },
         items,
       )
+
+      // Finance: record cash refund as money OUT of the account
+      if (newRefundType === "cash" && newAccountId && refundAmount > 0) {
+        const tenantId = await getTenantId()
+        await supabase.from("finance_transactions").insert({
+          tenant_id: tenantId,
+          date: newReturn.date,
+          type: "sale_refund",
+          account_id: newAccountId,
+          amount: refundAmount,
+          reference_type: "Return",
+          reference_number: newReturn.returnNumber,
+          description: `Refund — ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
+          notes: newReturn.notes ?? null,
+        })
+        const { data: accRow } = await supabase
+          .from("finance_accounts").select("current_balance").eq("id", newAccountId).single()
+        if (accRow) {
+          await supabase.from("finance_accounts")
+            .update({ current_balance: Math.max(0, (accRow as any).current_balance - refundAmount) })
+            .eq("id", newAccountId)
+        }
+        // tag return with account
+        await supabase.from("returns")
+          .update({ account_id: newAccountId, refund_type: "cash" })
+          .eq("id", (created as any).id)
+      } else if (newRefundType === "store_credit") {
+        await supabase.from("returns")
+          .update({ refund_type: "store_credit" })
+          .eq("id", (created as any).id)
+      }
+
       setReturnsList((prev) => [created, ...prev])
       setShowCreate(false)
       resetForm()
-      toast.success(`Return ${newReturn.returnNumber} created successfully`)
+      toast.success(`Return ${newReturn.returnNumber} created — ${newRefundType === "store_credit" ? "Store Credit issued" : `Rs ${refundAmount.toLocaleString()} refunded from account`}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create return")
     }
@@ -372,6 +436,8 @@ export default function ReturnsPage() {
       <PageHeader
         title="Returns & Refunds"
         description="Manage product returns, exchanges, and refund processing"
+        icon={<RotateCcw />}
+        iconBg="bg-amber-600"
         action={
           <Button
             className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs px-3"
@@ -414,7 +480,7 @@ export default function ReturnsPage() {
           value={`${stats.returnRate}%`}
           icon={Percent}
           iconBg="bg-red-100"
-          subtext={`${stats.total} of ~${APPROX_TOTAL_SALES} sales`}
+          subtext={`${stats.total} of ${stats.totalSales} sales`}
         />
       </div>
 
@@ -726,19 +792,38 @@ export default function ReturnsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Refund Method</Label>
-                <Select value={newRefundMethod} onValueChange={setNewRefundMethod}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Label>Refund Type</Label>
+                <Select value={newRefundType} onValueChange={v => setNewRefundType(v as "cash" | "store_credit")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {REFUND_METHODS.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
+                    <SelectItem value="cash">Cash Refund (money out)</SelectItem>
+                    <SelectItem value="store_credit">Store Credit (no money out)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {newRefundType === "cash" && (
+              <div className="space-y-2">
+                <Label>Pay Refund From Account</Label>
+                <Select value={newAccountId} onValueChange={setNewAccountId}>
+                  <SelectTrigger><SelectValue placeholder="Select account..." /></SelectTrigger>
+                  <SelectContent>
+                    {financeAccounts.map(a => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name} — Rs {a.currentBalance.toLocaleString()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-slate-400">This amount will be deducted from the selected account</p>
+              </div>
+            )}
+            {newRefundType === "store_credit" && (
+              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs text-blue-700">
+                Store Credit issued — no money leaves any account. Customer can use this credit on next purchase.
+              </div>
+            )}
 
             {/* Restock */}
             <div className="flex items-center gap-2">

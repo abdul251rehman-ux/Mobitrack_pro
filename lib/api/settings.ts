@@ -161,6 +161,58 @@ export async function updateProfile(id: string, data: Partial<Profile>): Promise
   }
 }
 
+export async function createProfile(data: {
+  name: string
+  email: string
+  role: string
+  password: string
+  status: "Active" | "Inactive"
+}): Promise<Profile> {
+  try {
+    const tenantId = await getTenantId()
+    const { data: row, error } = await supabase
+      .from('profiles')
+      .insert({
+        tenant_id: tenantId,
+        name: data.name,
+        email: data.email.toLowerCase().trim(),
+        role: data.role,
+        password: data.password,
+        status: data.status,
+      })
+      .select('*')
+      .single()
+
+    if (error) throw new Error(`Failed to create user: ${error.message}`)
+    return toProfile(row as DbProfile)
+  } catch (err) {
+    throw err instanceof Error ? err : new Error('Failed to create user')
+  }
+}
+
+export async function updateProfileFull(id: string, data: {
+  name: string
+  email: string
+  role: string
+  password?: string
+  status: "Active" | "Inactive"
+}): Promise<void> {
+  try {
+    const payload: Record<string, unknown> = {
+      name: data.name,
+      email: data.email.toLowerCase().trim(),
+      role: data.role,
+      status: data.status,
+    }
+    if (data.password) payload.password = data.password
+
+    const { error } = await supabase.from('profiles').update(payload).eq('id', id)
+    if (error) throw new Error(`Failed to update user: ${error.message}`)
+  } catch (err) {
+    throw err instanceof Error ? err : new Error('Failed to update user')
+  }
+}
+
 export async function inviteUser(email: string, role: string): Promise<void> {
   try {
     const tenantId = await getTenantId()

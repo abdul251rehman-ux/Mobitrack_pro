@@ -95,11 +95,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
-      const { data, error } = await supabase
+      const { data: rows, error } = await supabase
         .from("profiles")
         .select("id, tenant_id, name, email, phone, role, avatar_url, status, password")
         .eq("email", email.toLowerCase().trim())
-        .single()
+        .order("created_at", { ascending: false })
+        .limit(1)
+
+      const data = rows?.[0] ?? null
 
       if (error || !data) {
         console.error("Login: user not found", error?.message)
@@ -109,6 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Check password
       if (data.password !== password) {
         console.error("Login: wrong password")
+        return false
+      }
+
+      // Check active status
+      if (data.status?.toLowerCase() === "inactive") {
+        console.error("Login: account inactive")
         return false
       }
 

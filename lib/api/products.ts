@@ -88,6 +88,9 @@ export async function updateMobile(id: string, data: Partial<Mobile>): Promise<M
 
 export async function deleteMobile(id: string): Promise<void> {
   try {
+    // Clean up linked IMEI records first
+    await supabase.from('imei_records').delete().eq('product_id', id)
+
     const { error } = await supabase
       .from('mobiles')
       .delete()

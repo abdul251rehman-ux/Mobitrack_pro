@@ -72,12 +72,12 @@ export function useGlobalSearch() {
     const q = debouncedQuery.toLowerCase()
 
     const mobileResults: SearchResult[] = mobiles
-      .filter(m => m.brand.toLowerCase().includes(q) || m.model.toLowerCase().includes(q) || m.imei.includes(q))
+      .filter(m => (m.brand ?? "").toLowerCase().includes(q) || (m.model ?? "").toLowerCase().includes(q) || (m.imei ?? "").includes(q))
       .slice(0, 5)
       .map(m => ({ id: m.id, title: `${m.brand} ${m.model}`, subtitle: `₨ ${m.sellingPrice.toLocaleString()} • Stock: ${m.stock}`, type: "mobile", href: "/products/mobiles" }))
 
     const accessoryResults: SearchResult[] = accessories
-      .filter(a => a.name.toLowerCase().includes(q) || a.brand.toLowerCase().includes(q) || a.sku.toLowerCase().includes(q))
+      .filter(a => (a.name ?? "").toLowerCase().includes(q) || (a.brand ?? "").toLowerCase().includes(q) || (a.sku ?? "").toLowerCase().includes(q))
       .slice(0, 5)
       .map(a => ({ id: a.id, title: a.name, subtitle: `${a.brand} • ₨ ${a.sellingPrice.toLocaleString()}`, type: "accessory", href: "/products/accessories" }))
 

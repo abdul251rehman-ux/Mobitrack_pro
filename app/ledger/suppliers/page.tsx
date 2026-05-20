@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Printer, Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet } from "lucide-react"
+import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
 import { getPayments } from "@/lib/api/payments"
 import type { Supplier, Purchase, Payment } from "@/data/types"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 type LedgerEntry = {
@@ -56,12 +56,27 @@ export default function SupplierLedgerPage() {
 
   const selectedSupplier = suppliers.find((s) => s.id === selectedSupplierId)
 
+  // Only suppliers with an unpaid balance (we still owe them money)
+  const creditSuppliers = useMemo(() => {
+    return suppliers.filter((s) => {
+      const suppPurchases = purchases.filter((p) => p.supplierId === s.id)
+      const totalBilled = suppPurchases.reduce((sum, p) => sum + p.total, 0)
+      const totalPaidOnPurchases = suppPurchases.reduce((sum, p) => sum + p.amountPaid, 0)
+      const totalPaidViaPayments = supplierPayments
+        .filter((sp) => sp.entityId === s.id)
+        .reduce((sum, sp) => sum + sp.amount, 0)
+      return totalBilled - totalPaidOnPurchases - totalPaidViaPayments > 0
+    })
+  }, [suppliers, purchases, supplierPayments])
+
   const allEntries = useMemo<LedgerEntry[]>(() => {
     const raw: Omit<LedgerEntry, "balance">[] = []
 
+    const creditSupplierIds = new Set(creditSuppliers.map((s) => s.id))
+
     const filteredPurchases = selectedSupplierId
       ? purchases.filter((p) => p.supplierId === selectedSupplierId)
-      : purchases
+      : purchases.filter((p) => p.supplierId && creditSupplierIds.has(p.supplierId))
 
     filteredPurchases.forEach((p) => {
       const supName = suppliers.find((s) => s.id === p.supplierId)?.companyName || p.supplierName
@@ -118,7 +133,7 @@ export default function SupplierLedgerPage() {
     })
 
     return result
-  }, [selectedSupplierId, openingBalance, purchases, supplierPayments, suppliers])
+  }, [selectedSupplierId, openingBalance, purchases, supplierPayments, suppliers, creditSuppliers])
 
   const filtered = useMemo(() => {
     return allEntries.filter((e) => {
@@ -143,76 +158,95 @@ export default function SupplierLedgerPage() {
     return "bg-emerald-500"
   }
 
-  function buildPrintHtml() {
-    const supplierLabel = selectedSupplier ? selectedSupplier.companyName : "All Suppliers"
-    const periodLine = dateFrom || dateTo ? "| Period: " + (dateFrom || "Start") + " to " + (dateTo || "Now") : ""
-    const colCount = !selectedSupplierId ? 4 : 3
-    const rows = filtered.map((e) => {
-      const supCol = !selectedSupplierId ? "<td>" + (e.supplierName || "—") + "</td>" : ""
-      const debitCell = e.debit > 0 ? '<span class="debit">Rs ' + e.debit.toLocaleString() + "</span>" : '<span class="dim">—</span>'
-      const creditCell = e.credit > 0 ? '<span class="credit">Rs ' + e.credit.toLocaleString() + "</span>" : '<span class="dim">—</span>'
-      const balClass = e.balance > 0 ? "balance-cr" : "balance-dr"
-      const balLabel = e.balance > 0 ? " Cr" : e.balance < 0 ? " Dr" : ""
-      return "<tr><td>" + formatDate(e.date) + "</td>" + supCol + '<td style="font-family:monospace;color:#94a3b8">' + e.reference + "</td><td>" + e.description + '</td><td class="text-right">' + debitCell + '</td><td class="text-right">' + creditCell + '</td><td class="text-right ' + balClass + '">Rs ' + Math.abs(e.balance).toLocaleString() + balLabel + "</td></tr>"
-    }).join("")
-    const supHeader = !selectedSupplierId ? "<th>Supplier</th>" : ""
-    const totalBalClass = closingBalance > 0 ? "balance-cr" : "balance-dr"
-    const totalBalLabel = closingBalance > 0 ? " Cr" : closingBalance < 0 ? " Dr" : ""
-    return "<!DOCTYPE html><html><head><title>Supplier Ledger — " + supplierLabel + "</title>"
-      + "<style>body{font-family:Arial,sans-serif;padding:30px;color:#333;max-width:1100px;margin:0 auto}"
-      + "h1{font-size:20px;margin-bottom:2px}.sub{color:#888;font-size:12px;margin-bottom:18px}"
-      + ".stats{display:flex;gap:16px;margin-bottom:20px}.stat{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:12px;border-left:4px solid}"
-      + ".stat-orange{border-left-color:#f97316}.stat-green{border-left-color:#10b981}.stat-red{border-left-color:#ef4444}"
-      + ".stat-label{font-size:10px;text-transform:uppercase;color:#94a3b8;font-weight:700;letter-spacing:0.5px}"
-      + ".stat-value{font-size:18px;font-weight:800;margin-top:4px}"
-      + "table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}"
-      + "th{background:#f1f5f9;padding:8px 10px;text-align:left;font-weight:600;border-bottom:2px solid #e2e8f0;font-size:10px;text-transform:uppercase;letter-spacing:0.5px}"
-      + "td{padding:7px 10px;border-bottom:1px solid #f1f5f9}tr:nth-child(even){background:#f8fafc}"
-      + ".text-right{text-align:right}.debit{color:#10b981;font-weight:600}.credit{color:#f97316;font-weight:600}"
-      + ".balance-cr{color:#ef4444;font-weight:700}.balance-dr{color:#10b981;font-weight:700}"
-      + ".total-row{font-weight:700;background:#eff6ff!important;border-top:2px solid #e2e8f0}"
-      + ".footer{margin-top:16px;font-size:10px;color:#aaa}.dim{color:#cbd5e1}</style></head><body>"
-      + "<h1>Supplier Ledger — " + supplierLabel + "</h1>"
-      + '<div class="sub">Generated: ' + new Date().toLocaleDateString() + " " + periodLine + "</div>"
-      + '<div class="stats">'
-      + '<div class="stat stat-orange"><div class="stat-label">Total Purchases</div><div class="stat-value">Rs ' + totalCredit.toLocaleString() + "</div></div>"
-      + '<div class="stat stat-green"><div class="stat-label">Total Paid</div><div class="stat-value">Rs ' + totalDebit.toLocaleString() + "</div></div>"
-      + '<div class="stat stat-red"><div class="stat-label">Outstanding</div><div class="stat-value">Rs ' + Math.abs(closingBalance).toLocaleString() + "</div></div>"
-      + "</div>"
-      + "<table><thead><tr><th>Date</th>" + supHeader + "<th>Reference</th><th>Description</th>"
-      + '<th class="text-right">Debit</th><th class="text-right">Credit</th><th class="text-right">Balance</th></tr></thead>'
-      + "<tbody>" + rows + "</tbody>"
-      + '<tfoot><tr class="total-row"><td colspan="' + colCount + '" class="text-right">Totals</td>'
-      + '<td class="text-right debit">Rs ' + totalDebit.toLocaleString() + "</td>"
-      + '<td class="text-right credit">Rs ' + totalCredit.toLocaleString() + "</td>"
-      + '<td class="text-right ' + totalBalClass + '">Rs ' + Math.abs(closingBalance).toLocaleString() + totalBalLabel + "</td>"
-      + "</tr></tfoot></table>"
-      + '<div class="footer">MobiTrack Pro · Supplier Ledger · Printed on ' + new Date().toLocaleString() + "</div>"
-      + "</body></html>"
-  }
-
-  function handlePrintLedger() {
+  async function handleExportPDF() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
-    const win = window.open("", "_blank")
-    if (win) { win.document.write(buildPrintHtml()); win.document.close(); win.print() }
-  }
-
-  function handleExportCSV() {
-    if (filtered.length === 0) { toast.error("No data to export"); return }
-    const headers = ["Date", ...(selectedSupplierId ? [] : ["Supplier"]), "Reference", "Description", "Debit", "Credit", "Balance"]
-    const rows = filtered.map((e) => [
-      e.date, ...(selectedSupplierId ? [] : [e.supplierName || ""]),
-      e.reference, e.description, e.debit, e.credit, e.balance,
+    const [{ generateReportPDF }, { getTenant }] = await Promise.all([
+      import("@/lib/pdf/report"),
+      import("@/lib/api/settings"),
     ])
-    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => '"' + v + '"').join(","))].join("\n")
-    const blob = new Blob([csv], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "supplier-ledger-" + new Date().toISOString().split("T")[0] + ".csv"
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success("Exported " + filtered.length + " entries to CSV")
+    const tenant = await getTenant()
+    const supplierLabel = selectedSupplier ? selectedSupplier.companyName : "All Suppliers"
+    const periodParts = [dateFrom && "From: " + dateFrom, dateTo && "To: " + dateTo].filter(Boolean)
+    const subtitle = [supplierLabel, ...periodParts, filtered.length + " entries"].join(" | ")
+
+    const columns: import("@/lib/pdf/report").ReportColumn[] = [
+      { header: "Date",        dataKey: "date",         width: 22, halign: "left" },
+      ...(selectedSupplierId ? [] : [{ header: "Supplier", dataKey: "supplierName", width: 32 } as import("@/lib/pdf/report").ReportColumn]),
+      { header: "Reference",   dataKey: "reference",    width: 26, halign: "left" },
+      { header: "Description", dataKey: "description" },
+      { header: "Debit",       dataKey: "debitFmt",     width: 26, halign: "right" },
+      { header: "Credit",      dataKey: "creditFmt",    width: 26, halign: "right" },
+      { header: "Balance",     dataKey: "balanceFmt",   width: 30, halign: "right", bold: true },
+    ]
+
+    const rows = filtered.map((e) => ({
+      date:         e.date,
+      supplierName: e.supplierName || "—",
+      reference:    e.reference,
+      description:  e.description,
+      debitFmt:     e.debit > 0 ? "Rs " + e.debit.toLocaleString() : "—",
+      creditFmt:    e.credit > 0 ? "Rs " + e.credit.toLocaleString() : "—",
+      balanceFmt:   "Rs " + Math.abs(e.balance).toLocaleString() + (e.balance > 0 ? " Cr" : e.balance < 0 ? " Dr" : ""),
+    }))
+
+    const balLabel = closingBalance > 0 ? " Cr" : closingBalance < 0 ? " Dr" : ""
+    generateReportPDF({
+      shopName:    tenant?.name    ?? "Mobile Shop",
+      shopAddress: [tenant?.address, tenant?.city].filter(Boolean).join(", "),
+      shopPhone:   tenant?.phone   ?? "",
+      title:       "Supplier Ledger",
+      subtitle,
+      columns,
+      rows,
+      summary: [
+        { label: "Total Purchases", value: "Rs " + totalCredit.toLocaleString() },
+        { label: "Total Paid",      value: "Rs " + totalDebit.toLocaleString() },
+        { label: "Outstanding",     value: "Rs " + Math.abs(closingBalance).toLocaleString() + balLabel },
+      ],
+      filename: "supplier-ledger-" + todayPKT(),
+    })
+    toast.success("PDF exported")
+  }
+
+  async function handleExportExcel() {
+    if (filtered.length === 0) { toast.error("No data to export"); return }
+    const { exportToExcel } = await import("@/lib/excel-export")
+    const supplierLabel = selectedSupplier ? selectedSupplier.companyName : "All Suppliers"
+    const periodParts = [dateFrom && "From: " + dateFrom, dateTo && "To: " + dateTo].filter(Boolean)
+    const subtitle = [supplierLabel, ...periodParts].filter(Boolean).join(" | ")
+
+    const columns: import("@/lib/excel-export").ExcelColumn[] = [
+      { key: "date",         header: "Date",        width: 14 },
+      ...(selectedSupplierId ? [] : [{ key: "supplierName", header: "Supplier", width: 24 } as import("@/lib/excel-export").ExcelColumn]),
+      { key: "reference",    header: "Reference",   width: 18 },
+      { key: "description",  header: "Description", width: 36 },
+      { key: "debit",        header: "Debit (Rs)",  width: 16, numFmt: "#,##0", align: "right" },
+      { key: "credit",       header: "Credit (Rs)", width: 16, numFmt: "#,##0", align: "right" },
+      { key: "balance",      header: "Balance (Rs)",width: 18, numFmt: "#,##0", align: "right" },
+    ]
+
+    const rows = filtered.map((e) => ({
+      date:         e.date,
+      supplierName: e.supplierName || "—",
+      reference:    e.reference,
+      description:  e.description,
+      debit:        e.debit || "",
+      credit:       e.credit || "",
+      balance:      e.balance,
+    }))
+
+    const balLabel = closingBalance > 0 ? " Cr" : closingBalance < 0 ? " Dr" : ""
+    exportToExcel(rows, "supplier-ledger-" + todayPKT(), columns, {
+      sheetName: "Supplier Ledger",
+      title: "Supplier Ledger",
+      subtitle: subtitle || undefined,
+      summaryRows: [
+        { label: "Total Purchases", value: totalCredit },
+        { label: "Total Paid",      value: totalDebit },
+        { label: "Outstanding",     value: "Rs " + Math.abs(closingBalance).toLocaleString() + balLabel },
+      ],
+    })
+    toast.success("Excel exported — " + filtered.length + " entries")
   }
 
   if (loading) {
@@ -235,14 +269,11 @@ export default function SupplierLedgerPage() {
           <p className="text-slate-500 text-xs mt-0.5">View financial records and outstanding payables for any supplier</p>
         </div>
         <div className="flex gap-1.5">
-          <button onClick={handlePrintLedger} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
+          <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
             <FileText className="w-3.5 h-3.5" />PDF
           </button>
-          <button onClick={handleExportCSV} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
-            <Download className="w-3.5 h-3.5" />CSV
-          </button>
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
-            <Printer className="w-3.5 h-3.5" />Print
+          <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
+            <Download className="w-3.5 h-3.5" />Excel
           </button>
         </div>
       </div>
@@ -258,8 +289,8 @@ export default function SupplierLedgerPage() {
                 onChange={(e) => { setSelectedSupplierId(e.target.value); setPage(1) }}
                 className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">All Suppliers</option>
-                {suppliers.map((s) => (
+                <option value="">All Credit Suppliers ({creditSuppliers.length})</option>
+                {creditSuppliers.map((s) => (
                   <option key={s.id} value={s.id}>{s.companyName} — {s.city}</option>
                 ))}
               </select>

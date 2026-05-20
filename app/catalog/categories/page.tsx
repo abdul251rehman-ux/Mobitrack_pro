@@ -61,17 +61,28 @@ export default function CategoriesPage() {
 
   async function fetchCategories() {
     try {
-      const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .order("created_at", { ascending: false })
+      const [{ data, error }, { data: mobiles }, { data: accessories }] = await Promise.all([
+        supabase.from("categories").select("*").order("created_at", { ascending: false }),
+        supabase.from("mobiles").select("category"),
+        supabase.from("accessories").select("category"),
+      ])
       if (error) throw error
+
+      // Count real products per category (case-insensitive match)
+      const countMap: Record<string, number> = {}
+      for (const m of mobiles ?? []) {
+        if (m.category) countMap[m.category.toLowerCase()] = (countMap[m.category.toLowerCase()] ?? 0) + 1
+      }
+      for (const a of accessories ?? []) {
+        if (a.category) countMap[a.category.toLowerCase()] = (countMap[a.category.toLowerCase()] ?? 0) + 1
+      }
+
       const mapped: Category[] = (data ?? []).map((c: Record<string, unknown>) => ({
         id: c.id as string,
         name: c.name as string,
         type: (c.type ?? "Mobile") as Category["type"],
         description: (c.description ?? "") as string,
-        itemCount: (c.item_count ?? 0) as number,
+        itemCount: countMap[(c.name as string).toLowerCase()] ?? 0,
         createdAt: (c.created_at ?? new Date().toISOString()) as string,
       }))
       setList(mapped)

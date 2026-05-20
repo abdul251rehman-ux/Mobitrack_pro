@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Plus, Eye, Pencil, ShoppingBag, CalendarDays, TrendingDown, AlertCircle, RotateCcw, Truck, Package } from "lucide-react"
+import { Plus, Eye, Pencil, ShoppingBag, CalendarDays, TrendingDown, AlertCircle, RotateCcw, Truck, Package, FileText, Download } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -36,12 +36,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDatePKT, todayPKT } from "@/lib/utils"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const _now = new Date()
-const TODAY = _now.toISOString().split("T")[0]
+const TODAY = todayPKT()
 const CURRENT_MONTH = TODAY.substring(0, 7)
+const _now = new Date()
 const WEEK_START = new Date(_now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
 // ─── Table Columns ─────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       accessorKey: "date",
       header: "Date",
       cell: ({ row }) => (
-        <span className="text-xs text-slate-500 whitespace-nowrap">{formatDate(row.getValue("date"))}</span>
+        <span className="text-xs text-slate-500 whitespace-nowrap">{formatDatePKT(row.getValue("date"))}</span>
       ),
     },
     {
@@ -182,7 +182,7 @@ function PurchaseViewDialog({
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 bg-slate-50 rounded-xl p-3 sm:p-4 mt-2">
           <div>
             <p className="text-xs text-slate-400 mb-0.5">Date</p>
-            <p className="text-sm font-medium text-slate-800">{formatDate(purchase.date)}</p>
+            <p className="text-sm font-medium text-slate-800">{formatDatePKT(purchase.date)}</p>
           </div>
           <div>
             <p className="text-xs text-slate-400 mb-0.5">Supplier</p>
@@ -195,7 +195,7 @@ function PurchaseViewDialog({
           {purchase.dueDate && (
             <div>
               <p className="text-xs text-slate-400 mb-0.5">Due Date</p>
-              <p className="text-sm font-medium text-slate-800">{formatDate(purchase.dueDate)}</p>
+              <p className="text-sm font-medium text-slate-800">{formatDatePKT(purchase.dueDate)}</p>
             </div>
           )}
           {purchase.notes && (
@@ -395,24 +395,23 @@ export default function PurchasesPage() {
   const [viewOpen, setViewOpen] = useState(false)
 
   // ── Stats ─────────────────────────────────────────────────────────────────
-  const todayCount = useMemo(
-    () => purchases.filter((p) => p.date === TODAY).length,
-    [purchases]
-  )
+  const todayStats = useMemo(() => {
+    const list = purchases.filter((p) => p.date === TODAY)
+    return { count: list.length, total: list.reduce((s, p) => s + p.total, 0) }
+  }, [purchases])
 
-  const weekCount = useMemo(
-    () =>
-      purchases.filter((p) => {
-        const d = new Date(p.date)
-        return d >= WEEK_START && d <= new Date(TODAY)
-      }).length,
-    [purchases]
-  )
+  const weekStats = useMemo(() => {
+    const list = purchases.filter((p) => {
+      const d = new Date(p.date)
+      return d >= WEEK_START && d <= new Date(TODAY)
+    })
+    return { count: list.length, total: list.reduce((s, p) => s + p.total, 0) }
+  }, [purchases])
 
-  const monthCount = useMemo(
-    () => purchases.filter((p) => p.date.startsWith(CURRENT_MONTH)).length,
-    [purchases]
-  )
+  const monthStats = useMemo(() => {
+    const list = purchases.filter((p) => p.date.startsWith(CURRENT_MONTH))
+    return { count: list.length, total: list.reduce((s, p) => s + p.total, 0) }
+  }, [purchases])
 
   // ── Filtered data ──────────────────────────────────────────────────────────
   const filteredPurchases = useMemo(() => {
@@ -550,7 +549,7 @@ export default function PurchasesPage() {
           const supplierName = suppliers.find(s => s.id === editPurchase.supplierId)?.companyName || editPurchase.supplierName
           const { error: payErr } = await supabase.from("payments").insert({
             tenant_id: tenantId,
-            date: new Date().toISOString().split("T")[0],
+            date: todayPKT(),
             type: "Paid",
             entity_type: "Supplier",
             entity_id: editPurchase.supplierId,
@@ -643,19 +642,120 @@ export default function PurchasesPage() {
     </div>
   )
 
+  async function handleExportPDF() {
+    if (filteredPurchases.length === 0) { toast.error("No purchases to export"); return }
+    const [{ generateReportPDF }, { getTenant }] = await Promise.all([
+      import("@/lib/pdf/report"),
+      import("@/lib/api/settings"),
+    ])
+    const tenant = await getTenant()
+    const periodParts = [dateFrom && "From: " + dateFrom, dateTo && "To: " + dateTo].filter(Boolean)
+    const subtitle = [...periodParts, filteredPurchases.length + " orders"].join(" | ")
+    generateReportPDF({
+      shopName:    tenant?.name    ?? "Mobile Shop",
+      shopAddress: [tenant?.address, tenant?.city].filter(Boolean).join(", "),
+      shopPhone:   tenant?.phone   ?? "",
+      title:       "Purchase Orders",
+      subtitle,
+      columns: [
+        { header: "PO #",        dataKey: "poNumber",       width: 24, halign: "left" },
+        { header: "Date",        dataKey: "date",           width: 20 },
+        { header: "Supplier",    dataKey: "supplierName",   width: 36 },
+        { header: "Items",       dataKey: "itemCount",      width: 12, halign: "center" },
+        { header: "Total",       dataKey: "totalFmt",       width: 28, halign: "right" },
+        { header: "Paid",        dataKey: "paidFmt",        width: 28, halign: "right" },
+        { header: "Balance Due", dataKey: "balanceFmt",     width: 28, halign: "right", bold: true },
+        { header: "Pay Status",  dataKey: "paymentStatus",  width: 22 },
+        { header: "Delivery",    dataKey: "deliveryStatus", width: 22 },
+      ],
+      rows: filteredPurchases.map(p => ({
+        poNumber:       p.poNumber,
+        date:           p.date,
+        supplierName:   p.supplierName,
+        itemCount:      String(p.items.length),
+        totalFmt:       "Rs " + p.total.toLocaleString(),
+        paidFmt:        "Rs " + p.amountPaid.toLocaleString(),
+        balanceFmt:     p.balanceDue > 0 ? "Rs " + p.balanceDue.toLocaleString() : "—",
+        paymentStatus:  p.paymentStatus,
+        deliveryStatus: p.deliveryStatus,
+      })),
+      summary: [
+        { label: "Total Orders",  value: String(filteredPurchases.length) },
+        { label: "Total Spent",   value: "Rs " + filteredPurchases.reduce((s, p) => s + p.total, 0).toLocaleString() },
+        { label: "Total Payable", value: "Rs " + filteredPurchases.reduce((s, p) => s + p.balanceDue, 0).toLocaleString() },
+      ],
+      filename: "purchases-" + todayPKT(),
+    })
+    toast.success("PDF exported")
+  }
+
+  async function handleExportExcel() {
+    if (filteredPurchases.length === 0) { toast.error("No purchases to export"); return }
+    const { exportToExcel } = await import("@/lib/excel-export")
+    const periodParts = [dateFrom && "From: " + dateFrom, dateTo && "To: " + dateTo].filter(Boolean)
+    exportToExcel(
+      filteredPurchases.map(p => ({
+        poNumber:       p.poNumber,
+        date:           p.date,
+        supplierName:   p.supplierName,
+        items:          p.items.length,
+        total:          p.total,
+        amountPaid:     p.amountPaid,
+        balanceDue:     p.balanceDue,
+        paymentStatus:  p.paymentStatus,
+        deliveryStatus: p.deliveryStatus,
+        notes:          p.notes || "",
+      })),
+      "purchases-" + todayPKT(),
+      [
+        { key: "poNumber",       header: "PO #",          width: 16 },
+        { key: "date",           header: "Date",           width: 14 },
+        { key: "supplierName",   header: "Supplier",       width: 28 },
+        { key: "items",          header: "Items",          width: 10, align: "center" },
+        { key: "total",          header: "Total (Rs)",     width: 16, numFmt: "#,##0", align: "right" },
+        { key: "amountPaid",     header: "Paid (Rs)",      width: 16, numFmt: "#,##0", align: "right" },
+        { key: "balanceDue",     header: "Balance Due (Rs)", width: 18, numFmt: "#,##0", align: "right" },
+        { key: "paymentStatus",  header: "Payment",        width: 14 },
+        { key: "deliveryStatus", header: "Delivery",       width: 14 },
+        { key: "notes",          header: "Notes",          width: 24 },
+      ],
+      {
+        sheetName: "Purchases",
+        title: "Purchase Orders",
+        subtitle: periodParts.join(" | ") || undefined,
+        summaryRows: [
+          { label: "Total Orders", value: filteredPurchases.length },
+          { label: "Total Spent",  value: filteredPurchases.reduce((s, p) => s + p.total, 0) },
+          { label: "Total Payable", value: filteredPurchases.reduce((s, p) => s + p.balanceDue, 0) },
+        ],
+      }
+    )
+    toast.success("Excel exported — " + filteredPurchases.length + " orders")
+  }
+
   return (
     <PageWrapper>
       {/* ── Header ───────────────────────────────────────────────────────────── */}
       <PageHeader
         title="Purchases"
         description="Manage purchase orders and supplier payments"
+        icon={<ShoppingBag />}
+        iconBg="bg-violet-600"
         action={
-          <Link href="/purchases/new">
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm">
-              <Plus className="w-4 h-4" />
-              New Purchase
-            </Button>
-          </Link>
+          <div className="flex items-center gap-1.5">
+            <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-9 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
+              <FileText className="w-3.5 h-3.5" />PDF
+            </button>
+            <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-9 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
+              <Download className="w-3.5 h-3.5" />Excel
+            </button>
+            <Link href="/purchases/new">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm h-9">
+                <Plus className="w-4 h-4" />
+                New Purchase
+              </Button>
+            </Link>
+          </div>
         }
       />
 
@@ -663,22 +763,22 @@ export default function PurchasesPage() {
       <div className="grid grid-cols-4 gap-2.5 sm:gap-3 mb-4">
         <StatCard
           title="Today's Purchases"
-          value={String(todayCount)}
-          subtext={formatDate(TODAY)}
+          value={formatCurrency(todayStats.total)}
+          subtext={`${todayStats.count} order${todayStats.count !== 1 ? "s" : ""}`}
           icon={ShoppingBag}
           iconBg="bg-blue-100"
         />
         <StatCard
           title="This Week"
-          value={String(weekCount)}
-          subtext="Last 7 days"
+          value={formatCurrency(weekStats.total)}
+          subtext={`${weekStats.count} order${weekStats.count !== 1 ? "s" : ""} · last 7 days`}
           icon={CalendarDays}
           iconBg="bg-blue-100"
         />
         <StatCard
           title="This Month"
-          value={String(monthCount)}
-          subtext={new Date().toLocaleString("default", { month: "long", year: "numeric" })}
+          value={formatCurrency(monthStats.total)}
+          subtext={`${monthStats.count} order${monthStats.count !== 1 ? "s" : ""} · ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`}
           icon={TrendingDown}
           iconBg="bg-blue-100"
         />
@@ -746,7 +846,7 @@ export default function PurchasesPage() {
                   </div>
                   <span className="text-xs text-slate-400 shrink-0 flex items-center gap-1">
                     <CalendarDays className="w-3 h-3" />
-                    {formatDate(purchase.date)}
+                    {formatDatePKT(purchase.date)}
                   </span>
                 </div>
 
@@ -845,6 +945,7 @@ export default function PurchasesPage() {
                         <SelectItem value="Unpaid">Unpaid</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-[10px] text-slate-400">Auto-updates when amount paid changes</p>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-slate-600">Delivery Status</Label>
@@ -861,7 +962,13 @@ export default function PurchasesPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-slate-600">Amount Paid (Rs)</Label>
-                    <Input type="number" min={0} value={editAmountPaid} onChange={e => setEditAmountPaid(e.target.value)} className="h-9 text-sm" />
+                    <Input type="number" min={0} value={editAmountPaid} onChange={e => {
+                      const val = e.target.value
+                      setEditAmountPaid(val)
+                      const paid = parseFloat(val) || 0
+                      const total = editSubtotal + (editPurchase?.shippingCost || 0) + (editPurchase?.tax || 0)
+                      setEditPaymentStatus(paid <= 0 ? "Unpaid" : paid >= total ? "Paid" : "Partial")
+                    }} className="h-9 text-sm" />
                     {editPurchase && (
                       <p className="text-[11px] text-slate-400">
                         Balance: {formatCurrency(Math.max(0, editPurchase.total - (parseFloat(editAmountPaid) || 0)))}

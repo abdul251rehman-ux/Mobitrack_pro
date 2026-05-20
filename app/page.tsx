@@ -24,7 +24,7 @@ import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { format, subMonths, subDays, startOfWeek, endOfWeek, subWeeks, addDays, parseISO, differenceInDays } from "date-fns"
 
 /* ─── Custom Tooltips ─────────────────────────────────────────────────────── */
@@ -70,7 +70,7 @@ type Period = "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "y
 /* ─── Page ─────────────────────────────────────────────────────────────────── */
 export default function DashboardPage() {
   const { user } = useAuth()
-  const TODAY = format(new Date(), "yyyy-MM-dd")
+  const TODAY = todayPKT()
   const [period, setPeriod] = useState<Period>("month")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")

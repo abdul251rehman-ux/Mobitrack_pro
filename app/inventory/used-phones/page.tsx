@@ -19,9 +19,11 @@ import {
   type UsedPTAStatus,
 } from "@/data/used-phones"
 import { getUsedPhones, createUsedPhone, updateUsedPhone } from "@/lib/api/inventory"
+import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
+import { SearchableSelect } from "@/components/shared/searchable-select"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
-import { formatCurrency, formatDate, cn } from "@/lib/utils"
+import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
 import { toast } from "sonner"
 
 // ─── Grade / Status Meta ──────────────────────────────────────────────────────
@@ -570,7 +572,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select brand</option>
-                  {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                  {Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort().map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
               <div>
@@ -684,7 +686,7 @@ type FormData = {
 const EMPTY_FORM: FormData = {
   brand: "", model: "", color: "", storage: "128GB", ram: "4GB",
   imei_number: "", source_type: "customer_trade_in", source_customer_name: "",
-  purchased_date: new Date().toISOString().split("T")[0], purchase_price: "",
+  purchased_date: todayPKT(), purchase_price: "",
   condition_grade: "B", screen_condition: "perfect", body_condition: "minor_wear",
   battery_health: "", functional_issues: [], accessories_included: [], condition_notes: "",
   refurbishment_cost: "0", selling_price: "",
@@ -693,6 +695,17 @@ const EMPTY_FORM: FormData = {
 }
 
 const STEPS = ["Basic Info", "Condition", "Pricing", "Photos", "Review"]
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
 
 function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOptions, ramOptions, onAddBrand, onAddColor, onAddStorage, onAddRam }: {
   editPhone: UsedPhone | null
@@ -822,15 +835,6 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     ? ((profit / Number(form.selling_price)) * 100).toFixed(0)
     : "0"
 
-  const F = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      {children}
-    </div>
-  )
-
   const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
   const selectCls = inputCls
 
@@ -879,54 +883,43 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
             {step === 0 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <F label="Brand" required>
-                    {!showNewBrand ? (
-                      <>
-                        <select value={form.brand} onChange={e => set("brand", e.target.value)} className={selectCls}>
-                          <option value="">Select brand</option>
-                          {brands.map(b => <option key={b} value={b}>{b}</option>)}
-                        </select>
-                        <button type="button" onClick={() => setShowNewBrand(true)}
-                          className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1">
-                          <Plus className="w-3 h-3" /> Add New Brand
-                        </button>
-                      </>
-                    ) : (
-                      <div className="flex gap-2">
-                        <input placeholder="e.g. Huawei" value={newBrandName} onChange={e => setNewBrandName(e.target.value)}
-                          className={inputCls + " flex-1"} autoFocus
-                          onKeyDown={async (e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault()
-                              if (!newBrandName.trim()) return
-                              setAddingBrand(true)
-                              const ok = await onAddBrand(newBrandName.trim())
-                              setAddingBrand(false)
-                              if (ok) { set("brand", newBrandName.trim()); setNewBrandName(""); setShowNewBrand(false) }
-                            }
-                          }} />
-                        <button type="button" disabled={!newBrandName.trim() || addingBrand}
-                          className="h-9 px-3 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
-                          onClick={async () => {
-                            if (!newBrandName.trim()) return
-                            setAddingBrand(true)
-                            const ok = await onAddBrand(newBrandName.trim())
-                            setAddingBrand(false)
-                            if (ok) { set("brand", newBrandName.trim()); setNewBrandName(""); setShowNewBrand(false) }
-                          }}>
-                          {addingBrand ? "..." : "Save"}
-                        </button>
-                        <button type="button" onClick={() => { setShowNewBrand(false); setNewBrandName("") }}
-                          className="h-9 px-2 text-slate-400 hover:text-slate-600">&#x2715;</button>
-                      </div>
-                    )}
-                  </F>
-                  <F label="Model" required>
-                    <input type="text" value={form.model} onChange={e => set("model", e.target.value)} placeholder="e.g. Galaxy A54" className={inputCls} />
-                  </F>
+                  <Field label="Brand" required>
+                    {(() => {
+                      const allBrands = Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort()
+                      return (
+                        <SearchableSelect
+                          value={form.brand}
+                          onChange={val => { set("brand", val); set("model", "") }}
+                          options={allBrands}
+                          placeholder="Search brand..."
+                          allowCustom
+                          customWarning="This brand is not in the standard list. It will be saved as entered."
+                          onAddNew={async (name) => { await onAddBrand(name) }}
+                        />
+                      )
+                    })()}
+                  </Field>
+                  <Field label="Model" required>
+                    {(() => {
+                      const brandEntry = MASTER_BRANDS.find(b => b.name.toLowerCase() === form.brand.toLowerCase())
+                      const isApple = form.brand.toLowerCase() === "apple"
+                      const modelOptions = isApple ? APPLE_MODELS : (brandEntry?.models ?? [])
+                      return (
+                        <SearchableSelect
+                          value={form.model}
+                          onChange={val => set("model", val)}
+                          options={modelOptions}
+                          placeholder={form.brand ? `Search ${form.brand} model...` : "Select brand first"}
+                          disabled={!form.brand}
+                          allowCustom
+                          customWarning="This model is not in the standard list. Double-check spelling."
+                        />
+                      )
+                    })()}
+                  </Field>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <F label="Color">
+                  <Field label="Color">
                     {!showNewColor ? (
                       <>
                         <select value={form.color} onChange={e => set("color", e.target.value)} className={selectCls}>
@@ -967,8 +960,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           className="h-9 px-2 text-slate-400 hover:text-slate-600">&#x2715;</button>
                       </div>
                     )}
-                  </F>
-                  <F label="Storage">
+                  </Field>
+                  <Field label="Storage">
                     {!showNewStorage ? (
                       <>
                         <select value={form.storage} onChange={e => set("storage", e.target.value)} className={selectCls}>
@@ -1008,8 +1001,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           className="h-9 px-2 text-slate-400 hover:text-slate-600">&#x2715;</button>
                       </div>
                     )}
-                  </F>
-                  <F label="RAM">
+                  </Field>
+                  <Field label="RAM">
                     {!showNewRam ? (
                       <>
                         <select value={form.ram} onChange={e => set("ram", e.target.value)} className={selectCls}>
@@ -1049,31 +1042,31 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           className="h-9 px-2 text-slate-400 hover:text-slate-600">&#x2715;</button>
                       </div>
                     )}
-                  </F>
+                  </Field>
                 </div>
-                <F label="IMEI Number" required>
+                <Field label="IMEI Number" required>
                   <input type="text" value={form.imei_number} onChange={e => set("imei_number", e.target.value.replace(/\D/g,"").slice(0,15))} placeholder="15-digit IMEI" maxLength={15} className={inputCls} />
                   <p className="text-xs text-slate-400 mt-1">{form.imei_number.length}/15 digits</p>
-                </F>
+                </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <F label="Source Type">
+                  <Field label="Source Type">
                     <select value={form.source_type} onChange={e => set("source_type", e.target.value as SourceType)} className={selectCls}>
                       {(Object.entries(SOURCE_LABEL) as [SourceType, string][]).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
                       ))}
                     </select>
-                  </F>
-                  <F label="Customer / Source Name">
+                  </Field>
+                  <Field label="Customer / Source Name">
                     <input type="text" value={form.source_customer_name} onChange={e => set("source_customer_name", e.target.value)} placeholder="Optional" className={inputCls} />
-                  </F>
+                  </Field>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <F label="Date Acquired">
+                  <Field label="Date Acquired">
                     <input type="date" value={form.purchased_date} onChange={e => set("purchased_date", e.target.value)} className={inputCls} />
-                  </F>
-                  <F label="Purchase Price (₨)" required>
+                  </Field>
+                  <Field label="Purchase Price (₨)" required>
                     <input type="number" value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
-                  </F>
+                  </Field>
                 </div>
               </div>
             )}
@@ -1081,7 +1074,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
             {/* Step 2: Condition */}
             {step === 1 && (
               <div className="space-y-5">
-                <F label="Condition Grade">
+                <Field label="Condition Grade">
                   <div className="flex gap-2 flex-wrap mt-1">
                     {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => (
                       <button
@@ -1107,23 +1100,23 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                      form.condition_grade === "C"  ? "Heavy wear, multiple issues" :
                      "Poor — significant damage"}
                   </p>
-                </F>
+                </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <F label="Screen Condition">
+                  <Field label="Screen Condition">
                     <select value={form.screen_condition} onChange={e => set("screen_condition", e.target.value as ScreenCondition)} className={selectCls}>
                       {(Object.entries(SCREEN_LABEL) as [ScreenCondition, string][]).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
-                  </F>
-                  <F label="Body Condition">
+                  </Field>
+                  <Field label="Body Condition">
                     <select value={form.body_condition} onChange={e => set("body_condition", e.target.value as BodyCondition)} className={selectCls}>
                       {(Object.entries(BODY_LABEL) as [BodyCondition, string][]).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
-                  </F>
+                  </Field>
                 </div>
-                <F label="Battery Health (%)">
+                <Field label="Battery Health (%)">
                   <input type="number" value={form.battery_health} onChange={e => set("battery_health", e.target.value)} placeholder="e.g. 85" min={0} max={100} className={inputCls} />
                   {form.battery_health && <BatteryBar value={Number(form.battery_health)} />}
-                </F>
+                </Field>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Functional Issues</label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1162,7 +1155,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     ))}
                   </div>
                 </div>
-                <F label="Condition Notes">
+                <Field label="Condition Notes">
                   <textarea
                     value={form.condition_notes}
                     onChange={e => set("condition_notes", e.target.value)}
@@ -1170,7 +1163,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     placeholder="Describe the condition in detail..."
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   />
-                </F>
+                </Field>
               </div>
             )}
 
@@ -1178,12 +1171,12 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
             {step === 2 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <F label="Refurbishment Cost (₨)">
+                  <Field label="Refurbishment Cost (₨)">
                     <input type="number" value={form.refurbishment_cost} onChange={e => set("refurbishment_cost", e.target.value)} placeholder="0" min={0} className={inputCls} />
-                  </F>
-                  <F label="Selling Price (₨)" required>
+                  </Field>
+                  <Field label="Selling Price (₨)" required>
                     <input type="number" value={form.selling_price} onChange={e => set("selling_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
-                  </F>
+                  </Field>
                 </div>
                 {/* Profit preview */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1203,25 +1196,25 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <F label="PTA Status">
+                  <Field label="PTA Status">
                     <select value={form.pta_status} onChange={e => set("pta_status", e.target.value as UsedPTAStatus)} className={selectCls}>
                       <option value="approved">PTA Approved</option>
                       <option value="pending">PTA Pending</option>
                       <option value="blocked">PTA Blocked</option>
                     </select>
-                  </F>
-                  <F label="Status">
+                  </Field>
+                  <Field label="Status">
                     <select value={form.status} onChange={e => set("status", e.target.value as PhoneStatus)} className={selectCls}>
                       <option value="in_stock">In Stock</option>
                       <option value="under_repair">Under Repair</option>
                       <option value="listed_online">Listed Online</option>
                     </select>
-                  </F>
-                  <F label="Warranty (days)">
+                  </Field>
+                  <Field label="Warranty (days)">
                     <select value={form.warranty_days} onChange={e => set("warranty_days", e.target.value)} className={selectCls}>
                       {["0","3","7","10","14","30"].map(d => <option key={d} value={d}>{d === "0" ? "No Warranty" : `${d} days`}</option>)}
                     </select>
-                  </F>
+                  </Field>
                 </div>
               </div>
             )}
@@ -1492,7 +1485,7 @@ export default function UsedPhonesPage() {
     let res = [...phones]
     if (search)     res = res.filter(p => `${p.brand} ${p.model} ${p.color} ${p.imei_number}`.toLowerCase().includes(search.toLowerCase()))
     if (gradeFilter) res = res.filter(p => p.condition_grade === gradeFilter)
-    if (brandFilter) res = res.filter(p => p.brand === brandFilter)
+    if (brandFilter) res = res.filter(p => p.brand.toLowerCase() === brandFilter.toLowerCase())
     if (statusFilter) res = res.filter(p => p.status === statusFilter)
     if (ptaFilter)   res = res.filter(p => p.pta_status === ptaFilter)
     if (minPrice)    res = res.filter(p => p.selling_price >= Number(minPrice))
@@ -1527,7 +1520,7 @@ export default function UsedPhonesPage() {
           functional_issues: [], accessories_included: [],
           source_type: "customer_trade_in", purchase_price: 0, refurbishment_cost: 0,
           selling_price: 0, pta_status: "approved", status: "in_stock", warranty_days: 7,
-          photos: [], purchased_date: new Date().toISOString().split("T")[0],
+          photos: [], purchased_date: todayPKT(),
           created_at: new Date().toISOString(),
           ...data,
         }
@@ -1536,17 +1529,28 @@ export default function UsedPhonesPage() {
         await createUsedPhone({
           brand: newPhone.brand,
           model: newPhone.model,
-          imei: newPhone.imei_number,
+          imei_number: newPhone.imei_number,
           color: newPhone.color,
           storage: newPhone.storage,
           ram: newPhone.ram,
-          condition: newPhone.condition_grade,
-          grade: newPhone.condition_grade as 'A' | 'B' | 'C' | 'D',
-          purchasePrice: newPhone.purchase_price,
-          sellingPrice: newPhone.selling_price,
-          status: 'In Stock',
-          dateAdded: newPhone.purchased_date,
-          notes: '',
+          condition_grade: newPhone.condition_grade,
+          screen_condition: newPhone.screen_condition ?? 'perfect',
+          body_condition: newPhone.body_condition ?? 'perfect',
+          battery_health: newPhone.battery_health,
+          functional_issues: newPhone.functional_issues ?? [],
+          accessories_included: newPhone.accessories_included ?? [],
+          source_type: newPhone.source_type ?? 'purchased',
+          source_customer_name: newPhone.source_customer_name,
+          purchase_price: newPhone.purchase_price,
+          refurbishment_cost: newPhone.refurbishment_cost ?? 0,
+          selling_price: newPhone.selling_price,
+          pta_status: newPhone.pta_status ?? 'pending',
+          status: 'in_stock',
+          warranty_days: newPhone.warranty_days ?? 7,
+          condition_notes: newPhone.condition_notes,
+          photos: newPhone.photos ?? [],
+          purchased_date: newPhone.purchased_date,
+          sold_date: undefined,
         }).catch(() => {})
         toast.success("Phone added successfully")
       }
@@ -1562,7 +1566,7 @@ export default function UsedPhonesPage() {
       ...p,
       status: "sold",
       selling_price: price,
-      sold_date: new Date().toISOString().split("T")[0],
+      sold_date: todayPKT(),
       source_customer_name: customerName,
     } : p))
     // Persist to Supabase
@@ -1772,7 +1776,7 @@ export default function UsedPhonesPage() {
                 className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Brands</option>
-                {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                {Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort().map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div>

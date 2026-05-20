@@ -12,8 +12,10 @@ import { format, parseISO, startOfMonth, startOfYear, isWithinInterval, endOfMon
 import { toast } from "sonner"
 
 import { getExpenses, createExpense, updateExpense, deleteExpense } from "@/lib/api/expenses"
+import { getFinanceAccounts } from "@/lib/api/finance"
 import { Expense, ExpenseCategory, ExpenseType, ExpensePayment } from "@/data/types"
-import { formatCurrency, cn } from "@/lib/utils"
+import type { FinanceAccount } from "@/lib/api/types"
+import { formatCurrency, cn, todayPKT } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,7 +33,7 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const _now = new Date()
-const TODAY = _now.toISOString().split("T")[0]
+const TODAY = todayPKT()
 const THIS_MONTH = TODAY.substring(0, 7)
 const THIS_YEAR = TODAY.substring(0, 4)
 
@@ -91,6 +93,7 @@ interface ExpenseForm {
   date: string
   type: ExpenseType
   paymentMethod: ExpensePayment
+  accountId: string
   status: "Paid" | "Pending"
   isRecurring: boolean
   recurringDay: string
@@ -100,7 +103,7 @@ interface ExpenseForm {
 
 const defaultForm: ExpenseForm = {
   title: "", category: "", amount: "", date: TODAY,
-  type: "one-time", paymentMethod: "Cash", status: "Paid",
+  type: "one-time", paymentMethod: "Cash", accountId: "", status: "Paid",
   isRecurring: false, recurringDay: "1", recurringMonth: "1", notes: "",
 }
 
@@ -161,11 +164,13 @@ function StatCard({ label, amount, count, countLabel, iconBg, icon, trend }: {
 
 // ─── Add/Edit Drawer ─────────────────────────────────────────────────────────
 
-function ExpenseDrawer({ open, onClose, editing, onSave }: {
+function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccountId }: {
   open: boolean
   onClose: () => void
   editing: Expense | null
   onSave: (form: ExpenseForm) => void
+  accounts: FinanceAccount[]
+  defaultAccountId: string
 }) {
   const [form, setForm] = useState<ExpenseForm>(defaultForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -179,6 +184,7 @@ function ExpenseDrawer({ open, onClose, editing, onSave }: {
         date: editing.date,
         type: editing.type,
         paymentMethod: editing.paymentMethod,
+        accountId: defaultAccountId,
         status: editing.status,
         isRecurring: editing.isRecurring,
         recurringDay: String(editing.recurringDay ?? 1),
@@ -186,10 +192,10 @@ function ExpenseDrawer({ open, onClose, editing, onSave }: {
         notes: editing.notes ?? "",
       })
     } else {
-      setForm(defaultForm)
+      setForm({ ...defaultForm, accountId: defaultAccountId })
     }
     setErrors({})
-  }, [editing, open])
+  }, [editing, open, defaultAccountId])
 
   function up<K extends keyof ExpenseForm>(key: K, val: ExpenseForm[K]) {
     setForm(prev => ({ ...prev, [key]: val }))
@@ -387,25 +393,54 @@ function ExpenseDrawer({ open, onClose, editing, onSave }: {
               <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Payment</span>
             </div>
             <div className="p-4 space-y-3">
-              {/* Payment method */}
+              {/* Account selector — deducts from Finance account when Paid */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Payment Method</Label>
-                <div className="flex gap-2 flex-wrap">
-                  {PAYMENT_OPTIONS.map(p => {
-                    const pm = PAYMENT_META[p]
-                    return (
-                      <button key={p} type="button" onClick={() => up("paymentMethod", p)}
-                        className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all",
-                          form.paymentMethod === p
-                            ? `${pm.color} bg-slate-800 text-white border-slate-800`
-                            : `${pm.color} bg-white border-slate-200 hover:border-slate-300`
-                        )}>
-                        {pm.icon} {p}
-                      </button>
-                    )
-                  })}
-                </div>
+                <Label className="text-xs font-semibold text-slate-600">Pay From Account</Label>
+                {accounts.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {accounts.map(a => {
+                      const isSelected = form.accountId === a.id
+                      const typeColor = a.type === "cash" ? "emerald" : a.type === "bank" ? "purple" : "red"
+                      return (
+                        <button
+                          key={a.id} type="button"
+                          onClick={() => {
+                            up("accountId", a.id)
+                            up("paymentMethod", a.type === "cash" ? "Cash" : a.type === "bank" ? "Bank Transfer" : (a.bankName as ExpensePayment) || "Cash")
+                          }}
+                          className={cn(
+                            "flex items-center justify-between px-3 py-2 rounded-xl border-2 text-xs font-semibold transition-all text-left",
+                            isSelected
+                              ? `border-${typeColor}-500 bg-${typeColor}-50 text-${typeColor}-800`
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          )}
+                        >
+                          <span>{a.name}</span>
+                          <span className={cn("text-[10px] font-bold", isSelected ? "" : "text-slate-400")}>
+                            Rs {a.currentBalance.toLocaleString()}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex gap-2 flex-wrap">
+                    {PAYMENT_OPTIONS.map(p => {
+                      const pm = PAYMENT_META[p]
+                      return (
+                        <button key={p} type="button" onClick={() => up("paymentMethod", p)}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all",
+                            form.paymentMethod === p
+                              ? `${pm.color} bg-slate-800 text-white border-slate-800`
+                              : `${pm.color} bg-white border-slate-200 hover:border-slate-300`
+                          )}>
+                          {pm.icon} {p}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Status */}
@@ -485,6 +520,8 @@ function DeleteDialog({ open, expense, onConfirm, onCancel }: {
 
 export default function ExpensesPage() {
   const [list, setList] = useState<Expense[]>([])
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
+  const [defaultAccountId, setDefaultAccountId] = useState("")
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<TabType>("all")
   const [search, setSearch] = useState("")
@@ -505,8 +542,11 @@ export default function ExpensesPage() {
     async function fetchData() {
       try {
         setLoading(true)
-        const data = await getExpenses()
+        const [data, accs] = await Promise.all([getExpenses(), getFinanceAccounts()])
         setList(data)
+        setFinanceAccounts(accs)
+        const defAcc = accs.find(a => a.isDefaultCash) ?? accs[0]
+        if (defAcc) setDefaultAccountId(defAcc.id)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to fetch expenses")
       } finally {
@@ -580,10 +620,11 @@ export default function ExpensesPage() {
 
   async function handleSave(form: ExpenseForm) {
     try {
+      const amount = parseFloat(form.amount)
       const expenseData = {
         title: form.title,
         category: form.category as ExpenseCategory,
-        amount: parseFloat(form.amount),
+        amount,
         date: form.date,
         type: form.type,
         paymentMethod: form.paymentMethod,
@@ -598,8 +639,34 @@ export default function ExpensesPage() {
         setList(prev => prev.map(e => e.id === editing.id ? updated : e))
         toast.success("Expense updated")
       } else {
+        const { supabase } = await import("@/lib/supabase")
+        const { getTenantId } = await import("@/lib/api/helpers")
         const created = await createExpense(expenseData as Omit<Expense, 'id'>)
         setList(prev => [created, ...prev])
+
+        // ── Finance: debit from selected account when Paid ─────────────────
+        if (form.status === "Paid" && form.accountId) {
+          const tenantId = await getTenantId()
+          await supabase.from("finance_transactions").insert({
+            tenant_id: tenantId, date: form.date,
+            type: "expense",
+            account_id: form.accountId,
+            amount,
+            reference_type: "Expense",
+            reference_id: created.id,
+            description: `Expense — ${form.title}`,
+          })
+          const { data: accRow } = await supabase
+            .from("finance_accounts").select("current_balance").eq("id", form.accountId).single()
+          if (accRow) {
+            const newBal = Math.max(0, (accRow as any).current_balance - amount)
+            await supabase.from("finance_accounts").update({ current_balance: newBal }).eq("id", form.accountId)
+            setFinanceAccounts(prev => prev.map(a => a.id === form.accountId ? { ...a, currentBalance: newBal } : a))
+          }
+          // Tag the expense with the account
+          await supabase.from("expenses").update({ account_id: form.accountId }).eq("id", created.id)
+        }
+
         toast.success("Expense added")
       }
     } catch (err) {
@@ -1017,7 +1084,7 @@ export default function ExpensesPage() {
         </div>
 
       {/* Drawer + Delete dialog */}
-      <ExpenseDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editing} onSave={handleSave} />
+      <ExpenseDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editing} onSave={handleSave} accounts={financeAccounts} defaultAccountId={defaultAccountId} />
       <DeleteDialog open={!!deleteTarget} expense={deleteTarget} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   )

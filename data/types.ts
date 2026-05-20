@@ -67,7 +67,7 @@ export interface Customer {
 export interface SaleItem {
   productId: string;
   productName: string;
-  productType: "Mobile" | "Accessory";
+  productType: "Mobile" | "Accessory" | "UsedPhone";
   quantity: number;
   unitPrice: number;
   discount: number;

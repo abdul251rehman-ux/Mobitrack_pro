@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { format } from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -11,7 +10,38 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(date: string | Date): string {
-  return format(new Date(date), "dd MMM yyyy");
+  return new Intl.DateTimeFormat("en-PK", {
+    timeZone: PKT, day: "2-digit", month: "short", year: "numeric",
+  }).format(new Date(date))
+}
+
+// Pakistan Standard Time (UTC+5) — used for all display timestamps
+const PKT = "Asia/Karachi"
+
+export function formatDatePKT(date: string | Date): string {
+  return new Intl.DateTimeFormat("en-PK", {
+    timeZone: PKT, day: "2-digit", month: "short", year: "numeric",
+  }).format(new Date(date))
+}
+
+export function formatDateTimePKT(date: string | Date): string {
+  return new Intl.DateTimeFormat("en-PK", {
+    timeZone: PKT, day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  }).format(new Date(date))
+}
+
+export function nowPKT(): string {
+  return new Intl.DateTimeFormat("en-PK", {
+    timeZone: PKT, day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  }).format(new Date())
+}
+
+/** Returns today's date as YYYY-MM-DD in Pakistan Standard Time (UTC+5). */
+export function todayPKT(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: PKT, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
+  return parts // en-CA locale gives YYYY-MM-DD format natively
 }
 
 export function calculateMargin(purchasePrice: number, sellingPrice: number): number {

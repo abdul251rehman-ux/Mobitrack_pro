@@ -24,6 +24,7 @@ import type {
   AuditLog,
   AppUser,
 } from '@/data/types'
+import type { UsedPhone } from '@/data/used-phones'
 
 // ─── Tenant & Profile (not in data/types, defined here) ─────────────────────
 
@@ -110,26 +111,8 @@ export interface StockAlertLog {
   acknowledged: boolean
 }
 
-export interface UsedPhone {
-  id: string
-  tenantId: string
-  brand: string
-  model: string
-  imei: string
-  color: string
-  storage: string
-  ram: string
-  condition: string
-  grade: 'A' | 'B' | 'C' | 'D'
-  purchasePrice: number
-  sellingPrice: number
-  customerId?: string
-  customerName?: string
-  defects?: string
-  notes?: string
-  status: 'In Stock' | 'Sold' | 'Listed'
-  dateAdded: string
-}
+// UsedPhone is defined in data/used-phones — re-export it as the canonical type
+export type { UsedPhone } from '@/data/used-phones'
 
 // ─── Database Row Types (snake_case, matching Supabase tables) ──────────────
 
@@ -637,24 +620,43 @@ export interface DbStockAlertLog {
 export interface DbUsedPhone {
   id: string
   tenant_id: string
+  // common
   brand: string
   model: string
-  imei: string
   color: string
   storage: string
   ram: string
-  condition: string
-  grade: string
   purchase_price: number
+  refurbishment_cost: number
   selling_price: number
-  customer_id: string | null
-  customer_name: string | null
-  defects: string | null
-  notes: string | null
   status: string
   date_added: string
   created_at: string
   updated_at: string
+  // complex schema (purchases/new page)
+  imei_number: string | null
+  condition_grade: string | null
+  battery_health: number | null
+  screen_condition: string | null
+  body_condition: string | null
+  functional_issues: string[] | null
+  accessories_included: string[] | null
+  source_type: string | null
+  source_customer_name: string | null
+  pta_status: string | null
+  warranty_days: number | null
+  condition_notes: string | null
+  photos: string[] | null
+  purchased_date: string | null
+  sold_date: string | null
+  // simple schema (legacy)
+  imei: string | null
+  condition: string | null
+  grade: string | null
+  customer_id: string | null
+  customer_name: string | null
+  defects: string | null
+  notes: string | null
 }
 
 // ─── Converter Functions ────────────────────────────────────────────────────
@@ -664,7 +666,7 @@ export function toMobile(db: DbMobile): Mobile {
     id: db.id,
     brand: db.brand,
     model: db.model,
-    imei: db.imei,
+    imei: db.imei ?? '',
     color: db.color,
     storage: db.storage,
     ram: db.ram,
@@ -686,7 +688,7 @@ export function toDbMobile(m: Partial<Mobile>, tenantId: string): Partial<DbMobi
   const db: Record<string, unknown> = { tenant_id: tenantId }
   if (m.brand !== undefined) db.brand = m.brand
   if (m.model !== undefined) db.model = m.model
-  if (m.imei !== undefined) db.imei = m.imei
+  if (m.imei !== undefined) db.imei = m.imei.trim() || null
   if (m.color !== undefined) db.color = m.color
   if (m.storage !== undefined) db.storage = m.storage
   if (m.ram !== undefined) db.ram = m.ram
@@ -1350,6 +1352,131 @@ export function toStockAlertRule(db: DbStockAlertRule): StockAlertRule {
   }
 }
 
+// ─── Finance Types ──────────────────────────────────────────────────────────
+
+export type FinanceAccountType = 'cash' | 'bank' | 'mobile_wallet'
+
+export type RefundType = 'cash' | 'store_credit'
+
+export type FinanceTransactionType =
+  | 'deposit'
+  | 'withdrawal'
+  | 'transfer_in'
+  | 'transfer_out'
+  | 'sale_receipt'
+  | 'purchase_payment'
+  | 'expense'
+  | 'opening_balance'
+  | 'sale_refund'
+  | 'customer_payment'
+  | 'supplier_payment'
+  | 'used_phone_purchase'
+
+export interface FinanceAccount {
+  id: string
+  tenantId: string
+  name: string
+  type: FinanceAccountType
+  accountTitle?: string
+  bankName?: string
+  accountNumber?: string
+  openingBalance: number
+  currentBalance: number
+  isDefaultCash: boolean
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FinanceTransaction {
+  id: string
+  tenantId: string
+  date: string
+  type: FinanceTransactionType
+  accountId: string
+  accountName?: string
+  toAccountId?: string
+  toAccountName?: string
+  amount: number
+  referenceType?: string
+  referenceId?: string
+  referenceNumber?: string
+  description?: string
+  notes?: string
+  createdBy?: string
+  createdAt: string
+}
+
+export interface DbFinanceAccount {
+  id: string
+  tenant_id: string
+  name: string
+  type: string
+  account_title: string | null
+  bank_name: string | null
+  account_number: string | null
+  opening_balance: number
+  current_balance: number
+  is_default_cash: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DbFinanceTransaction {
+  id: string
+  tenant_id: string
+  date: string
+  type: string
+  account_id: string
+  to_account_id: string | null
+  amount: number
+  reference_type: string | null
+  reference_id: string | null
+  reference_number: string | null
+  description: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export function toFinanceAccount(db: DbFinanceAccount): FinanceAccount {
+  return {
+    id: db.id,
+    tenantId: db.tenant_id,
+    name: db.name,
+    type: db.type as FinanceAccountType,
+    accountTitle: db.account_title ?? undefined,
+    bankName: db.bank_name ?? undefined,
+    accountNumber: db.account_number ?? undefined,
+    openingBalance: db.opening_balance,
+    currentBalance: db.current_balance,
+    isDefaultCash: db.is_default_cash,
+    isActive: db.is_active,
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+  }
+}
+
+export function toFinanceTransaction(db: DbFinanceTransaction): FinanceTransaction {
+  return {
+    id: db.id,
+    tenantId: db.tenant_id,
+    date: db.date,
+    type: db.type as FinanceTransactionType,
+    accountId: db.account_id,
+    toAccountId: db.to_account_id ?? undefined,
+    amount: db.amount,
+    referenceType: db.reference_type ?? undefined,
+    referenceId: db.reference_id ?? undefined,
+    referenceNumber: db.reference_number ?? undefined,
+    description: db.description ?? undefined,
+    notes: db.notes ?? undefined,
+    createdBy: db.created_by ?? undefined,
+    createdAt: db.created_at,
+  }
+}
+
 export function toStockAlertLog(db: DbStockAlertLog): StockAlertLog {
   return {
     id: db.id,
@@ -1363,25 +1490,51 @@ export function toStockAlertLog(db: DbStockAlertLog): StockAlertLog {
   }
 }
 
+// Normalize legacy title-case status values to the lowercase enum used by the page.
+function normalizePhoneStatus(raw: string | null | undefined): UsedPhone['status'] {
+  switch (raw) {
+    case 'in_stock':      case 'In Stock':   return 'in_stock'
+    case 'under_repair':  case 'Under Repair': return 'under_repair'
+    case 'sold':          case 'Sold':       return 'sold'
+    case 'listed_online': case 'Listed':     return 'listed_online'
+    default:                                  return 'in_stock'
+  }
+}
+
+// Normalize legacy grade values ('A','B','C','D') to the 6-grade enum.
+function normalizeGrade(raw: string | null | undefined): UsedPhone['condition_grade'] {
+  const valid = ['A+', 'A', 'B+', 'B', 'C', 'D']
+  if (raw && valid.includes(raw)) return raw as UsedPhone['condition_grade']
+  return 'B'
+}
+
 export function toUsedPhone(db: DbUsedPhone): UsedPhone {
   return {
     id: db.id,
-    tenantId: db.tenant_id,
+    imei_number: db.imei_number ?? db.imei ?? '',
     brand: db.brand,
     model: db.model,
-    imei: db.imei,
     color: db.color,
     storage: db.storage,
     ram: db.ram,
-    condition: db.condition,
-    grade: db.grade as UsedPhone['grade'],
-    purchasePrice: db.purchase_price,
-    sellingPrice: db.selling_price,
-    customerId: db.customer_id ?? undefined,
-    customerName: db.customer_name ?? undefined,
-    defects: db.defects ?? undefined,
-    notes: db.notes ?? undefined,
-    status: db.status as UsedPhone['status'],
-    dateAdded: db.date_added,
+    condition_grade: normalizeGrade(db.condition_grade ?? db.grade),
+    screen_condition: (db.screen_condition ?? 'perfect') as UsedPhone['screen_condition'],
+    body_condition: (db.body_condition ?? 'perfect') as UsedPhone['body_condition'],
+    battery_health: db.battery_health ?? undefined,
+    functional_issues: db.functional_issues ?? [],
+    accessories_included: db.accessories_included ?? [],
+    source_type: (db.source_type ?? 'purchased') as UsedPhone['source_type'],
+    source_customer_name: db.source_customer_name ?? undefined,
+    purchase_price: db.purchase_price,
+    refurbishment_cost: db.refurbishment_cost ?? 0,
+    selling_price: db.selling_price,
+    pta_status: (db.pta_status ?? 'pending') as UsedPhone['pta_status'],
+    status: normalizePhoneStatus(db.status),
+    warranty_days: db.warranty_days ?? 7,
+    condition_notes: db.condition_notes ?? db.defects ?? undefined,
+    photos: db.photos ?? [],
+    purchased_date: db.purchased_date ?? db.date_added,
+    sold_date: db.sold_date ?? undefined,
+    created_at: db.created_at,
   }
 }

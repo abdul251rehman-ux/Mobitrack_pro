@@ -7,7 +7,7 @@ import { z } from "zod"
 import { toast } from "sonner"
 import {
   Building2, Mail, Phone, Upload, FileText, Users, Database,
-  Download, Shield, RotateCcw, Plus, Pencil, Power, Settings,
+  Download, Shield, RotateCcw, Plus, Pencil, Power, Settings, Eye, EyeOff,
 } from "lucide-react"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { getTenant, updateTenant, getTenantSettings, updateTenantSettings, getProfiles } from "@/lib/api/settings"
+import { getTenant, updateTenant, getTenantSettings, updateTenantSettings, getProfiles, createProfile, updateProfileFull } from "@/lib/api/settings"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type UserRole   = "Admin" | "Manager" | "Cashier"
@@ -106,6 +106,7 @@ function SectionCard({ title, description, children, className }: {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   const shopForm = useForm<ShopForm>({
     resolver: zodResolver(shopSchema),
@@ -135,6 +136,7 @@ export default function SettingsPage() {
 
   const [users, setUsers] = useState<AppUser[]>(initialUsers)
   const [userDialogOpen, setUserDialogOpen] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [editUser, setEditUser] = useState<AppUser | null>(null)
   const [toggleTarget, setToggleTarget] = useState<AppUser | null>(null)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
@@ -150,6 +152,7 @@ export default function SettingsPage() {
       try {
         const [tenant, settings, profiles] = await Promise.all([getTenant(), getTenantSettings(), getProfiles()])
         shopForm.reset({ shopName: tenant.name || "MobiTrack Pro", address: tenant.address || "", city: tenant.city || "Lahore", phone: tenant.phone || "", email: tenant.email || "", ntn: "1234567-8", currency: tenant.currency || "₨" })
+        if (tenant.logo) setLogoPreview(tenant.logo)
         taxForm.reset({ taxName: "GST", taxRate: settings.taxRate ?? 17 })
         setTaxEnabled(settings.taxEnabled ?? true)
         invoiceForm.reset({ prefix: settings.invoicePrefix || "INV", nextNumber: "2026-0053", footerText: settings.receiptFooter || "Thank you for your business!", termsText: "All sales are final. No returns after 7 days." })
@@ -157,7 +160,7 @@ export default function SettingsPage() {
           setUsers(profiles.map((p: any) => ({
             id: p.id, name: p.name || "Unknown", email: p.email || "",
             role: (p.role || "Cashier") as UserRole,
-            status: (p.status === "active" ? "Active" : "Inactive") as UserStatus,
+            status: (p.status?.toLowerCase() === "active" ? "Active" : "Inactive") as UserStatus,
             lastLogin: p.lastLogin || "Never",
           })))
         }
@@ -171,51 +174,86 @@ export default function SettingsPage() {
   }, [])
 
   async function onShopSubmit(data: ShopForm) {
+    setSaving(true)
     try {
-      await updateTenant({ name: data.shopName, address: data.address, city: data.city, phone: data.phone, email: data.email, currency: data.currency })
-      toast.success("Shop profile saved")
-    } catch { toast.error("Failed to save shop profile") }
+      await updateTenant({ name: data.shopName, address: data.address, city: data.city, phone: data.phone, email: data.email, currency: data.currency, logo: logoPreview ?? "" })
+      toast.success("Shop profile saved successfully")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save shop profile")
+    } finally { setSaving(false) }
   }
 
   async function onTaxSubmit(data: TaxForm) {
+    setSaving(true)
     try {
       await updateTenantSettings({ taxEnabled, taxRate: data.taxRate })
       toast.success(`Tax settings saved — ${data.taxName} at ${data.taxRate}%`)
-    } catch { toast.error("Failed to save tax settings") }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save tax settings")
+    } finally { setSaving(false) }
   }
 
   async function onInvoiceSubmit(data: InvoiceForm) {
+    setSaving(true)
     try {
       await updateTenantSettings({ invoicePrefix: data.prefix, receiptFooter: data.footerText })
-      toast.success("Invoice settings saved")
-    } catch { toast.error("Failed to save invoice settings") }
+      toast.success("Invoice settings saved successfully")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save invoice settings")
+    } finally { setSaving(false) }
   }
 
   function openAddUser() {
     setEditUser(null)
     userForm.reset({ name: "", email: "", role: "Cashier", password: "", status: true })
+    setShowPassword(false)
     setUserDialogOpen(true)
   }
   function openEditUser(user: AppUser) {
     setEditUser(user)
     userForm.reset({ name: user.name, email: user.email, role: user.role, password: "", status: user.status === "Active" })
+    setShowPassword(false)
     setUserDialogOpen(true)
   }
-  function onUserSubmit(data: UserForm) {
-    if (editUser) {
-      setUsers((prev) => prev.map((u) => u.id === editUser.id ? { ...u, name: data.name, email: data.email, role: data.role, status: data.status ? "Active" : "Inactive" } : u))
-      toast.success(`${data.name} updated`)
-    } else {
-      setUsers((prev) => [{ id: `u${Date.now()}`, name: data.name, email: data.email, role: data.role, status: data.status ? "Active" : "Inactive", lastLogin: "Never" }, ...prev])
-      toast.success(`${data.name} added`)
+  async function onUserSubmit(data: UserForm) {
+    const status = data.status ? "Active" : "Inactive"
+    try {
+      if (editUser) {
+        if (!data.password && !editUser) {
+          // editing — password optional
+        }
+        await updateProfileFull(editUser.id, {
+          name: data.name, email: data.email, role: data.role,
+          password: data.password || undefined, status,
+        })
+        setUsers(prev => prev.map(u => u.id === editUser.id
+          ? { ...u, name: data.name, email: data.email, role: data.role, status }
+          : u))
+        toast.success(`${data.name} updated`)
+      } else {
+        if (!data.password) { toast.error("Password is required for new users"); return }
+        const created = await createProfile({ name: data.name, email: data.email, role: data.role, password: data.password, status })
+        setUsers(prev => [{ id: created.id, name: data.name, email: data.email, role: data.role as UserRole, status, lastLogin: "Never" }, ...prev])
+        toast.success(`${data.name} added — they can now log in`)
+      }
+      setUserDialogOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save user")
     }
-    setUserDialogOpen(false)
   }
-  function confirmToggleStatus() {
+  async function confirmToggleStatus() {
     if (!toggleTarget) return
     const next: UserStatus = toggleTarget.status === "Active" ? "Inactive" : "Active"
-    setUsers((prev) => prev.map((u) => u.id === toggleTarget.id ? { ...u, status: next } : u))
-    toast.success(`${toggleTarget.name} is now ${next.toLowerCase()}`)
+    try {
+      await updateProfileFull(toggleTarget.id, {
+        name: toggleTarget.name, email: toggleTarget.email,
+        role: toggleTarget.role, status: next,
+      })
+      setUsers(prev => prev.map(u => u.id === toggleTarget.id ? { ...u, status: next } : u))
+      toast.success(`${toggleTarget.name} is now ${next.toLowerCase()}`)
+    } catch {
+      toast.error("Failed to update status")
+    }
     setToggleTarget(null)
   }
 
@@ -312,7 +350,9 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <Button type="submit" size="sm" className="h-8 text-xs mt-1">Save Changes</Button>
+                  <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs mt-1 min-w-[110px]">
+                    {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving…</> : "Save Changes"}
+                  </Button>
                 </form>
               </SectionCard>
             </div>
@@ -376,7 +416,9 @@ export default function SettingsPage() {
                 </div>
                 <Switch checked={taxEnabled} onCheckedChange={setTaxEnabled} className="data-[state=checked]:bg-blue-600" />
               </div>
-              <Button type="submit" size="sm" className="h-8 text-xs">Save Tax Settings</Button>
+              <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs min-w-[120px]">
+                {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving…</> : "Save Tax Settings"}
+              </Button>
             </form>
           </SectionCard>
         </TabsContent>
@@ -415,7 +457,9 @@ export default function SettingsPage() {
                 </div>
                 <Switch checked={showLogoOnInvoice} onCheckedChange={setShowLogoOnInvoice} className="data-[state=checked]:bg-blue-600" />
               </div>
-              <Button type="submit" size="sm" className="h-8 text-xs">Save Invoice Settings</Button>
+              <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs min-w-[140px]">
+                {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving…</> : "Save Invoice Settings"}
+              </Button>
             </form>
           </SectionCard>
         </TabsContent>
@@ -520,7 +564,21 @@ export default function SettingsPage() {
                     <Label className="text-xs">
                       Password {editUser && <span className="text-slate-400 font-normal">(blank = keep)</span>}
                     </Label>
-                    <Input type="password" placeholder="••••••••" {...userForm.register("password")} className="h-8 text-xs" />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        {...userForm.register("password")}
+                        className="h-8 text-xs pr-8"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(v => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                     {userForm.formState.errors.password && <p className="text-[10px] text-red-500">{userForm.formState.errors.password.message}</p>}
                   </div>
                 </div>

@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { StatCard } from "@/components/shared/stat-card"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import {
   Download, FileText, TrendingUp, TrendingDown,
   BarChart2, Package, DollarSign, ShoppingCart, BarChart3,
@@ -118,10 +118,12 @@ export default function ReportsPage() {
     load()
   }, [])
 
-  const [salesFrom,     setSalesFrom]     = useState(new Date(Date.now() - 180 * 86400000).toISOString().split("T")[0])
-  const [salesTo,       setSalesTo]       = useState(new Date().toISOString().split("T")[0])
-  const [purchasesFrom, setPurchasesFrom] = useState(new Date(Date.now() - 180 * 86400000).toISOString().split("T")[0])
-  const [purchasesTo,   setPurchasesTo]   = useState(new Date().toISOString().split("T")[0])
+  const _180daysAgo = new Date(Date.now() - 180 * 86400000)
+  const _180PKT = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit" }).format(_180daysAgo)
+  const [salesFrom,     setSalesFrom]     = useState(_180PKT)
+  const [salesTo,       setSalesTo]       = useState(todayPKT())
+  const [purchasesFrom, setPurchasesFrom] = useState(_180PKT)
+  const [purchasesTo,   setPurchasesTo]   = useState(todayPKT())
 
   // ── Sales data ────────────────────────────────────────────────────────────
   const salesData = useMemo(() => {

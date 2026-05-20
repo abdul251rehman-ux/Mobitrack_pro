@@ -269,6 +269,8 @@ export default function AuditLogPage() {
       <PageHeader
         title="Audit Log"
         description="Track all system activities, user actions, and data changes"
+        icon={<Activity />}
+        iconBg="bg-slate-700"
         badge={
           <Badge variant="outline" className="text-xs font-medium text-slate-500 border-slate-200">
             {filtered.length} {filtered.length === 1 ? "entry" : "entries"}

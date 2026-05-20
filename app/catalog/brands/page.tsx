@@ -65,22 +65,37 @@ export default function BrandsPage() {
 
   async function fetchBrands() {
     try {
-      const { data, error } = await supabase
-        .from("brands")
-        .select("*")
-        .order("created_at", { ascending: false })
+      const [{ data, error }, { data: mobiles }, { data: accessories }] = await Promise.all([
+        supabase.from("brands").select("*").order("created_at", { ascending: false }),
+        supabase.from("mobiles").select("brand"),
+        supabase.from("accessories").select("brand"),
+      ])
       if (error) throw error
-      const mapped: Brand[] = (data ?? []).map((b: Record<string, unknown>) => ({
-        id: b.id as string,
-        name: b.name as string,
-        country: b.country as string,
-        logoInitials: (b.logo_initials ?? (b.name as string).slice(0, 2).toUpperCase()) as string,
-        mobileCount: (b.mobile_count ?? 0) as number,
-        accessoryCount: (b.accessory_count ?? 0) as number,
-        status: (b.status ?? "Active") as Brand["status"],
-        description: (b.description ?? "") as string,
-        createdAt: (b.created_at ?? new Date().toISOString()) as string,
-      }))
+
+      // Count real products per brand (case-insensitive match)
+      const mobileCountMap: Record<string, number> = {}
+      for (const m of mobiles ?? []) {
+        if (m.brand) mobileCountMap[m.brand.toLowerCase()] = (mobileCountMap[m.brand.toLowerCase()] ?? 0) + 1
+      }
+      const accessoryCountMap: Record<string, number> = {}
+      for (const a of accessories ?? []) {
+        if (a.brand) accessoryCountMap[a.brand.toLowerCase()] = (accessoryCountMap[a.brand.toLowerCase()] ?? 0) + 1
+      }
+
+      const mapped: Brand[] = (data ?? []).map((b: Record<string, unknown>) => {
+        const key = (b.name as string).toLowerCase()
+        return {
+          id: b.id as string,
+          name: b.name as string,
+          country: b.country as string,
+          logoInitials: (b.logo_initials ?? (b.name as string).slice(0, 2).toUpperCase()) as string,
+          mobileCount: mobileCountMap[key] ?? 0,
+          accessoryCount: accessoryCountMap[key] ?? 0,
+          status: (b.status ?? "Active") as Brand["status"],
+          description: (b.description ?? "") as string,
+          createdAt: (b.created_at ?? new Date().toISOString()) as string,
+        }
+      })
       setList(mapped)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to fetch brands")

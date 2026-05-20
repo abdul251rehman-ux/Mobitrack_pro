@@ -59,7 +59,7 @@ export default function LoginPage() {
         toast.success("Welcome back!", { description: "You have been logged in successfully." })
         router.push("/")
       } else {
-        toast.error("Login failed", { description: "Invalid email or password. Check browser console for details." })
+        toast.error("Login failed", { description: "Invalid email or password, or account is inactive." })
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "An unexpected error occurred"

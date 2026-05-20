@@ -214,7 +214,7 @@ export async function getUsedPhones(): Promise<UsedPhone[]> {
 }
 
 export async function createUsedPhone(
-  data: Omit<UsedPhone, 'id' | 'tenantId'>
+  data: Omit<UsedPhone, 'id' | 'created_at'>
 ): Promise<UsedPhone> {
   try {
     const tenantId = await getTenantId()
@@ -223,20 +223,28 @@ export async function createUsedPhone(
       tenant_id: tenantId,
       brand: data.brand,
       model: data.model,
-      imei: data.imei,
       color: data.color,
       storage: data.storage,
       ram: data.ram,
-      condition: data.condition,
-      grade: data.grade,
-      purchase_price: data.purchasePrice,
-      selling_price: data.sellingPrice,
-      customer_id: data.customerId || null,
-      customer_name: data.customerName || null,
-      defects: data.defects || null,
-      notes: data.notes || null,
+      imei_number: data.imei_number || null,
+      condition_grade: data.condition_grade,
+      screen_condition: data.screen_condition,
+      body_condition: data.body_condition,
+      battery_health: data.battery_health ?? null,
+      functional_issues: data.functional_issues,
+      accessories_included: data.accessories_included,
+      source_type: data.source_type,
+      source_customer_name: data.source_customer_name || null,
+      purchase_price: data.purchase_price,
+      refurbishment_cost: data.refurbishment_cost,
+      selling_price: data.selling_price,
+      pta_status: data.pta_status,
       status: data.status,
-      date_added: data.dateAdded,
+      warranty_days: data.warranty_days,
+      condition_notes: data.condition_notes || null,
+      photos: data.photos,
+      purchased_date: data.purchased_date,
+      sold_date: data.sold_date || null,
     }
 
     const { data: created, error } = await supabase
@@ -260,17 +268,28 @@ export async function updateUsedPhone(
     const updatePayload: Record<string, unknown> = {}
     if (data.brand !== undefined) updatePayload.brand = data.brand
     if (data.model !== undefined) updatePayload.model = data.model
-    if (data.imei !== undefined) updatePayload.imei = data.imei
     if (data.color !== undefined) updatePayload.color = data.color
     if (data.storage !== undefined) updatePayload.storage = data.storage
     if (data.ram !== undefined) updatePayload.ram = data.ram
-    if (data.condition !== undefined) updatePayload.condition = data.condition
-    if (data.grade !== undefined) updatePayload.grade = data.grade
-    if (data.purchasePrice !== undefined) updatePayload.purchase_price = data.purchasePrice
-    if (data.sellingPrice !== undefined) updatePayload.selling_price = data.sellingPrice
+    if (data.imei_number !== undefined) updatePayload.imei_number = data.imei_number
+    if (data.condition_grade !== undefined) updatePayload.condition_grade = data.condition_grade
+    if (data.screen_condition !== undefined) updatePayload.screen_condition = data.screen_condition
+    if (data.body_condition !== undefined) updatePayload.body_condition = data.body_condition
+    if (data.battery_health !== undefined) updatePayload.battery_health = data.battery_health ?? null
+    if (data.functional_issues !== undefined) updatePayload.functional_issues = data.functional_issues
+    if (data.accessories_included !== undefined) updatePayload.accessories_included = data.accessories_included
+    if (data.source_type !== undefined) updatePayload.source_type = data.source_type
+    if (data.source_customer_name !== undefined) updatePayload.source_customer_name = data.source_customer_name
+    if (data.purchase_price !== undefined) updatePayload.purchase_price = data.purchase_price
+    if (data.refurbishment_cost !== undefined) updatePayload.refurbishment_cost = data.refurbishment_cost
+    if (data.selling_price !== undefined) updatePayload.selling_price = data.selling_price
+    if (data.pta_status !== undefined) updatePayload.pta_status = data.pta_status
     if (data.status !== undefined) updatePayload.status = data.status
-    if (data.defects !== undefined) updatePayload.defects = data.defects
-    if (data.notes !== undefined) updatePayload.notes = data.notes
+    if (data.warranty_days !== undefined) updatePayload.warranty_days = data.warranty_days
+    if (data.condition_notes !== undefined) updatePayload.condition_notes = data.condition_notes
+    if (data.photos !== undefined) updatePayload.photos = data.photos
+    if (data.purchased_date !== undefined) updatePayload.purchased_date = data.purchased_date
+    if (data.sold_date !== undefined) updatePayload.sold_date = data.sold_date ?? null
 
     const { data: updated, error } = await supabase
       .from('used_phones')

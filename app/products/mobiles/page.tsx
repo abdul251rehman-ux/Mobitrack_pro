@@ -16,6 +16,8 @@ import { format } from "date-fns"
 import { ColumnDef } from "@tanstack/react-table"
 
 import { getMobiles, createMobile, updateMobile, deleteMobile } from "@/lib/api/products"
+import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
+import { SearchableSelect } from "@/components/shared/searchable-select"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
@@ -46,17 +48,18 @@ import { cn, formatCurrency, calculateMargin, getStockStatus } from "@/lib/utils
 const mobileSchema = z.object({
   brand: z.string().min(1, "Brand is required"),
   model: z.string().min(1, "Model is required"),
-  imei: z.string().length(15, "IMEI must be exactly 15 digits").regex(/^\d{15}$/, "IMEI must contain only digits"),
   color: z.string().min(1, "Color is required"),
   storage: z.string().min(1, "Storage is required"),
   ram: z.string().min(1, "RAM is required"),
-  purchasePrice: z.string().transform(v => parseFloat(v)).pipe(z.number().min(1, "Purchase price must be greater than 0")),
-  sellingPrice: z.string().transform(v => parseFloat(v)).pipe(z.number().min(1, "Selling price must be greater than 0")),
-  supplierId: z.string().min(1, "Supplier is required"),
-  stock: z.string().transform(v => parseInt(v, 10)).pipe(z.number().min(0, "Stock cannot be negative")),
   condition: z.string().min(1, "Condition is required"),
   category: z.string().min(1, "Category is required"),
+  imei: z.string().trim().optional().default("").refine((v) => !v || /^\d{15}$/.test(v), "IMEI must be 15 digits when provided"),
   notes: z.string().optional(),
+  // price/stock/supplier are set via Purchase page, not here
+  purchasePrice: z.string().optional().transform(v => v ? parseFloat(v) : 0).pipe(z.number().min(0)),
+  sellingPrice: z.string().optional().transform(v => v ? parseFloat(v) : 0).pipe(z.number().min(0)),
+  supplierId: z.string().optional().default(""),
+  stock: z.string().optional().transform(v => v ? parseInt(v, 10) : 0).pipe(z.number().min(0)),
 })
 
 // Input type = what the HTML form fields contain (strings for numeric inputs)
@@ -100,6 +103,10 @@ function MobileCard({
   const stockStatus = getStockStatus(mobile.stock)
 
   function handleCopyImei() {
+    if (!mobile.imei) {
+      toast.info("No IMEI recorded for this stock batch")
+      return
+    }
     navigator.clipboard.writeText(mobile.imei)
     toast.success("IMEI copied to clipboard")
   }
@@ -138,11 +145,13 @@ function MobileCard({
           </span>
         </div>
 
-        {/* Margin badge — top right */}
-        <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
-          <TrendingUp className="w-2.5 h-2.5" />
-          {margin.toFixed(1)}%
-        </span>
+        {/* Margin badge — top right (only shown after purchase sets price) */}
+        {mobile.purchasePrice > 0 && mobile.sellingPrice > 0 && (
+          <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+            <TrendingUp className="w-2.5 h-2.5" />
+            {margin.toFixed(1)}%
+          </span>
+        )}
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────── */}
@@ -158,39 +167,37 @@ function MobileCard({
           </p>
         </div>
 
-        {/* IMEI row */}
-        <div className="flex items-center gap-1.5 bg-slate-50 rounded-md px-2 py-1.5 border border-slate-100">
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">IMEI</span>
-          <span className="text-[10px] text-slate-600 font-mono truncate flex-1">
-            {mobile.imei.slice(0, 8)}…{mobile.imei.slice(-4)}
-          </span>
-          <button
-            onClick={handleCopyImei}
-            className="w-5 h-5 rounded flex items-center justify-center hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors flex-shrink-0"
-            title="Copy full IMEI"
-          >
-            <Copy className="w-3 h-3" />
-          </button>
-        </div>
 
         {/* Price block */}
-        <div className="grid grid-cols-2 gap-1.5">
-          <div className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Buy</p>
-            <p className="text-[11px] font-semibold text-slate-600 truncate">{formatCurrency(mobile.purchasePrice)}</p>
+        {mobile.purchasePrice > 0 || mobile.sellingPrice > 0 ? (
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Buy</p>
+              <p className="text-[11px] font-semibold text-slate-600 truncate">{formatCurrency(mobile.purchasePrice)}</p>
+            </div>
+            <div className="rounded-lg bg-blue-600 px-2.5 py-1.5 shadow-sm shadow-blue-600/20">
+              <p className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Sell</p>
+              <p className="text-[11px] font-bold text-white truncate">{formatCurrency(mobile.sellingPrice)}</p>
+            </div>
           </div>
-          <div className="rounded-lg bg-blue-600 px-2.5 py-1.5 shadow-sm shadow-blue-600/20">
-            <p className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Sell</p>
-            <p className="text-[11px] font-bold text-white truncate">{formatCurrency(mobile.sellingPrice)}</p>
+        ) : (
+          <div className="rounded-lg bg-amber-50 border border-amber-100 px-2.5 py-2 text-center">
+            <p className="text-[10px] text-amber-600 font-medium">No price set — purchase to stock</p>
           </div>
-        </div>
+        )}
 
         {/* Stock badge */}
         <div className="flex items-center justify-between">
-          <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", stockBadgeStyle[stockStatus])}>
-            <span className={cn("w-1.5 h-1.5 rounded-full", stockDotStyle[stockStatus])} />
-            {stockStatus}
-          </span>
+          {mobile.stock > 0 ? (
+            <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", stockBadgeStyle[stockStatus])}>
+              <span className={cn("w-1.5 h-1.5 rounded-full", stockDotStyle[stockStatus])} />
+              {stockStatus}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500">
+              Catalog only
+            </span>
+          )}
           <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
             {mobile.stock} units
           </span>
@@ -251,6 +258,10 @@ function ViewDialog({
   const margin = calculateMargin(m.purchasePrice, m.sellingPrice)
   const stockStatus = getStockStatus(m.stock)
   function handleCopyImei() {
+    if (!m.imei) {
+      toast.info("No IMEI recorded for this stock batch")
+      return
+    }
     navigator.clipboard.writeText(m.imei)
     toast.success("IMEI copied to clipboard")
   }
@@ -278,7 +289,7 @@ function ViewDialog({
           <div className="rounded-lg bg-slate-50 p-3">
             <p className="text-slate-400 text-xs mb-1">IMEI</p>
             <div className="flex items-center gap-1">
-              <span className="font-mono text-slate-700 text-xs">{m.imei}</span>
+            <span className="font-mono text-slate-700 text-xs">{m.imei || "Not recorded"}</span>
               <button onClick={handleCopyImei} className="text-slate-400 hover:text-slate-600">
                 <Copy className="w-3 h-3" />
               </button>
@@ -356,14 +367,13 @@ function ViewDialog({
 interface IPhoneFormState {
   model: string; color: string; storage: string; batteryHealth: string
   condition: string; imei: string; faceIdWorking: boolean; iCloudLocked: boolean
-  category: string
-  purchasePrice: string; sellingPrice: string; supplierId: string; stock: string; notes: string
+  category: string; notes: string
 }
 
 const defaultIPhoneForm: IPhoneFormState = {
   model: "", color: "", storage: "", batteryHealth: "100",
   condition: "New", imei: "", faceIdWorking: true, iCloudLocked: false,
-  category: "", purchasePrice: "", sellingPrice: "", supplierId: "", stock: "1", notes: "",
+  category: "", notes: "",
 }
 
 function MobileFormDrawer({
@@ -379,6 +389,8 @@ function MobileFormDrawer({
   mobileCategories,
   onAddMobileCategory,
   onAddSupplier,
+  androidModels,
+  onAddAndroidModel,
   iphoneModels,
   onAddIphoneModel,
   storageOptions,
@@ -391,7 +403,7 @@ function MobileFormDrawer({
   open: boolean
   onOpenChange: (v: boolean) => void
   editingMobile: Mobile | null
-  onSubmit: (data: MobileFormOutput, imageUrl: string, deviceType: "android" | "iphone") => void
+  onSubmit: (data: MobileFormOutput, imageUrl: string, deviceType: "android" | "iphone") => Promise<void> | void
   suppliers: Supplier[]
   brands: string[]
   onAddBrand: (name: string) => Promise<boolean>
@@ -400,6 +412,8 @@ function MobileFormDrawer({
   mobileCategories: string[]
   onAddMobileCategory: (name: string) => Promise<boolean>
   onAddSupplier: (name: string, phone: string) => Promise<Supplier | null>
+  androidModels: string[]
+  onAddAndroidModel: (name: string) => Promise<boolean>
   iphoneModels: string[]
   onAddIphoneModel: (name: string) => Promise<boolean>
   storageOptions: string[]
@@ -426,6 +440,9 @@ function MobileFormDrawer({
   const [newSupplierName, setNewSupplierName] = useState("")
   const [newSupplierPhone, setNewSupplierPhone] = useState("")
   const [addingSupplier, setAddingSupplier] = useState(false)
+  const [showNewAndroidModel, setShowNewAndroidModel] = useState(false)
+  const [newAndroidModelName, setNewAndroidModelName] = useState("")
+  const [addingAndroidModel, setAddingAndroidModel] = useState(false)
   const [showNewIphoneModel, setShowNewIphoneModel] = useState(false)
   const [newIphoneModelName, setNewIphoneModelName] = useState("")
   const [addingIphoneModel, setAddingIphoneModel] = useState(false)
@@ -462,10 +479,6 @@ function MobileFormDrawer({
         condition: editingMobile.condition === "New" ? "New" : "Good",
         imei: editingMobile.imei,
         category: editingMobile.category,
-        purchasePrice: String(editingMobile.purchasePrice),
-        sellingPrice: String(editingMobile.sellingPrice),
-        supplierId: editingMobile.supplierId,
-        stock: String(editingMobile.stock),
         notes: editingMobile.notes ?? "",
       })
     } else {
@@ -497,56 +510,67 @@ function MobileFormDrawer({
     resolver: zodResolver(mobileSchema) as never,
     defaultValues: editingMobile && editingMobile.brand !== "Apple"
       ? {
-          brand: editingMobile.brand, model: editingMobile.model, imei: editingMobile.imei,
+          brand: editingMobile.brand, model: editingMobile.model,
           color: editingMobile.color, storage: editingMobile.storage, ram: editingMobile.ram,
-          purchasePrice: String(editingMobile.purchasePrice), sellingPrice: String(editingMobile.sellingPrice),
-          supplierId: editingMobile.supplierId, stock: String(editingMobile.stock),
           condition: editingMobile.condition, category: editingMobile.category,
           notes: editingMobile.notes ?? "",
         }
       : {
-          brand: "", model: "", imei: "", color: "", storage: "", ram: "",
-          purchasePrice: "", sellingPrice: "", supplierId: "", stock: "0",
+          brand: "", model: "", color: "", storage: "", ram: "",
           condition: "New" as const, category: "Mid-Range" as const, notes: "",
         },
   })
 
-  const purchasePriceStr = watch("purchasePrice")
-  const sellingPriceStr = watch("sellingPrice")
-  const liveMargin = (() => {
-    const b = parseFloat(purchasePriceStr), s = parseFloat(sellingPriceStr)
-    return !isNaN(b) && !isNaN(s) && b > 0 && s > 0 ? calculateMargin(b, s) : null
-  })()
-  const ipLiveMargin = (() => {
-    const b = parseFloat(ip.purchasePrice), s = parseFloat(ip.sellingPrice)
-    return !isNaN(b) && !isNaN(s) && b > 0 && s > 0 ? calculateMargin(b, s) : null
-  })()
+  // price/stock set via Purchase page — no live margin in catalog form
 
   function handleClose() {
     reset()
     setImageUrl("")
     setIp(defaultIPhoneForm)
     setIpErrors({})
+    setStagedPhones([])
     if (fileInputRef.current) fileInputRef.current.value = ""
     onOpenChange(false)
   }
 
-  function onAndroidValid(data: MobileFormOutput) {
-    onSubmit(data, imageUrl, "android")
+  // ── Batch staging ────────────────────────────────────────────────────────
+  type StagedPhone = { data: MobileFormOutput; imageUrl: string; deviceType: "android" | "iphone" }
+  const [stagedPhones, setStagedPhones] = useState<StagedPhone[]>([])
+
+  function stagePhone(data: MobileFormOutput, imgUrl: string, dt: "android" | "iphone") {
+    setStagedPhones(prev => [...prev, { data, imageUrl: imgUrl, deviceType: dt }])
+    // Reset form but keep brand for quick repeated entry
+    const keepBrand = data.brand
+    reset({ brand: keepBrand, model: "", color: "", storage: "", ram: "", condition: "", category: "", notes: "" })
+    setIp({ ...defaultIPhoneForm })
+    setImageUrl("")
+    toast.success(`${data.brand} ${data.model} staged — add another or save all`)
+  }
+
+  async function saveAll(current?: StagedPhone) {
+    const all = current ? [...stagedPhones, current] : stagedPhones
+    if (all.length === 0) return
+    for (const p of all) {
+      await onSubmit(p.data, p.imageUrl, p.deviceType)
+    }
+    setStagedPhones([])
     handleClose()
   }
 
-  function handleIPhoneSubmit() {
-    const errs: Record<string, string> = {}
-    if (!ip.model) errs.model = "Model is required"
-    if (!ip.color) errs.color = "Color is required"
-    if (!ip.storage) errs.storage = "Storage is required"
-    if (!ip.imei || !/^\d{15}$/.test(ip.imei)) errs.imei = "Valid 15-digit IMEI required"
-    if (!ip.purchasePrice || parseFloat(ip.purchasePrice) <= 0) errs.purchasePrice = "Purchase price required"
-    if (!ip.sellingPrice || parseFloat(ip.sellingPrice) <= 0) errs.sellingPrice = "Selling price required"
-    if (!ip.supplierId) errs.supplierId = "Supplier is required"
-    if (Object.keys(errs).length > 0) { setIpErrors(errs); return }
+  function onAndroidValid(data: MobileFormOutput) {
+    if (stagedPhones.length > 0) {
+      saveAll({ data, imageUrl, deviceType: "android" })
+    } else {
+      onSubmit(data, imageUrl, "android")
+      handleClose()
+    }
+  }
 
+  function onAndroidStage(data: MobileFormOutput) {
+    stagePhone(data, imageUrl, "android")
+  }
+
+  function buildIPhoneData(): MobileFormOutput {
     const condMap: Record<string, "New" | "Refurbished" | "Used"> = {
       New: "New", Excellent: "Refurbished", Good: "Refurbished", Fair: "Used", Poor: "Used",
     }
@@ -556,18 +580,39 @@ function MobileFormDrawer({
       `iCloud: ${ip.iCloudLocked ? "Locked" : "Unlocked"}`,
       ip.notes,
     ].filter(Boolean).join(" | ")
-
-    const data: MobileFormOutput = {
-      brand: "Apple", model: ip.model, imei: ip.imei, color: ip.color,
+    return {
+      brand: "Apple", model: ip.model, imei: ip.imei.trim(), color: ip.color,
       storage: ip.storage, ram: "N/A",
-      purchasePrice: parseFloat(ip.purchasePrice),
-      sellingPrice: parseFloat(ip.sellingPrice),
-      supplierId: ip.supplierId, stock: parseInt(ip.stock) || 0,
+      purchasePrice: 0, sellingPrice: 0, supplierId: "", stock: 0,
       condition: condMap[ip.condition] ?? "New", category: ip.category,
       notes: noteParts || undefined,
     }
-    onSubmit(data, imageUrl, "iphone")
-    handleClose()
+  }
+
+  function validateIPhone(): boolean {
+    const errs: Record<string, string> = {}
+    if (!ip.model) errs.model = "Model is required"
+    if (!ip.color) errs.color = "Color is required"
+    if (!ip.storage) errs.storage = "Storage is required"
+    if (ip.imei && !/^\d{15}$/.test(ip.imei)) errs.imei = "IMEI must be 15 digits when provided"
+    if (Object.keys(errs).length > 0) { setIpErrors(errs); return false }
+    return true
+  }
+
+  function handleIPhoneSubmit() {
+    if (!validateIPhone()) return
+    const data = buildIPhoneData()
+    if (stagedPhones.length > 0) {
+      saveAll({ data, imageUrl, deviceType: "iphone" })
+    } else {
+      onSubmit(data, imageUrl, "iphone")
+      handleClose()
+    }
+  }
+
+  function handleIPhoneStage() {
+    if (!validateIPhone()) return
+    stagePhone(buildIPhoneData(), imageUrl, "iphone")
   }
 
   function upIp<K extends keyof IPhoneFormState>(key: K, val: IPhoneFormState[K]) {
@@ -695,82 +740,32 @@ function MobileFormDrawer({
                 </div>
                 <div className="p-3 sm:p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className={cn("space-y-1.5", showNewBrand && "col-span-2")}>
+                    <div className="space-y-1.5">
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                         <Tag className="w-3 h-3" /> Brand <span className="text-red-500">*</span>
                       </Label>
-                      {!showNewBrand ? (
-                        <>
-                          <Select defaultValue={editingMobile?.brand ?? ""}
-                            onValueChange={val => setValue("brand", val, { shouldValidate: true })}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.brand && "border-red-400")}>
-                              <SelectValue placeholder="Select brand" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {brands.filter(b => b !== "Apple").map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            type="button"
-                            onClick={() => setShowNewBrand(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
-                          >
-                            <Plus className="w-3 h-3" /> Add New Brand
-                          </button>
-                        </>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <div className="flex gap-1.5">
-                            <input
-                              placeholder="e.g. Huawei"
-                              value={newBrandName}
-                              onChange={e => setNewBrandName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
-                              autoFocus
-                              onKeyDown={async (e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault()
-                                  if (!newBrandName.trim()) return
-                                  setAddingBrand(true)
-                                  const ok = await onAddBrand(newBrandName.trim())
-                                  setAddingBrand(false)
-                                  if (ok) {
-                                    setValue("brand", newBrandName.trim(), { shouldValidate: true })
-                                    setNewBrandName("")
-                                    setShowNewBrand(false)
-                                  }
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              disabled={!newBrandName.trim() || addingBrand}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
-                              onClick={async () => {
-                                if (!newBrandName.trim()) return
-                                setAddingBrand(true)
-                                const ok = await onAddBrand(newBrandName.trim())
-                                setAddingBrand(false)
-                                if (ok) {
-                                  setValue("brand", newBrandName.trim(), { shouldValidate: true })
-                                  setNewBrandName("")
-                                  setShowNewBrand(false)
-                                }
-                              }}
-                            >
-                              {addingBrand ? "..." : "Save"}
-                            </button>
-                            <button
-                              type="button"
-                              className="h-9 px-2 text-slate-400 hover:text-slate-600 shrink-0"
-                              onClick={() => { setShowNewBrand(false); setNewBrandName("") }}
-                            >
-                              <XIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                          <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
-                        </div>
-                      )}
+                      {(() => {
+                        const dbBrands = brands.filter(b => b !== "Apple")
+                        const allAndroidBrands = Array.from(new Set([
+                          ...MASTER_BRAND_NAMES.filter(b => b !== "Apple"),
+                          ...dbBrands,
+                        ])).sort()
+                        return (
+                          <SearchableSelect
+                            value={watch("brand") ?? ""}
+                            onChange={val => {
+                              setValue("brand", val, { shouldValidate: true })
+                              setValue("model", "", { shouldValidate: false })
+                            }}
+                            options={allAndroidBrands}
+                            placeholder="Search brand..."
+                            allowCustom
+                            customWarning="This brand is not in the standard list. It will be saved as entered."
+                            onAddNew={async (name) => { await onAddBrand(name) }}
+                            error={!!errors.brand}
+                          />
+                        )
+                      })()}
                       {errors.brand && <p className="text-xs text-red-500">{errors.brand.message}</p>}
                     </div>
                     <div className={cn("space-y-1.5", showNewColor && "col-span-2")}>
@@ -779,7 +774,7 @@ function MobileFormDrawer({
                       </Label>
                       {!showNewColor ? (
                         <>
-                          <Select defaultValue={editingMobile?.color ?? ""}
+                          <Select value={watch("color") ?? ""}
                             onValueChange={val => setValue("color", val, { shouldValidate: true })}>
                             <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.color && "border-red-400")}>
                               <SelectValue placeholder="Color" />
@@ -856,8 +851,86 @@ function MobileFormDrawer({
                     <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                       <Smartphone className="w-3 h-3" /> Model <span className="text-red-500">*</span>
                     </Label>
-                    <Input placeholder="e.g. Galaxy S24 Ultra" {...register("model")}
-                      className={cn("bg-slate-50 h-9 text-sm", errors.model && "border-red-400")} />
+                    {(() => {
+                      const selectedBrand = watch("brand") ?? ""
+                      const brandEntry = MASTER_BRANDS.find(b => b.name.toLowerCase() === selectedBrand.toLowerCase())
+                      const masterModels = brandEntry?.models ?? []
+                      const allAndroidModels = Array.from(new Set([...masterModels, ...androidModels])).sort()
+                      return (
+                        <>
+                          {!showNewAndroidModel ? (
+                            <>
+                              <SearchableSelect
+                                value={watch("model") ?? ""}
+                                onChange={val => setValue("model", val, { shouldValidate: true })}
+                                options={allAndroidModels}
+                                placeholder={selectedBrand ? `Search ${selectedBrand} model...` : "Select brand first"}
+                                disabled={!selectedBrand}
+                                allowCustom
+                                customWarning="This model is not in the standard list. Double-check the spelling to avoid filter issues."
+                                error={!!errors.model}
+                              />
+                              {selectedBrand && (
+                                <button type="button" onClick={() => setShowNewAndroidModel(true)}
+                                  className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors">
+                                  <Plus className="w-3 h-3" /> Add New Model
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="flex gap-1.5">
+                                <input
+                                  placeholder={`e.g. ${selectedBrand ? selectedBrand + " " : ""}Note 50 Pro`}
+                                  value={newAndroidModelName}
+                                  onChange={e => setNewAndroidModelName(e.target.value)}
+                                  className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                                  autoFocus
+                                  onKeyDown={async (e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault()
+                                      if (!newAndroidModelName.trim()) return
+                                      setAddingAndroidModel(true)
+                                      const ok = await onAddAndroidModel(newAndroidModelName.trim())
+                                      setAddingAndroidModel(false)
+                                      if (ok) {
+                                        setValue("model", newAndroidModelName.trim(), { shouldValidate: true })
+                                        setNewAndroidModelName("")
+                                        setShowNewAndroidModel(false)
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={!newAndroidModelName.trim() || addingAndroidModel}
+                                  className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                                  onClick={async () => {
+                                    if (!newAndroidModelName.trim()) return
+                                    setAddingAndroidModel(true)
+                                    const ok = await onAddAndroidModel(newAndroidModelName.trim())
+                                    setAddingAndroidModel(false)
+                                    if (ok) {
+                                      setValue("model", newAndroidModelName.trim(), { shouldValidate: true })
+                                      setNewAndroidModelName("")
+                                      setShowNewAndroidModel(false)
+                                    }
+                                  }}
+                                >
+                                  {addingAndroidModel ? "..." : "Save"}
+                                </button>
+                                <button type="button"
+                                  className="h-9 px-2 text-slate-400 hover:text-slate-600 shrink-0"
+                                  onClick={() => { setShowNewAndroidModel(false); setNewAndroidModelName("") }}>
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              </div>
+                              <p className="text-[10px] text-slate-400">Press Enter or click Save — model will be added to your list</p>
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
                     {errors.model && <p className="text-xs text-red-500">{errors.model.message}</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -867,7 +940,7 @@ function MobileFormDrawer({
                       </Label>
                       {!showNewCondition ? (
                         <>
-                          <Select defaultValue={editingMobile?.condition ?? ""}
+                          <Select value={watch("condition") ?? ""}
                             onValueChange={val => setValue("condition", val, { shouldValidate: true })}>
                             <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.condition && "border-red-400")}>
                               <SelectValue placeholder="Condition" />
@@ -908,7 +981,7 @@ function MobileFormDrawer({
                       </Label>
                       {!showNewCategory ? (
                         <>
-                          <Select defaultValue={editingMobile?.category ?? ""}
+                          <Select value={watch("category") ?? ""}
                             onValueChange={val => setValue("category", val, { shouldValidate: true })}>
                             <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.category && "border-red-400")}>
                               <SelectValue placeholder="Category" />
@@ -994,11 +1067,11 @@ function MobileFormDrawer({
                 {imgUploadArea}
               </div>
 
-              {/* Specs & IMEI */}
+              {/* Specs */}
               <div className="rounded-xl border border-slate-200 overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100">
                   <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                  <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Specs & IMEI</span>
+                  <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Specs</span>
                 </div>
                 <div className="p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -1008,7 +1081,7 @@ function MobileFormDrawer({
                       </Label>
                       {!showNewStorage ? (
                         <>
-                          <Select defaultValue={editingMobile?.storage ?? ""}
+                          <Select value={watch("storage") ?? ""}
                             onValueChange={val => setValue("storage", val, { shouldValidate: true })}>
                             <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.storage && "border-red-400")}>
                               <SelectValue placeholder="Storage" />
@@ -1086,7 +1159,7 @@ function MobileFormDrawer({
                       </Label>
                       {!showNewRam ? (
                         <>
-                          <Select defaultValue={editingMobile?.ram ?? ""}
+                          <Select value={watch("ram") ?? ""}
                             onValueChange={val => setValue("ram", val, { shouldValidate: true })}>
                             <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.ram && "border-red-400")}>
                               <SelectValue placeholder="RAM" />
@@ -1159,119 +1232,19 @@ function MobileFormDrawer({
                       {errors.ram && <p className="text-xs text-red-500">{errors.ram.message}</p>}
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <Hash className="w-3 h-3" /> IMEI <span className="text-red-500">*</span>
-                    </Label>
-                    <Input placeholder="15-digit IMEI number" maxLength={15} {...register("imei")}
-                      className={cn("bg-slate-50 h-9 text-sm font-mono", errors.imei && "border-red-400")} />
-                    {errors.imei ? <p className="text-xs text-red-500">{errors.imei.message}</p>
-                      : <p className="text-[11px] text-slate-400">Dial *#06# to find IMEI</p>}
-                  </div>
                 </div>
               </div>
 
-              {/* Pricing */}
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-b border-emerald-100">
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Pricing</span>
-                </div>
-                <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <ArrowDownLeft className="w-3 h-3 text-red-400" /> Buy Price (₨) <span className="text-red-500">*</span>
-                      </Label>
-                      <Input type="number" min={0} placeholder="0" {...register("purchasePrice")}
-                        className={cn("bg-slate-50 h-9 text-sm", errors.purchasePrice && "border-red-400")} />
-                      {errors.purchasePrice && <p className="text-xs text-red-500">{errors.purchasePrice.message}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <ArrowUpRight className="w-3 h-3 text-emerald-500" /> Sell Price (₨) <span className="text-red-500">*</span>
-                      </Label>
-                      <Input type="number" min={0} placeholder="0" {...register("sellingPrice")}
-                        className={cn("bg-slate-50 h-9 text-sm", errors.sellingPrice && "border-red-400")} />
-                      {errors.sellingPrice && <p className="text-xs text-red-500">{errors.sellingPrice.message}</p>}
-                    </div>
-                  </div>
-                  {liveMargin !== null && (
-                    <div className={marginBar(liveMargin)}>
-                      <span className="text-xs font-semibold text-slate-500">Live Margin</span>
-                      <span className={marginText(liveMargin)}>{liveMargin.toFixed(1)}%</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Inventory & Notes */}
+              {/* Notes */}
               <div className="rounded-xl border border-slate-200 overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2 bg-violet-50 border-b border-violet-100">
-                  <Package className="w-3.5 h-3.5 text-violet-600" />
-                  <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Inventory & Notes</span>
+                  <FileText className="w-3.5 h-3.5 text-violet-600" />
+                  <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Notes</span>
                 </div>
-                <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className={cn("space-y-1.5", showNewSupplier && "col-span-2")}>
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Truck className="w-3 h-3" /> Supplier <span className="text-red-500">*</span>
-                      </Label>
-                      {!showNewSupplier ? (
-                        <>
-                          <Select defaultValue={editingMobile?.supplierId ?? ""}
-                            onValueChange={val => setValue("supplierId", val, { shouldValidate: true })}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.supplierId && "border-red-400")}>
-                              <SelectValue placeholder="Select supplier" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {activeSuppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.companyName}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <button type="button" onClick={() => setShowNewSupplier(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors">
-                            <Plus className="w-3 h-3" /> Add New Supplier
-                          </button>
-                        </>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <input placeholder="Supplier name" value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)}
-                            className="bg-slate-50 h-9 text-sm w-full min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400" autoFocus />
-                          <div className="flex gap-1.5">
-                            <input placeholder="Phone" value={newSupplierPhone} onChange={e => setNewSupplierPhone(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
-                              onKeyDown={async (e) => { if (e.key === "Enter") { e.preventDefault(); if (!newSupplierName.trim()) return; setAddingSupplier(true); const s = await onAddSupplier(newSupplierName.trim(), newSupplierPhone.trim()); setAddingSupplier(false); if (s) { setValue("supplierId", s.id, { shouldValidate: true }); setNewSupplierName(""); setNewSupplierPhone(""); setShowNewSupplier(false); } } }} />
-                            <button type="button" disabled={!newSupplierName.trim() || addingSupplier}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
-                              onClick={async () => { if (!newSupplierName.trim()) return; setAddingSupplier(true); const s = await onAddSupplier(newSupplierName.trim(), newSupplierPhone.trim()); setAddingSupplier(false); if (s) { setValue("supplierId", s.id, { shouldValidate: true }); setNewSupplierName(""); setNewSupplierPhone(""); setShowNewSupplier(false); } }}>
-                              {addingSupplier ? "..." : "Save"}
-                            </button>
-                            <button type="button" className="h-9 px-2 text-slate-400 hover:text-slate-600 shrink-0"
-                              onClick={() => { setShowNewSupplier(false); setNewSupplierName(""); setNewSupplierPhone("") }}>
-                              <XIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                          <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
-                        </div>
-                      )}
-                      {errors.supplierId && <p className="text-xs text-red-500">{errors.supplierId.message}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Package className="w-3 h-3" /> Stock Qty <span className="text-red-500">*</span>
-                      </Label>
-                      <Input type="number" min={0} placeholder="0" {...register("stock")}
-                        className={cn("bg-slate-50 h-9 text-sm", errors.stock && "border-red-400")} />
-                      {errors.stock && <p className="text-xs text-red-500">{errors.stock.message}</p>}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <FileText className="w-3 h-3" /> Notes <span className="text-slate-400 font-normal">(optional)</span>
-                    </Label>
-                    <Textarea placeholder="Any additional notes..." rows={2} {...register("notes")}
-                      className="bg-slate-50 text-sm resize-none" />
-                  </div>
+                <div className="p-4">
+                  <Textarea placeholder="Any additional notes about this phone..." rows={2} {...register("notes")}
+                    className="bg-slate-50 text-sm resize-none" />
+                  <p className="text-[11px] text-slate-400 mt-1.5">Price and stock are set when you purchase this phone from a supplier.</p>
                 </div>
               </div>
             </form>
@@ -1294,77 +1267,21 @@ function MobileFormDrawer({
                     <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                       <Smartphone className="w-3 h-3" /> iPhone Model <span className="text-red-500">*</span>
                     </Label>
-                    {!showNewIphoneModel ? (
-                      <>
-                        <Select value={ip.model} onValueChange={val => upIp("model", val)}>
-                          <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", ipErrors.model && "border-red-400")}>
-                            <SelectValue placeholder="Select iPhone model" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {iphoneModels.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <button
-                          type="button"
-                          onClick={() => setShowNewIphoneModel(true)}
-                          className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
-                        >
-                          <Plus className="w-3 h-3" /> Add New Model
-                        </button>
-                      </>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <div className="flex gap-1.5">
-                          <input
-                            placeholder="e.g. iPhone 17 Pro"
-                            value={newIphoneModelName}
-                            onChange={e => setNewIphoneModelName(e.target.value)}
-                            className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
-                            autoFocus
-                            onKeyDown={async (e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault()
-                                if (!newIphoneModelName.trim()) return
-                                setAddingIphoneModel(true)
-                                const ok = await onAddIphoneModel(newIphoneModelName.trim())
-                                setAddingIphoneModel(false)
-                                if (ok) {
-                                  upIp("model", newIphoneModelName.trim())
-                                  setNewIphoneModelName("")
-                                  setShowNewIphoneModel(false)
-                                }
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            disabled={!newIphoneModelName.trim() || addingIphoneModel}
-                            className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
-                            onClick={async () => {
-                              if (!newIphoneModelName.trim()) return
-                              setAddingIphoneModel(true)
-                              const ok = await onAddIphoneModel(newIphoneModelName.trim())
-                              setAddingIphoneModel(false)
-                              if (ok) {
-                                upIp("model", newIphoneModelName.trim())
-                                setNewIphoneModelName("")
-                                setShowNewIphoneModel(false)
-                              }
-                            }}
-                          >
-                            {addingIphoneModel ? "..." : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            className="h-9 px-2 text-slate-400 hover:text-slate-600 shrink-0"
-                            onClick={() => { setShowNewIphoneModel(false); setNewIphoneModelName("") }}
-                          >
-                            <XIcon className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
-                      </div>
-                    )}
+                    {(() => {
+                      const allIphoneModels = Array.from(new Set([...APPLE_MODELS, ...iphoneModels]));
+                      return (
+                        <SearchableSelect
+                          value={ip.model}
+                          onChange={val => upIp("model", val)}
+                          options={allIphoneModels}
+                          placeholder="Search iPhone model..."
+                          allowCustom
+                          customWarning="This model is not in the standard list. Double-check spelling to avoid filter issues."
+                          onAddNew={async (name) => { await onAddIphoneModel(name) }}
+                          error={!!ipErrors.model}
+                        />
+                      )
+                    })()}
                     {ipErrors.model && <p className="text-xs text-red-500">{ipErrors.model}</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -1644,7 +1561,7 @@ function MobileFormDrawer({
                   {/* IMEI */}
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <Hash className="w-3 h-3" /> IMEI <span className="text-red-500">*</span>
+                      <Hash className="w-3 h-3" /> IMEI <span className="text-slate-400 font-normal">(optional)</span>
                     </Label>
                     <Input value={ip.imei}
                       onChange={e => upIp("imei", e.target.value.replace(/\D/g, "").slice(0, 15))}
@@ -1696,125 +1613,63 @@ function MobileFormDrawer({
                 </div>
               </div>
 
-              {/* Pricing */}
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-b border-emerald-100">
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Pricing</span>
-                </div>
-                <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <ArrowDownLeft className="w-3 h-3 text-red-400" /> Buy Price (₨) <span className="text-red-500">*</span>
-                      </Label>
-                      <Input type="number" min={0} placeholder="0" value={ip.purchasePrice}
-                        onChange={e => upIp("purchasePrice", e.target.value)}
-                        className={cn("bg-slate-50 h-9 text-sm", ipErrors.purchasePrice && "border-red-400")} />
-                      {ipErrors.purchasePrice && <p className="text-xs text-red-500">{ipErrors.purchasePrice}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <ArrowUpRight className="w-3 h-3 text-emerald-500" /> Sell Price (₨) <span className="text-red-500">*</span>
-                      </Label>
-                      <Input type="number" min={0} placeholder="0" value={ip.sellingPrice}
-                        onChange={e => upIp("sellingPrice", e.target.value)}
-                        className={cn("bg-slate-50 h-9 text-sm", ipErrors.sellingPrice && "border-red-400")} />
-                      {ipErrors.sellingPrice && <p className="text-xs text-red-500">{ipErrors.sellingPrice}</p>}
-                    </div>
-                  </div>
-                  {ipLiveMargin !== null && (
-                    <div className={marginBar(ipLiveMargin)}>
-                      <span className="text-xs font-semibold text-slate-500">Live Margin</span>
-                      <span className={marginText(ipLiveMargin)}>{ipLiveMargin.toFixed(1)}%</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Inventory & Notes */}
+              {/* Notes */}
               <div className="rounded-xl border border-slate-200 overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2 bg-violet-50 border-b border-violet-100">
-                  <Package className="w-3.5 h-3.5 text-violet-600" />
-                  <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Inventory & Notes</span>
+                  <FileText className="w-3.5 h-3.5 text-violet-600" />
+                  <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Notes</span>
                 </div>
-                <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className={cn("space-y-1.5", showNewSupplier && "col-span-2")}>
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Truck className="w-3 h-3" /> Supplier <span className="text-red-500">*</span>
-                      </Label>
-                      {!showNewSupplier ? (
-                        <>
-                          <Select value={ip.supplierId} onValueChange={val => upIp("supplierId", val)}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", ipErrors.supplierId && "border-red-400")}>
-                              <SelectValue placeholder="Select supplier" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {activeSuppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.companyName}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <button type="button" onClick={() => setShowNewSupplier(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors">
-                            <Plus className="w-3 h-3" /> Add New Supplier
-                          </button>
-                        </>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <input placeholder="Supplier name" value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)}
-                            className="bg-slate-50 h-9 text-sm w-full min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400" autoFocus />
-                          <div className="flex gap-1.5">
-                            <input placeholder="Phone" value={newSupplierPhone} onChange={e => setNewSupplierPhone(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
-                              onKeyDown={async (e) => { if (e.key === "Enter") { e.preventDefault(); if (!newSupplierName.trim()) return; setAddingSupplier(true); const s = await onAddSupplier(newSupplierName.trim(), newSupplierPhone.trim()); setAddingSupplier(false); if (s) { upIp("supplierId", s.id); setNewSupplierName(""); setNewSupplierPhone(""); setShowNewSupplier(false); } } }} />
-                            <button type="button" disabled={!newSupplierName.trim() || addingSupplier}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
-                              onClick={async () => { if (!newSupplierName.trim()) return; setAddingSupplier(true); const s = await onAddSupplier(newSupplierName.trim(), newSupplierPhone.trim()); setAddingSupplier(false); if (s) { upIp("supplierId", s.id); setNewSupplierName(""); setNewSupplierPhone(""); setShowNewSupplier(false); } }}>
-                              {addingSupplier ? "..." : "Save"}
-                            </button>
-                            <button type="button" className="h-9 px-2 text-slate-400 hover:text-slate-600 shrink-0"
-                              onClick={() => { setShowNewSupplier(false); setNewSupplierName(""); setNewSupplierPhone("") }}>
-                              <XIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                          <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
-                        </div>
-                      )}
-                      {ipErrors.supplierId && <p className="text-xs text-red-500">{ipErrors.supplierId}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Package className="w-3 h-3" /> Stock Qty
-                      </Label>
-                      <Input type="number" min={0} placeholder="0" value={ip.stock}
-                        onChange={e => upIp("stock", e.target.value)} className="bg-slate-50 h-9 text-sm" />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <FileText className="w-3 h-3" /> Notes <span className="text-slate-400 font-normal">(optional)</span>
-                    </Label>
-                    <Textarea placeholder="Any additional notes..." rows={2} value={ip.notes}
-                      onChange={e => upIp("notes", e.target.value)} className="bg-slate-50 text-sm resize-none" />
-                  </div>
+                <div className="p-4">
+                  <Textarea placeholder="Any additional notes about this iPhone..." rows={2} value={ip.notes}
+                    onChange={e => upIp("notes", e.target.value)} className="bg-slate-50 text-sm resize-none" />
+                  <p className="text-[11px] text-slate-400 mt-1.5">Price and stock are set when you purchase this phone from a supplier.</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
+        {/* ── Staged phones list ── */}
+        {stagedPhones.length > 0 && (
+          <div className="shrink-0 border-t border-slate-200 bg-amber-50 px-5 py-3 space-y-1.5">
+            <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">Staged — ready to save ({stagedPhones.length})</p>
+            {stagedPhones.map((p, i) => (
+              <div key={i} className="flex items-center justify-between bg-white rounded-lg border border-amber-200 px-3 py-1.5 text-xs">
+                <span className="font-medium text-slate-800">{p.data.brand} {p.data.model}</span>
+                <span className="text-slate-400">{p.data.color} · {p.data.storage} · {p.data.condition}</span>
+                <button type="button" onClick={() => setStagedPhones(prev => prev.filter((_, j) => j !== i))}
+                  className="ml-2 text-slate-400 hover:text-red-500">✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── Sticky footer ── */}
-        <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 flex items-center gap-3">
+        <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 flex items-center gap-3 flex-wrap">
           <Button type="button" variant="outline" onClick={handleClose} className="w-28">Cancel</Button>
+          {!isEditing && (
+            deviceType === "android" ? (
+              <Button type="button" variant="outline"
+                onClick={() => handleAndroidSubmit(onAndroidStage)()}
+                className="border-amber-300 text-amber-700 hover:bg-amber-50">
+                + Add Another
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" onClick={handleIPhoneStage}
+                className="border-amber-300 text-amber-700 hover:bg-amber-50">
+                + Add Another
+              </Button>
+            )
+          )}
           {deviceType === "android" ? (
             <Button type="submit" form="android-form" disabled={isSubmitting}
               className={cn("ml-auto", isEditing ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700")}>
-              {isEditing ? "Save Changes" : "Add Android Phone"}
+              {isEditing ? "Save Changes" : stagedPhones.length > 0 ? `Save All (${stagedPhones.length + 1})` : "Add Android Phone"}
             </Button>
           ) : (
             <Button type="button" onClick={handleIPhoneSubmit}
               className={cn("ml-auto", isEditing ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-800 hover:bg-slate-900")}>
-              {isEditing ? "Save Changes" : "Add iPhone"}
+              {isEditing ? "Save Changes" : stagedPhones.length > 0 ? `Save All (${stagedPhones.length + 1})` : "Add iPhone"}
             </Button>
           )}
         </div>
@@ -1831,6 +1686,7 @@ export default function MobilesPage() {
   const [brands, setBrands] = useState<string[]>([])
   const [colors, setColors] = useState<string[]>([])
   const [mobileCategories, setMobileCategories] = useState<string[]>([])
+  const [androidModels, setAndroidModels] = useState<string[]>([])
   const [iphoneModels, setIphoneModels] = useState<string[]>([])
   const [storageOptions, setStorageOptions] = useState<string[]>([])
   const [ramOptions, setRamOptions] = useState<string[]>([])
@@ -1996,6 +1852,37 @@ export default function MobilesPage() {
 
   // ─── Fetch iPhone models from DB ─────────────────────────────────────────
 
+  async function fetchAndroidModels() {
+    try {
+      const tenantId = await getTenantId()
+      const { data } = await supabase
+        .from("android_models")
+        .select("name")
+        .eq("tenant_id", tenantId)
+        .order("name")
+      if (data) setAndroidModels(data.map((d: { name: string }) => d.name))
+    } catch {
+      // empty — table may not exist yet
+    }
+  }
+
+  async function handleAddAndroidModel(name: string): Promise<boolean> {
+    try {
+      const tenantId = await getTenantId()
+      const { error } = await supabase.from("android_models").insert({
+        tenant_id: tenantId,
+        name: name.trim(),
+      })
+      if (error) { toast.error("Failed to add model: " + error.message); return false }
+      setAndroidModels(prev => Array.from(new Set([...prev, name.trim()])).sort())
+      toast.success(`Model "${name.trim()}" added!`)
+      return true
+    } catch {
+      toast.error("Failed to add model")
+      return false
+    }
+  }
+
   async function fetchIphoneModels() {
     try {
       const tenantId = await getTenantId()
@@ -2156,6 +2043,7 @@ export default function MobilesPage() {
     fetchColors()
     fetchMobileCategories()
     fetchConditions()
+    fetchAndroidModels()
     fetchIphoneModels()
     fetchStorageOptions()
     fetchRamOptions()
@@ -2182,7 +2070,7 @@ export default function MobilesPage() {
         m.brand.toLowerCase().includes(q) ||
         m.imei.includes(q) ||
         m.color.toLowerCase().includes(q)
-      const matchBrand = brandFilter === "all" || m.brand === brandFilter
+      const matchBrand = brandFilter === "all" || m.brand.toLowerCase() === brandFilter.toLowerCase()
       const matchCategory = categoryFilter === "all" || m.category === categoryFilter
       const matchDeviceType = deviceTypeFilter === "all" || m.deviceType === deviceTypeFilter
       const stockStatus = getStockStatus(m.stock)
@@ -2236,7 +2124,7 @@ export default function MobilesPage() {
         await updateMobile(editingMobile.id, {
           brand: data.brand,
           model: data.model,
-          imei: data.imei,
+          imei: "",
           color: data.color,
           storage: data.storage,
           ram: data.ram,
@@ -2255,7 +2143,7 @@ export default function MobilesPage() {
         await createMobile({
           brand: data.brand,
           model: data.model,
-          imei: data.imei,
+          imei: "",
           color: data.color,
           storage: data.storage,
           ram: data.ram,
@@ -2325,25 +2213,16 @@ export default function MobilesPage() {
         ),
       },
       {
-        accessorKey: "imei",
-        header: "IMEI",
+        accessorKey: "stock",
+        header: "Stock",
         cell: ({ row }) => {
-          const imei = row.original.imei
+          const s = row.original.stock
+          const status = getStockStatus(s)
           return (
-            <div className="flex items-center gap-1">
-              <span className="font-mono text-xs text-slate-500">
-                {imei.slice(0, 8)}…{imei.slice(-4)}
-              </span>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(imei)
-                  toast.success("IMEI copied")
-                }}
-                className="text-slate-300 hover:text-slate-500 transition-colors"
-              >
-                <Copy className="w-3 h-3" />
-              </button>
-            </div>
+            <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", stockBadgeStyle[status])}>
+              <span className={cn("w-1.5 h-1.5 rounded-full", stockDotStyle[status])} />
+              {s} units
+            </span>
           )
         },
       },
@@ -2465,6 +2344,8 @@ export default function MobilesPage() {
       <PageHeader
         title="Mobile Phones"
         description="Manage your mobile phone inventory"
+        icon={<Smartphone />}
+        iconBg="bg-blue-600"
         badge={
           <Badge variant="secondary" className="text-sm px-3 py-1">
             {mobileList.length} devices
@@ -2695,7 +2576,7 @@ export default function MobilesPage() {
                           <StatusBadge status={stockStatus} className="shrink-0 text-[10px] px-1.5 py-0.5" />
                         </div>
 
-                        {/* Zone 2 — Prices + IMEI */}
+                        {/* Zone 2 — Prices */}
                         <div className="flex items-center gap-2">
                           {/* Buy */}
                           <div className="flex-1 min-w-0">
@@ -2711,14 +2592,17 @@ export default function MobilesPage() {
                           </div>
                           {/* Divider */}
                           <div className="w-px h-8 bg-slate-200 shrink-0" />
-                          {/* IMEI */}
+                          {/* Stock */}
                           <div className="flex items-center gap-1 flex-1 min-w-0">
                             <div className="min-w-0 flex-1">
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">IMEI</p>
-                              <p className="text-[11px] text-slate-500 font-mono truncate">{mobile.imei.slice(0, 8)}…{mobile.imei.slice(-4)}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Stock</p>
+                              <p className="text-[11px] text-slate-500 font-mono truncate">{mobile.stock} units</p>
                             </div>
                             <button
-                              onClick={() => { navigator.clipboard.writeText(mobile.imei); toast.success("IMEI copied") }}
+                              onClick={() => {
+                                navigator.clipboard.writeText(String(mobile.stock))
+                                toast.success("Stock copied")
+                              }}
                               className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors shrink-0"
                             >
                               <Copy className="w-3 h-3" />
@@ -2780,6 +2664,8 @@ export default function MobilesPage() {
         mobileCategories={mobileCategories}
         onAddMobileCategory={handleAddMobileCategory}
         onAddSupplier={handleAddSupplier}
+        androidModels={androidModels}
+        onAddAndroidModel={handleAddAndroidModel}
         iphoneModels={iphoneModels}
         onAddIphoneModel={handleAddIphoneModel}
         storageOptions={storageOptions}
@@ -2805,7 +2691,7 @@ export default function MobilesPage() {
         title="Delete Mobile Phone"
         description={
           deleteTarget
-            ? `Are you sure you want to delete ${deleteTarget.brand} ${deleteTarget.model} (IMEI: ${deleteTarget.imei})? This action cannot be undone.`
+            ? `Are you sure you want to delete ${deleteTarget.brand} ${deleteTarget.model}? This action cannot be undone.`
             : "Are you sure you want to delete this mobile phone?"
         }
         confirmLabel="Delete"

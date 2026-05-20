@@ -2,13 +2,18 @@
 
 import React, { useState, useMemo, useEffect } from "react"
 import { Plus, Eye, Printer, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet } from "lucide-react"
+
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { startOfDay, startOfWeek, startOfMonth, isAfter, parseISO } from "date-fns"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 import { getSales, updateSaleStatus } from "@/lib/api/sales"
-import { Sale, SaleItem } from "@/data/types"
+import { getTenant } from "@/lib/api/settings"
+import type { ShopInfo } from "@/lib/pdf/invoice"
+import { Sale } from "@/data/types"
+import { generateInvoicePDF } from "@/lib/pdf/invoice"
 import { DataTable } from "@/components/shared/data-table"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -19,11 +24,7 @@ import { Input } from "@/components/ui/input"
 import {
   Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog"
-import { Separator } from "@/components/ui/separator"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDatePKT, todayPKT } from "@/lib/utils"
 import { PAYMENT_METHODS } from "@/lib/constants"
 
 // ── Payment method icon map ───────────────────────────────────────────────────
@@ -39,25 +40,29 @@ function PaymentIcon({ method }: { method: string }) {
   return <Icon className="w-3.5 h-3.5 text-slate-500" />
 }
 
-// ── Today reference (dynamic) ─────────────────────────────────────────────────
+// ── Today reference (PKT) ─────────────────────────────────────────────────────
 const TODAY = new Date()
-const TODAY_STR = TODAY.toISOString().split("T")[0]
+const TODAY_STR = todayPKT()
 const START_OF_TODAY = startOfDay(TODAY)
 const START_OF_WEEK = startOfWeek(TODAY, { weekStartsOn: 1 })
 const START_OF_MONTH = startOfMonth(TODAY)
 const THIS_MONTH_PREFIX = TODAY_STR.substring(0, 7)
 
 export default function SalesPage() {
+  const router = useRouter()
+
   // ── Data state ──────────────────────────────────────────────────────────────
   const [salesList, setSalesList] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
+  const [shopInfo, setShopInfo] = useState<ShopInfo>({ shopName: "Mobile Shop", shopAddress: "", shopPhone: "" })
 
   useEffect(() => {
     async function fetchSales() {
       try {
         setLoading(true)
-        const data = await getSales()
+        const [data, tenant] = await Promise.all([getSales(), getTenant()])
         setSalesList(data)
+        if (tenant) setShopInfo({ shopName: tenant.name, shopAddress: tenant.address ?? "", shopPhone: tenant.phone ?? "", shopLogo: tenant.logo ?? "" })
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to load sales")
       } finally {
@@ -73,9 +78,10 @@ export default function SalesPage() {
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [customerSearch, setCustomerSearch] = useState("")
+  // Universal search — matches invoice#, customer, IMEI, product name, color, price
+  const [universalSearch, setUniversalSearch] = useState("")
 
   // ── Dialog state ────────────────────────────────────────────────────────────
-  const [viewSale, setViewSale] = useState<Sale | null>(null)
   const [refundTarget, setRefundTarget] = useState<Sale | null>(null)
 
   // ── Stats ───────────────────────────────────────────────────────────────────
@@ -110,24 +116,32 @@ export default function SalesPage() {
   // ── Filtered data ───────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return salesList.filter((sale) => {
-      if (customerSearch && !sale.customerName.toLowerCase().includes(customerSearch.toLowerCase())) {
-        return false
+      if (customerSearch && !sale.customerName.toLowerCase().includes(customerSearch.toLowerCase())) return false
+      if (paymentFilter !== "all" && sale.paymentMethod !== paymentFilter) return false
+      if (statusFilter !== "all" && sale.status !== statusFilter) return false
+      if (dateFrom && sale.date < dateFrom) return false
+      if (dateTo && sale.date > dateTo) return false
+
+      if (universalSearch.trim()) {
+        const q = universalSearch.toLowerCase().trim()
+        const totalStr = sale.total.toString()
+        const matchesSale =
+          sale.invoiceNumber.toLowerCase().includes(q) ||
+          sale.customerName.toLowerCase().includes(q) ||
+          (sale.customerPhone && sale.customerPhone.includes(q)) ||
+          totalStr.includes(q)
+        const matchesItem = sale.items.some(item =>
+          item.productName.toLowerCase().includes(q) ||
+          (item.productType && item.productType.toLowerCase().includes(q)) ||
+          item.unitPrice.toString().includes(q) ||
+          item.lineTotal.toString().includes(q)
+        )
+        if (!matchesSale && !matchesItem) return false
       }
-      if (paymentFilter !== "all" && sale.paymentMethod !== paymentFilter) {
-        return false
-      }
-      if (statusFilter !== "all" && sale.status !== statusFilter) {
-        return false
-      }
-      if (dateFrom && sale.date < dateFrom) {
-        return false
-      }
-      if (dateTo && sale.date > dateTo) {
-        return false
-      }
+
       return true
     })
-  }, [salesList, customerSearch, paymentFilter, statusFilter, dateFrom, dateTo])
+  }, [salesList, customerSearch, paymentFilter, statusFilter, dateFrom, dateTo, universalSearch])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleReset() {
@@ -136,6 +150,7 @@ export default function SalesPage() {
     setPaymentFilter("all")
     setStatusFilter("all")
     setCustomerSearch("")
+    setUniversalSearch("")
   }
 
   async function handleRefundConfirm() {
@@ -152,63 +167,93 @@ export default function SalesPage() {
     setRefundTarget(null)
   }
 
-  // ── Export CSV ──────────────────────────────────────────────────────────────
-  function handleExportCSV() {
+  // ── Export Excel ─────────────────────────────────────────────────────────────
+  async function handleExportExcel() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
-    const headers = ["Invoice #", "Date", "Customer", "Phone", "Items", "Total", "Payment", "Status"]
-    const rows = filtered.map(s => [
-      s.invoiceNumber, s.date, s.customerName, s.customerPhone,
-      s.items.length, s.total, s.paymentMethod, s.status,
-    ])
-    const csv = [headers.join(","), ...rows.map(r => r.map(v => `"${v}"`).join(","))].join("\n")
-    const blob = new Blob([csv], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url; a.download = `sales-report-${TODAY_STR}.csv`; a.click()
-    URL.revokeObjectURL(url)
-    toast.success(`Exported ${filtered.length} sales to CSV`)
+    const { exportToExcel } = await import("@/lib/excel-export")
+    const totalAmount = filtered.reduce((s, sale) => s + sale.total, 0)
+    exportToExcel(
+      filtered.map((s, i) => ({
+        "#": i + 1,
+        invoiceNumber: s.invoiceNumber,
+        date: s.date,
+        customer: s.customerName,
+        phone: s.customerPhone,
+        items: s.items.length,
+        total: s.total,
+        payment: s.paymentMethod,
+        status: s.status,
+      })),
+      `Sales-Report-${TODAY_STR}`,
+      [
+        { key: "#",            header: "#",             width: 5,  align: "center" },
+        { key: "invoiceNumber",header: "Invoice #",     width: 18 },
+        { key: "date",         header: "Date",          width: 14 },
+        { key: "customer",     header: "Customer",      width: 22 },
+        { key: "phone",        header: "Phone",         width: 16 },
+        { key: "items",        header: "Items",         width: 8,  align: "center" },
+        { key: "total",        header: "Total (Rs)",    width: 16, align: "right", numFmt: "#,##0" },
+        { key: "payment",      header: "Payment Method",width: 18 },
+        { key: "status",       header: "Status",        width: 12 },
+      ],
+      {
+        sheetName: "Sales Report",
+        title: "Sales Report — MobiTrack Pro",
+        subtitle: `Exported on ${new Date().toLocaleDateString("en-PK")}  ·  ${filtered.length} records`,
+        summaryRows: [
+          { label: "Total Records", value: filtered.length },
+          { label: "Grand Total", value: `Rs ${totalAmount.toLocaleString("en-PK")}` },
+        ],
+      }
+    )
+    toast.success(`Exported ${filtered.length} sales to Excel`)
   }
 
-  // ── Export PDF ──────────────────────────────────────────────────────────────
-  function handleExportPDF() {
+  // ── Export PDF (report) ───────────────────────────────────────────────────────
+  async function handleExportPDF() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
     const totalAmount = filtered.reduce((s, sale) => s + sale.total, 0)
-    const html = `<!DOCTYPE html><html><head><title>Sales Report</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
-        h1 { font-size: 22px; margin-bottom: 4px; }
-        .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; }
-        tr:nth-child(even) { background: #f8fafc; }
-        .text-right { text-align: right; }
-        .total-row { font-weight: 700; background: #eff6ff !important; }
-        .footer { margin-top: 20px; font-size: 11px; color: #999; }
-        .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-        .completed { background: #dcfce7; color: #166534; }
-        .pending { background: #fef9c3; color: #854d0e; }
-        .refunded { background: #fee2e2; color: #991b1b; }
-      </style></head><body>
-      <h1>Sales Report</h1>
-      <div class="subtitle">Generated: ${new Date().toLocaleDateString()} · ${filtered.length} transactions · Total: Rs ${totalAmount.toLocaleString()}</div>
-      <table>
-        <thead><tr><th>#</th><th>Invoice</th><th>Date</th><th>Customer</th><th>Items</th><th class="text-right">Total</th><th>Payment</th><th>Status</th></tr></thead>
-        <tbody>
-          ${filtered.map((s, i) => `<tr>
-            <td>${i + 1}</td><td>${s.invoiceNumber}</td><td>${s.date}</td>
-            <td>${s.customerName}</td><td>${s.items.length}</td>
-            <td class="text-right">Rs ${s.total.toLocaleString()}</td>
-            <td>${s.paymentMethod}</td>
-            <td><span class="badge ${s.status.toLowerCase()}">${s.status}</span></td>
-          </tr>`).join("")}
-          <tr class="total-row"><td colspan="5">Total</td><td class="text-right">Rs ${totalAmount.toLocaleString()}</td><td colspan="2"></td></tr>
-        </tbody>
-      </table>
-      <div class="footer">MobiTrack Pro · Sales Report · Printed on ${new Date().toLocaleString()}</div>
-    </body></html>`
-    const win = window.open("", "_blank")
-    if (win) { win.document.write(html); win.document.close(); win.print() }
+    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = ""
+    try {
+      const { getTenant } = await import("@/lib/api/settings")
+      const tenant = await getTenant()
+      shopName = tenant.name || shopName
+      shopAddress = [tenant.address, tenant.city].filter(Boolean).join(", ")
+      shopPhone = tenant.phone || ""
+    } catch { /* use defaults */ }
+    const { generateReportPDF } = await import("@/lib/pdf/report")
+    generateReportPDF({
+      shopName, shopAddress, shopPhone,
+      title: "Sales Report",
+      subtitle: `${filtered.length} records  ·  Total: Rs ${totalAmount.toLocaleString("en-PK")}`,
+      columns: [
+        { header: "#",             dataKey: "idx",     width: 8,  halign: "center" },
+        { header: "Invoice #",     dataKey: "invoice", width: 28 },
+        { header: "Date",          dataKey: "date",    width: 24 },
+        { header: "Customer",      dataKey: "customer",width: 36 },
+        { header: "Items",         dataKey: "items",   width: 10, halign: "center" },
+        { header: "Total (Rs)",    dataKey: "total",   width: 24, halign: "right", bold: true },
+        { header: "Payment",       dataKey: "payment", width: 24 },
+        { header: "Status",        dataKey: "status",  width: 18, halign: "center" },
+      ],
+      rows: filtered.map((s, i) => ({
+        idx:      i + 1,
+        invoice:  s.invoiceNumber,
+        date:     s.date,
+        customer: s.customerName,
+        items:    s.items.length,
+        total:    `Rs ${s.total.toLocaleString("en-PK")}`,
+        payment:  s.paymentMethod,
+        status:   s.status,
+      })),
+      summary: [
+        { label: "Total Records", value: `${filtered.length}` },
+        { label: "Grand Total",   value: `Rs ${totalAmount.toLocaleString("en-PK")}` },
+      ],
+      filename: `Sales-Report-${TODAY_STR}`,
+      action: "save",
+    })
+    toast.success(`Sales report PDF downloaded`)
   }
 
   // ── Columns ─────────────────────────────────────────────────────────────────
@@ -217,9 +262,9 @@ export default function SalesPage() {
       accessorKey: "invoiceNumber",
       header: "Invoice #",
       cell: ({ row }) => (
-        <span className="font-mono text-blue-600 text-sm font-semibold">
+        <Link href={`/sales/${row.original.id}`} className="font-mono text-blue-600 text-sm font-semibold hover:underline">
           {row.original.invoiceNumber}
-        </span>
+        </Link>
       ),
     },
     {
@@ -227,7 +272,7 @@ export default function SalesPage() {
       header: "Date",
       cell: ({ row }) => (
         <span className="text-slate-600 text-sm whitespace-nowrap">
-          {formatDate(row.original.date)}
+          {formatDatePKT(row.original.date)}
         </span>
       ),
     },
@@ -320,18 +365,28 @@ export default function SalesPage() {
               variant="ghost"
               size="icon-sm"
               className="h-8 w-8 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
-              onClick={() => setViewSale(sale)}
+              onClick={() => router.push(`/sales/${sale.id}`)}
               title="View details"
             >
               <Eye className="w-4 h-4" />
             </Button>
 
+            {/* Download PDF */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-8 w-8 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50"
+              onClick={() => generateInvoicePDF(sale, shopInfo, "save")}
+              title="Download invoice PDF"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
             {/* Print */}
             <Button
               variant="ghost"
               size="icon-sm"
               className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-              onClick={() => window.print()}
+              onClick={() => generateInvoicePDF(sale, shopInfo, "print")}
               title="Print invoice"
             >
               <Printer className="w-4 h-4" />
@@ -362,10 +417,12 @@ export default function SalesPage() {
       <PageHeader
         title="Sales"
         description="Manage and track all sales transactions"
+        icon={<ShoppingCart />}
+        iconBg="bg-blue-600"
         action={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportCSV}>
-              <Download className="w-3.5 h-3.5" /> CSV
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportExcel}>
+              <Download className="w-3.5 h-3.5" /> Excel
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportPDF}>
               <FileText className="w-3.5 h-3.5" /> PDF
@@ -427,14 +484,28 @@ export default function SalesPage() {
           <Filter className="w-3 h-3 text-slate-400" />
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Filters</span>
         </div>
+
+        {/* Universal search */}
+        <div className="mb-2.5">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Input
+              placeholder="Search by invoice #, customer, IMEI, product name, price, color..."
+              value={universalSearch}
+              onChange={(e) => setUniversalSearch(e.target.value)}
+              className="pl-8 h-9 text-xs"
+            />
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-end gap-2">
           {/* Customer search */}
           <div className="flex flex-col gap-1 min-w-0 flex-1 w-full sm:w-auto">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer</label>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer Name</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
               <Input
-                placeholder="Search customer name..."
+                placeholder="Filter by customer name..."
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
                 className="pl-7 h-8 text-xs"
@@ -547,7 +618,7 @@ export default function SalesPage() {
                 <div className="flex items-center gap-3 mb-2">
                   <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                     <Calendar className="w-3 h-3 text-slate-400" />
-                    {formatDate(sale.date)}
+                    {formatDatePKT(sale.date)}
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs text-slate-600">
                     <PaymentIcon method={sale.paymentMethod} /> {sale.paymentMethod}
@@ -569,7 +640,7 @@ export default function SalesPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 h-8 text-xs gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
-                    onClick={() => setViewSale(sale)}
+                    onClick={() => router.push(`/sales/${sale.id}`)}
                   >
                     <Eye className="w-3 h-3" />
                     View
@@ -577,8 +648,17 @@ export default function SalesPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="flex-1 h-8 text-xs gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                    onClick={() => generateInvoicePDF(sale, shopInfo, "save")}
+                  >
+                    <Download className="w-3 h-3" />
+                    PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="flex-1 h-8 text-xs gap-1.5 text-slate-600 border-slate-200 hover:bg-slate-50"
-                    onClick={() => window.print()}
+                    onClick={() => generateInvoicePDF(sale, shopInfo, "print")}
                   >
                     <Printer className="w-3 h-3" />
                     Print
@@ -612,147 +692,6 @@ export default function SalesPage() {
 
       </>
       )}
-
-      {/* ── View Sale Dialog ─────────────────────────────────────────────────── */}
-      <Dialog open={!!viewSale} onOpenChange={(open) => !open && setViewSale(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="font-mono text-blue-600">{viewSale?.invoiceNumber}</span>
-              {viewSale && <StatusBadge status={viewSale.status} />}
-            </DialogTitle>
-            <DialogDescription>
-              Sale details — {viewSale ? formatDate(viewSale.date) : ""}
-            </DialogDescription>
-          </DialogHeader>
-
-          {viewSale && (
-            <div className="space-y-5 mt-2">
-              {/* Customer info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-slate-50 border border-slate-100">
-                <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Customer Name</p>
-                  <p className="font-semibold text-slate-800">{viewSale.customerName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Phone</p>
-                  <p className="font-semibold text-slate-800">{viewSale.customerPhone}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Date</p>
-                  <p className="font-semibold text-slate-800">{formatDate(viewSale.date)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Payment Method</p>
-                  <p className="font-semibold text-slate-800 flex items-center gap-1.5">
-                    <PaymentIcon method={viewSale.paymentMethod} /> {viewSale.paymentMethod}
-                  </p>
-                </div>
-              </div>
-
-              {/* Items table */}
-              <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-2">Items Sold</h3>
-
-                {/* Mobile card layout */}
-                <div className="sm:hidden space-y-2">
-                  {viewSale.items.map((item: SaleItem, idx: number) => (
-                    <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-slate-800 text-sm">{item.productName}</span>
-                        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{item.productType}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>Qty: {item.quantity} × {formatCurrency(item.unitPrice)}</span>
-                        {item.discount > 0 && (
-                          <span className="text-red-500">− {formatCurrency(item.discount)}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                        <span className="text-xs text-slate-400">Line Total</span>
-                        <span className="font-semibold text-sm text-slate-900">{formatCurrency(item.lineTotal)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Desktop table layout */}
-                <div className="hidden sm:block rounded-lg border border-slate-200 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 whitespace-nowrap">Product</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 whitespace-nowrap">Type</th>
-                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 whitespace-nowrap">Qty</th>
-                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 whitespace-nowrap">Unit Price</th>
-                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 whitespace-nowrap">Discount</th>
-                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 whitespace-nowrap">Line Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {viewSale.items.map((item: SaleItem, idx: number) => (
-                        <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                          <td className="px-4 py-3 font-medium text-slate-800">{item.productName}</td>
-                          <td className="px-4 py-3 text-slate-500">{item.productType}</td>
-                          <td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
-                          <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(item.unitPrice)}</td>
-                          <td className="px-4 py-3 text-right text-red-500">
-                            {item.discount > 0 ? `− ${formatCurrency(item.discount)}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(item.lineTotal)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Totals */}
-              <div className="rounded-lg border border-slate-200 p-3 sm:p-4 bg-slate-50 space-y-2">
-                <div className="flex justify-between text-sm text-slate-600">
-                  <span>Subtotal</span>
-                  <span>{formatCurrency(viewSale.subtotal)}</span>
-                </div>
-                {viewSale.discount > 0 && (
-                  <div className="flex justify-between text-sm text-red-500">
-                    <span>Discount</span>
-                    <span>− {formatCurrency(viewSale.discount)}</span>
-                  </div>
-                )}
-                {viewSale.tax > 0 && (
-                  <div className="flex justify-between text-sm text-slate-600">
-                    <span>Tax</span>
-                    <span>{formatCurrency(viewSale.tax)}</span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between text-base font-bold text-slate-900">
-                  <span>Total</span>
-                  <span>{formatCurrency(viewSale.total)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-slate-600">
-                  <span>Amount Received</span>
-                  <span>{formatCurrency(viewSale.amountReceived)}</span>
-                </div>
-                {viewSale.changeDue > 0 && (
-                  <div className="flex justify-between text-sm text-emerald-600">
-                    <span>Change Due</span>
-                    <span>{formatCurrency(viewSale.changeDue)}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Notes */}
-              {viewSale.notes && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold text-slate-600 mb-1">Notes</p>
-                  <p className="text-sm text-slate-700">{viewSale.notes}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* ── Refund Confirm Dialog ────────────────────────────────────────────── */}
       <ConfirmDialog

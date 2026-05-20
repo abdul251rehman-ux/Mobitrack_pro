@@ -3,9 +3,9 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  LayoutDashboard, Smartphone, Package, ShoppingCart, TrendingUp, Users, Truck,
-  BarChart2, Settings, ChevronLeft, ChevronRight, LogOut, Layers, Tag, Award, ChevronDown, X, BookOpen, UserCheck, Building2, ScanLine, Bell, RefreshCw, Plus, Receipt,
-  RotateCcw, Shield, Wallet, ClipboardList, DollarSign,
+  LayoutDashboard, Smartphone, Package, ShoppingCart, TrendingUp, Users, Truck, ShoppingBag,
+  BarChart2, Settings, ChevronLeft, ChevronRight, LogOut, Layers, Tag, Award, ChevronDown, X, BookOpen, UserCheck, Building2, Bell, RefreshCw, Plus, Receipt,
+  RotateCcw, Wallet, ClipboardList, DollarSign,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/context/app-context"
@@ -28,7 +28,6 @@ const navSections: NavSection[] = [
     items: [
       { label: "Mobile Phones", icon: Smartphone, href: "/products/mobiles" },
       { label: "Accessories", icon: Package, href: "/products/accessories" },
-      { label: "IMEI Tracker", icon: ScanLine, href: "/inventory/imei-tracker" },
       { label: "Stock Alerts", icon: Bell, href: "/inventory/stock-alerts" },
       { label: "Used Phones", icon: RefreshCw, href: "/inventory/used-phones" },
       {
@@ -47,7 +46,7 @@ const navSections: NavSection[] = [
       { label: "Sales", icon: ShoppingCart, href: "/sales" },
       { label: "Purchases", icon: TrendingUp, href: "/purchases" },
       { label: "Returns", icon: RotateCcw, href: "/returns" },
-      { label: "Payments", icon: Wallet, href: "/payments" },
+      { label: "Finance", icon: Wallet, href: "/finance" },
       { label: "Expenses", icon: Receipt, href: "/expenses" },
       {
         label: "Ledger",
@@ -64,13 +63,7 @@ const navSections: NavSection[] = [
     items: [
       { label: "Suppliers", icon: Truck, href: "/suppliers" },
       { label: "Customers", icon: Users, href: "/customers" },
-      { label: "Shops", icon: Building2, href: "/shops" },
-    ],
-  },
-  {
-    section: "SERVICES",
-    items: [
-      { label: "Warranty & Repair", icon: Shield, href: "/warranty" },
+      { label: "Dealers", icon: Building2, href: "/shops" },
     ],
   },
   {
@@ -152,27 +145,48 @@ function SidebarContent({
         )}
       </div>
 
-      {/* New Sale Button */}
-      <div className={cn("px-2.5 pt-2.5 pb-1 shrink-0", sidebarCollapsed && "px-2")}>
+      {/* Quick Action Buttons */}
+      <div className={cn("px-2.5 pt-2.5 pb-1 shrink-0 space-y-1.5", sidebarCollapsed && "px-2")}>
         {sidebarCollapsed ? (
-          <button
-            onClick={() => { router.push("/sales/new"); onNavClick?.() }}
-            title="New Sale"
-            className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-md shadow-blue-900/30"
-          >
-            <Plus className="w-4 h-4 text-white" />
-            <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-              New Sale
-            </div>
-          </button>
+          <>
+            <button
+              onClick={() => { router.push("/sales/new"); onNavClick?.() }}
+              title="New Sale"
+              className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-md shadow-blue-900/30"
+            >
+              <Plus className="w-4 h-4 text-white" />
+              <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
+                New Sale
+              </div>
+            </button>
+            <button
+              onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
+              title="New Purchase"
+              className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-95 transition-all"
+            >
+              <ShoppingCart className="w-4 h-4 text-white" />
+              <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
+                New Purchase
+              </div>
+            </button>
+          </>
         ) : (
-          <button
-            onClick={() => { router.push("/sales/new"); onNavClick?.() }}
-            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md shadow-blue-900/30 group"
-          >
-            <Plus className="w-3.5 h-3.5 text-white" />
-            <span className="text-white font-semibold text-xs tracking-wide">New Sale</span>
-          </button>
+          <>
+            <button
+              onClick={() => { router.push("/sales/new"); onNavClick?.() }}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md shadow-blue-900/30 group"
+            >
+              <Plus className="w-3.5 h-3.5 text-white" />
+              <span className="text-white font-semibold text-xs tracking-wide">New Sale</span>
+            </button>
+            <button
+              onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
+              className="w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-[0.98] transition-all group"
+            >
+              <ShoppingCart className="w-3.5 h-3.5 text-slate-300" />
+              <span className="text-slate-300 font-medium text-xs tracking-wide">New Purchase</span>
+            </button>
+          </>
         )}
       </div>
 
@@ -313,10 +327,7 @@ function SidebarContent({
       {/* User Profile */}
       <div className={cn("border-t border-white/[0.07] p-2 flex-shrink-0", sidebarCollapsed && "flex justify-center")}>
         {!sidebarCollapsed ? (
-          <div
-            onClick={() => { logout(); router.push("/auth/login") }}
-            className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
-          >
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors group">
             <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center shrink-0 shadow-sm">
               <span className="text-white text-[10px] font-bold">
                 {user ? user.name.split(" ").map(n => n[0]).join("").slice(0, 2) : "?"}
@@ -324,20 +335,24 @@ function SidebarContent({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-slate-200 text-[12px] font-semibold leading-tight truncate">{user?.name ?? "Guest"}</p>
-              <p className="text-slate-600 text-[10px] leading-tight">{user?.role ?? "Unknown"}</p>
+              <p className="text-slate-500 text-[10px] leading-tight">{user?.role ?? "Unknown"}</p>
             </div>
-            <LogOut className="w-3.5 h-3.5 text-slate-600 group-hover:text-red-400 transition-colors flex-shrink-0" />
+            <button
+              onClick={async () => { await logout(); router.push("/auth/login") }}
+              className="p-1.5 rounded-md hover:bg-red-500/20 transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-3.5 h-3.5 text-slate-500 hover:text-red-400 transition-colors" />
+            </button>
           </div>
         ) : (
-          <div
-            onClick={() => { logout(); router.push("/auth/login") }}
-            className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center cursor-pointer shadow-sm"
+          <button
+            onClick={async () => { await logout(); router.push("/auth/login") }}
+            className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center cursor-pointer shadow-sm hover:bg-red-500 transition-colors"
             title="Logout"
           >
-            <span className="text-white text-[10px] font-bold">
-              {user ? user.name.split(" ").map(n => n[0]).join("").slice(0, 2) : "?"}
-            </span>
-          </div>
+            <LogOut className="w-3.5 h-3.5 text-white" />
+          </button>
         )}
       </div>
 

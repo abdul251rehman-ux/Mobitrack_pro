@@ -27,7 +27,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 
 // ── Zod schema ────────────────────────────────────────────────────────────────
 const customerSchema = z.object({
@@ -145,7 +145,7 @@ export default function CustomersPage() {
         setCustomers((prev) => prev.map((c) => (c.id === editTarget.id ? updated : c)))
         toast.success("Customer updated", { description: `${data.name}'s profile has been updated.` })
       } else {
-        const created = await createCustomer({ name: data.name, phone: data.phone, email: data.email || undefined, address: data.address || undefined, notes: data.notes || undefined, totalPurchases: 0, totalSpent: 0, lastPurchaseDate: new Date().toISOString(), loyaltyTier: "Bronze" })
+        const created = await createCustomer({ name: data.name, phone: data.phone, email: data.email || undefined, address: data.address || undefined, notes: data.notes || undefined, totalPurchases: 0, totalSpent: 0, lastPurchaseDate: todayPKT(), loyaltyTier: "Bronze" })
         setCustomers((prev) => [created, ...prev])
         toast.success("Customer added", { description: `${data.name} has been added to your customer list.` })
       }

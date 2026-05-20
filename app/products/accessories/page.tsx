@@ -6,7 +6,7 @@ import {
   Plus, Search, Grid3X3, List, Headphones, Pencil, Trash2,
   TrendingUp, Package, DollarSign, AlertTriangle, X, Tag,
   Volume2, Zap, Shield, Smartphone, BatteryCharging, Keyboard, HardDrive, Watch,
-  Type, Hash, Layers, Truck, FileText, ArrowDownLeft, ArrowUpRight,
+  Type, Hash, Layers, FileText,
   ImageIcon, Upload,
 } from "lucide-react"
 import { useForm } from "react-hook-form"
@@ -17,10 +17,11 @@ import { format } from "date-fns"
 import { ColumnDef } from "@tanstack/react-table"
 
 import { getAccessories, createAccessory, updateAccessory, deleteAccessory } from "@/lib/api/products"
-import { getSuppliers } from "@/lib/api/suppliers"
+import { MASTER_BRAND_NAMES } from "@/data/brands"
+import { SearchableSelect } from "@/components/shared/searchable-select"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
-import { Accessory, Supplier } from "@/data/types"
+import { Accessory } from "@/data/types"
 import { DataTable } from "@/components/shared/data-table"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -47,21 +48,13 @@ import { cn, formatCurrency, calculateMargin, getStockStatus } from "@/lib/utils
 const accessorySchema = z.object({
   name: z.string().min(1, "Name is required"),
   brand: z.string().min(1, "Brand is required"),
-  sku: z.string().min(1, "SKU is required"),
+  sku: z.string().optional().default(""),
   category: z.string().min(1, "Category is required"),
-  purchasePrice: z
-    .string()
-    .transform(v => parseFloat(v))
-    .pipe(z.number().min(1, "Purchase price must be greater than 0")),
-  sellingPrice: z
-    .string()
-    .transform(v => parseFloat(v))
-    .pipe(z.number().min(1, "Selling price must be greater than 0")),
-  stock: z
-    .string()
-    .transform(v => parseInt(v, 10))
-    .pipe(z.number().min(0, "Stock cannot be negative")),
-  supplierId: z.string().min(1, "Supplier is required"),
+  // price/stock/supplier set via Purchase page
+  purchasePrice: z.string().optional().transform(v => v ? parseFloat(v) : 0).pipe(z.number().min(0)),
+  sellingPrice: z.string().optional().transform(v => v ? parseFloat(v) : 0).pipe(z.number().min(0)),
+  stock: z.string().optional().transform(v => v ? parseInt(v, 10) : 0).pipe(z.number().min(0)),
+  supplierId: z.string().optional().default(""),
   compatibleModels: z.array(z.string()).optional().default([]),
   description: z.string().optional(),
 })
@@ -114,8 +107,8 @@ function AccessoryCard({
   onEdit: (a: Accessory) => void
   onDelete: (a: Accessory) => void
 }) {
-  const margin = calculateMargin(accessory.purchasePrice, accessory.sellingPrice)
-  const stockStatus = getStockStatus(accessory.stock)
+  const hasPrices = accessory.purchasePrice > 0 && accessory.sellingPrice > 0
+  const margin = hasPrices ? calculateMargin(accessory.purchasePrice, accessory.sellingPrice) : 0
   const profit = accessory.sellingPrice - accessory.purchasePrice
   const cfg = categoryConfig[accessory.category] ?? categoryConfig["Other"]
   const Icon = cfg.icon
@@ -134,10 +127,12 @@ function AccessoryCard({
             className="object-contain p-2"
             sizes="(max-width: 768px) 50vw, 25vw"
           />
-          <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md bg-white shadow-sm border border-slate-100 px-1.5 py-0.5 text-[10px] font-bold">
-            <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
-            <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
-          </span>
+          {hasPrices && (
+            <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md bg-white shadow-sm border border-slate-100 px-1.5 py-0.5 text-[10px] font-bold">
+              <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
+              <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
+            </span>
+          )}
         </div>
       ) : (
         <div className={cn("relative bg-gradient-to-br h-24 flex items-center justify-between px-4 overflow-hidden", cfg.headerGradient)}>
@@ -146,10 +141,12 @@ function AccessoryCard({
           <div className="relative z-10 p-2 rounded-xl bg-white/20 backdrop-blur-sm">
             <Icon className="w-5 h-5 text-white/90" />
           </div>
-          <span className="relative z-10 inline-flex items-center gap-0.5 rounded-md bg-white/90 shadow px-1.5 py-0.5 text-[10px] font-bold">
-            <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
-            <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
-          </span>
+          {hasPrices && (
+            <span className="relative z-10 inline-flex items-center gap-0.5 rounded-md bg-white/90 shadow px-1.5 py-0.5 text-[10px] font-bold">
+              <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
+              <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
+            </span>
+          )}
         </div>
       )}
 
@@ -173,32 +170,44 @@ function AccessoryCard({
         </div>
 
         {/* Price box */}
-        <div className="bg-slate-50 rounded-lg px-2.5 py-2 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-slate-400">Sell Price</span>
-            <span className="text-[13px] font-extrabold text-slate-900 tabular-nums leading-none">
-              {formatCurrency(accessory.sellingPrice)}
-            </span>
+        {hasPrices ? (
+          <div className="bg-slate-50 rounded-lg px-2.5 py-2 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400">Sell Price</span>
+              <span className="text-[13px] font-extrabold text-slate-900 tabular-nums leading-none">
+                {formatCurrency(accessory.sellingPrice)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400">Buy Price</span>
+              <span className="text-[10px] text-slate-500 tabular-nums">{formatCurrency(accessory.purchasePrice)}</span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+              <span className="text-[10px] text-slate-400">Profit</span>
+              <span className="text-[10px] font-semibold text-emerald-600 tabular-nums">+{formatCurrency(profit)}</span>
+            </div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-slate-400">Buy Price</span>
-            <span className="text-[10px] text-slate-500 tabular-nums">{formatCurrency(accessory.purchasePrice)}</span>
+        ) : (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-center">
+            <p className="text-[10px] font-medium text-amber-700">No price set — purchase to stock</p>
           </div>
-          <div className="flex items-center justify-between pt-1 border-t border-slate-200">
-            <span className="text-[10px] text-slate-400">Profit</span>
-            <span className="text-[10px] font-semibold text-emerald-600 tabular-nums">+{formatCurrency(profit)}</span>
-          </div>
-        </div>
+        )}
 
         {/* Stock + action buttons */}
         <div className="flex items-center justify-between gap-1.5">
-          <span className={cn(
-            "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium",
-            stockPillStyle[stockStatus]
-          )}>
-            <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", stockDotColor[stockStatus])} />
-            {accessory.stock} units
-          </span>
+          {accessory.stock > 0 ? (
+            <span className={cn(
+              "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+              stockPillStyle[getStockStatus(accessory.stock)]
+            )}>
+              <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", stockDotColor[getStockStatus(accessory.stock)])} />
+              {accessory.stock} units
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+              Catalog only
+            </span>
+          )}
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
@@ -299,23 +308,19 @@ function AccessoryFormDialog({
   onOpenChange,
   editingAccessory,
   onSubmit,
-  suppliers,
   categories,
   onAddCategory,
   brands,
   onAddBrand,
-  onAddSupplier,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   editingAccessory: Accessory | null
   onSubmit: (data: AccessoryFormOutput, imageUrl: string) => void
-  suppliers: Supplier[]
   categories: string[]
   onAddCategory: (name: string) => Promise<boolean>
   brands: string[]
   onAddBrand: (name: string) => Promise<boolean>
-  onAddSupplier: (name: string, phone: string) => Promise<Supplier | null>
 }) {
   const isEditing = !!editingAccessory
   const [compatibleModels, setCompatibleModels] = useState<string[]>(
@@ -329,10 +334,6 @@ function AccessoryFormDialog({
   const [showNewBrand, setShowNewBrand] = useState(false)
   const [newBrandName, setNewBrandName] = useState("")
   const [addingBrand, setAddingBrand] = useState(false)
-  const [showNewSupplier, setShowNewSupplier] = useState(false)
-  const [newSupplierName, setNewSupplierName] = useState("")
-  const [newSupplierPhone, setNewSupplierPhone] = useState("")
-  const [addingSupplier, setAddingSupplier] = useState(false)
 
   useEffect(() => {
     setImageUrl(editingAccessory?.image ?? "")
@@ -354,8 +355,8 @@ function AccessoryFormDialog({
   const {
     register,
     handleSubmit,
-    watch,
     setValue,
+    watch,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<AccessoryFormInput, unknown, AccessoryFormOutput>({
@@ -366,10 +367,6 @@ function AccessoryFormDialog({
           brand: editingAccessory.brand,
           sku: editingAccessory.sku,
           category: editingAccessory.category,
-          purchasePrice: String(editingAccessory.purchasePrice),
-          sellingPrice: String(editingAccessory.sellingPrice),
-          stock: String(editingAccessory.stock),
-          supplierId: editingAccessory.supplierId,
           compatibleModels: editingAccessory.compatibleModels ?? [],
           description: editingAccessory.description ?? "",
         }
@@ -378,29 +375,17 @@ function AccessoryFormDialog({
           brand: "",
           sku: "",
           category: "",
-          purchasePrice: "",
-          sellingPrice: "",
-          stock: "0",
-          supplierId: "",
           compatibleModels: [],
           description: "",
         },
   })
 
-  // Sync compatible models state when editing accessory changes
   useMemo(() => {
     setCompatibleModels(editingAccessory?.compatibleModels ?? [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingAccessory?.id])
 
-  const purchasePriceStr = watch("purchasePrice")
-  const sellingPriceStr = watch("sellingPrice")
-  const purchasePriceNum = parseFloat(purchasePriceStr)
-  const sellingPriceNum = parseFloat(sellingPriceStr)
-  const liveMargin =
-    !isNaN(purchasePriceNum) && !isNaN(sellingPriceNum) && purchasePriceNum > 0 && sellingPriceNum > 0
-      ? calculateMargin(purchasePriceNum, sellingPriceNum)
-      : null
+  // price/stock set via Purchase page — no live margin in catalog form
 
   function handleClose() {
     reset()
@@ -415,11 +400,9 @@ function AccessoryFormDialog({
     handleClose()
   }
 
-  const activeSuppliers = suppliers.filter(s => s.status === "Active")
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-visible p-0 gap-0" style={{ overflowY: "auto" }}>
         <DialogTitle className="sr-only">
           {isEditing ? "Edit Accessory" : "Add New Accessory"}
         </DialogTitle>
@@ -452,7 +435,7 @@ function AccessoryFormDialog({
         <form onSubmit={handleSubmit(handleFormSubmit)} className="p-4 space-y-4">
 
           {/* ── Section 1: Product Info ── */}
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 overflow-visible">
             <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-100">
               <Tag className="w-3.5 h-3.5 text-blue-600" />
               <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Product Info</span>
@@ -471,58 +454,73 @@ function AccessoryFormDialog({
                   <Label htmlFor="brand" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                     <Tag className="w-3 h-3" /> Brand <span className="text-red-500">*</span>
                   </Label>
-                  {!showNewBrand ? (
-                    <>
-                      <Select defaultValue={editingAccessory?.brand ?? ""}
-                        onValueChange={val => setValue("brand", val, { shouldValidate: true })}>
-                        <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.brand && "border-red-400")}>
-                          <SelectValue placeholder="Select brand" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {brands.map(b => (
-                            <SelectItem key={b} value={b}>{b}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <button
-                        type="button"
-                        onClick={() => setShowNewBrand(true)}
-                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" /> Add New Brand
-                      </button>
-                    </>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="e.g. Anker"
-                          value={newBrandName}
-                          onChange={e => setNewBrandName(e.target.value)}
-                          className="bg-slate-50 h-9 text-sm flex-1"
-                          autoFocus
-                          onKeyDown={async (e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault()
-                              if (!newBrandName.trim()) return
-                              setAddingBrand(true)
-                              const ok = await onAddBrand(newBrandName.trim())
-                              setAddingBrand(false)
-                              if (ok) {
-                                setValue("brand", newBrandName.trim(), { shouldValidate: true })
-                                setNewBrandName("")
-                                setShowNewBrand(false)
+                  {(() => {
+                    const allBrands = Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort()
+                    return (
+                      <SearchableSelect
+                        value={watch("brand") ?? ""}
+                        onChange={val => setValue("brand", val, { shouldValidate: true })}
+                        options={allBrands}
+                        placeholder="Search brand..."
+                        allowCustom
+                        customWarning="This brand is not in the standard list. It will be saved as entered."
+                        onAddNew={async (name) => { await onAddBrand(name) }}
+                        error={!!errors.brand}
+                      />
+                    )
+                  })()}
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewBrand(true); setNewBrandName("") }}
+                    className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add New Brand
+                  </button>
+                  {errors.brand && <p className="text-xs text-red-500">{errors.brand.message}</p>}
+
+                  {/* Quick Add Brand Modal */}
+                  <Dialog open={showNewBrand} onOpenChange={setShowNewBrand}>
+                    <DialogContent className="max-w-xs">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm font-bold">Add New Brand</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-3 py-1">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Brand Name <span className="text-red-500">*</span></Label>
+                          <Input
+                            placeholder="e.g. Anker, Baseus, JBL"
+                            value={newBrandName}
+                            onChange={e => setNewBrandName(e.target.value)}
+                            className="h-8 text-xs"
+                            autoFocus
+                            onKeyDown={async (e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                if (!newBrandName.trim() || addingBrand) return
+                                setAddingBrand(true)
+                                const ok = await onAddBrand(newBrandName.trim())
+                                setAddingBrand(false)
+                                if (ok) {
+                                  setValue("brand", newBrandName.trim(), { shouldValidate: true })
+                                  setNewBrandName("")
+                                  setShowNewBrand(false)
+                                }
                               }
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-slate-400">This brand will be saved globally and available across all products.</p>
+                      </div>
+                      <DialogFooter className="gap-2">
+                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNewBrand(false)}>
+                          Cancel
+                        </Button>
                         <Button
-                          type="button"
                           size="sm"
+                          className="h-8 text-xs"
                           disabled={!newBrandName.trim() || addingBrand}
-                          className="h-9 px-3"
                           onClick={async () => {
-                            if (!newBrandName.trim()) return
+                            if (!newBrandName.trim() || addingBrand) return
                             setAddingBrand(true)
                             const ok = await onAddBrand(newBrandName.trim())
                             setAddingBrand(false)
@@ -533,89 +531,87 @@ function AccessoryFormDialog({
                             }
                           }}
                         >
-                          {addingBrand ? "..." : "Save"}
+                          {addingBrand ? "Saving..." : "Add Brand"}
                         </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-9 px-2"
-                          onClick={() => { setShowNewBrand(false); setNewBrandName("") }}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <p className="text-[10px] text-slate-400">Press Enter or click Save to add</p>
-                    </div>
-                  )}
-                  {errors.brand && <p className="text-xs text-red-500">{errors.brand.message}</p>}
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="sku" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Hash className="w-3 h-3" /> SKU <span className="text-red-500">*</span>
+                    <Hash className="w-3 h-3" /> SKU <span className="text-slate-400 font-normal text-[10px]">(optional)</span>
                   </Label>
                   <Input id="sku" placeholder="e.g. EAR-SAM-0001" {...register("sku")}
-                    className={cn("bg-slate-50 h-9 text-sm", errors.sku && "border-red-400")} />
-                  {errors.sku && <p className="text-xs text-red-500">{errors.sku.message}</p>}
+                    className="bg-slate-50 h-9 text-sm" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                     <Layers className="w-3 h-3" /> Category <span className="text-red-500">*</span>
                   </Label>
-                  {!showNewCategory ? (
-                    <>
-                      <Select defaultValue={editingAccessory?.category ?? ""}
-                        onValueChange={val => setValue("category", val, { shouldValidate: true })}>
-                        <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.category && "border-red-400")}>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map(cat => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <button
-                        type="button"
-                        onClick={() => setShowNewCategory(true)}
-                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" /> Add New Category
-                      </button>
-                    </>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="e.g. Tablets"
-                          value={newCategoryName}
-                          onChange={e => setNewCategoryName(e.target.value)}
-                          className="bg-slate-50 h-9 text-sm flex-1"
-                          autoFocus
-                          onKeyDown={async (e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault()
-                              if (!newCategoryName.trim()) return
-                              setAddingCategory(true)
-                              const ok = await onAddCategory(newCategoryName.trim())
-                              setAddingCategory(false)
-                              if (ok) {
-                                setValue("category", newCategoryName.trim(), { shouldValidate: true })
-                                setNewCategoryName("")
-                                setShowNewCategory(false)
+                  <SearchableSelect
+                    value={watch("category") ?? ""}
+                    onChange={val => setValue("category", val, { shouldValidate: true })}
+                    options={categories}
+                    placeholder="Search category..."
+                    allowCustom
+                    customWarning="This category is not in your list. Use 'Add permanently' to save it for future use."
+                    onAddNew={async (name) => { await onAddCategory(name) }}
+                    error={!!errors.category}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewCategory(true); setNewCategoryName("") }}
+                    className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add New Category
+                  </button>
+                  {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
+
+                  {/* Quick Add Category Modal */}
+                  <Dialog open={showNewCategory} onOpenChange={setShowNewCategory}>
+                    <DialogContent className="max-w-xs">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm font-bold">Add New Category</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-3 py-1">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Category Name <span className="text-red-500">*</span></Label>
+                          <Input
+                            placeholder="e.g. Earphones, Cases, Chargers"
+                            value={newCategoryName}
+                            onChange={e => setNewCategoryName(e.target.value)}
+                            className="h-8 text-xs"
+                            autoFocus
+                            onKeyDown={async (e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                if (!newCategoryName.trim() || addingCategory) return
+                                setAddingCategory(true)
+                                const ok = await onAddCategory(newCategoryName.trim())
+                                setAddingCategory(false)
+                                if (ok) {
+                                  setValue("category", newCategoryName.trim(), { shouldValidate: true })
+                                  setNewCategoryName("")
+                                  setShowNewCategory(false)
+                                }
                               }
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-slate-400">Saved as an accessory category only — will not appear in mobile phone categories.</p>
+                      </div>
+                      <DialogFooter className="gap-2">
+                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNewCategory(false)}>
+                          Cancel
+                        </Button>
                         <Button
-                          type="button"
                           size="sm"
+                          className="h-8 text-xs"
                           disabled={!newCategoryName.trim() || addingCategory}
-                          className="h-9 px-3"
                           onClick={async () => {
-                            if (!newCategoryName.trim()) return
+                            if (!newCategoryName.trim() || addingCategory) return
                             setAddingCategory(true)
                             const ok = await onAddCategory(newCategoryName.trim())
                             setAddingCategory(false)
@@ -626,22 +622,11 @@ function AccessoryFormDialog({
                             }
                           }}
                         >
-                          {addingCategory ? "..." : "Save"}
+                          {addingCategory ? "Saving..." : "Add Category"}
                         </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-9 px-2"
-                          onClick={() => { setShowNewCategory(false); setNewCategoryName("") }}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <p className="text-[10px] text-slate-400">Press Enter or click Save to add</p>
-                    </div>
-                  )}
-                  {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </div>
@@ -708,160 +693,17 @@ function AccessoryFormDialog({
             </div>
           </div>
 
-          {/* ── Section 3: Pricing ── */}
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-b border-emerald-100">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Pricing</span>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="purchasePrice" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <ArrowDownLeft className="w-3 h-3 text-red-400" /> Buy Price (₨) <span className="text-red-500">*</span>
-                  </Label>
-                  <Input id="purchasePrice" type="number" min={0} placeholder="0" {...register("purchasePrice")}
-                    className={cn("bg-slate-50 h-9 text-sm", errors.purchasePrice && "border-red-400")} />
-                  {errors.purchasePrice && <p className="text-xs text-red-500">{errors.purchasePrice.message}</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="sellingPrice" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <ArrowUpRight className="w-3 h-3 text-emerald-500" /> Sell Price (₨) <span className="text-red-500">*</span>
-                  </Label>
-                  <Input id="sellingPrice" type="number" min={0} placeholder="0" {...register("sellingPrice")}
-                    className={cn("bg-slate-50 h-9 text-sm", errors.sellingPrice && "border-red-400")} />
-                  {errors.sellingPrice && <p className="text-xs text-red-500">{errors.sellingPrice.message}</p>}
-                </div>
-              </div>
-              {/* Live margin banner */}
-              {liveMargin !== null && (
-                <div className={cn(
-                  "flex items-center justify-between rounded-lg px-4 py-2.5 border",
-                  liveMargin >= 25 ? "bg-emerald-50 border-emerald-200" :
-                  liveMargin >= 15 ? "bg-blue-50 border-blue-200" :
-                  liveMargin >= 0  ? "bg-amber-50 border-amber-200" :
-                                     "bg-red-50 border-red-200"
-                )}>
-                  <span className="text-xs font-semibold text-slate-500">Live Margin</span>
-                  <span className={cn(
-                    "text-lg font-bold",
-                    liveMargin >= 25 ? "text-emerald-700" :
-                    liveMargin >= 15 ? "text-blue-700" :
-                    liveMargin >= 0  ? "text-amber-700" :
-                                       "text-red-700"
-                  )}>{liveMargin.toFixed(1)}%</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Section 3: Inventory & Details ── */}
+          {/* ── Section 3: Notes & Details ── */}
           <div className="rounded-xl border border-slate-200 overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-2 bg-violet-50 border-b border-violet-100">
-              <Package className="w-3.5 h-3.5 text-violet-600" />
-              <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Inventory & Details</span>
+              <FileText className="w-3.5 h-3.5 text-violet-600" />
+              <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Notes & Details</span>
             </div>
             <div className="p-4 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Truck className="w-3 h-3" /> Supplier <span className="text-red-500">*</span>
-                  </Label>
-                  {!showNewSupplier ? (
-                    <>
-                      <Select defaultValue={editingAccessory?.supplierId ?? ""}
-                        onValueChange={val => setValue("supplierId", val, { shouldValidate: true })}>
-                        <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.supplierId && "border-red-400")}>
-                          <SelectValue placeholder="Select supplier" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {activeSuppliers.map(s => (
-                            <SelectItem key={s.id} value={s.id}>{s.companyName}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <button
-                        type="button"
-                        onClick={() => setShowNewSupplier(true)}
-                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" /> Add New Supplier
-                      </button>
-                    </>
-                  ) : (
-                    <div className="space-y-2">
-                      <Input
-                        placeholder="Supplier name"
-                        value={newSupplierName}
-                        onChange={e => setNewSupplierName(e.target.value)}
-                        className="bg-slate-50 h-9 text-sm"
-                        autoFocus
-                      />
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Phone (e.g. 0300-1234567)"
-                          value={newSupplierPhone}
-                          onChange={e => setNewSupplierPhone(e.target.value)}
-                          className="bg-slate-50 h-9 text-sm flex-1"
-                          onKeyDown={async (e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault()
-                              if (!newSupplierName.trim()) return
-                              setAddingSupplier(true)
-                              const sup = await onAddSupplier(newSupplierName.trim(), newSupplierPhone.trim())
-                              setAddingSupplier(false)
-                              if (sup) {
-                                setValue("supplierId", sup.id, { shouldValidate: true })
-                                setNewSupplierName("")
-                                setNewSupplierPhone("")
-                                setShowNewSupplier(false)
-                              }
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={!newSupplierName.trim() || addingSupplier}
-                          className="h-9 px-3"
-                          onClick={async () => {
-                            if (!newSupplierName.trim()) return
-                            setAddingSupplier(true)
-                            const sup = await onAddSupplier(newSupplierName.trim(), newSupplierPhone.trim())
-                            setAddingSupplier(false)
-                            if (sup) {
-                              setValue("supplierId", sup.id, { shouldValidate: true })
-                              setNewSupplierName("")
-                              setNewSupplierPhone("")
-                              setShowNewSupplier(false)
-                            }
-                          }}
-                        >
-                          {addingSupplier ? "..." : "Save"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-9 px-2"
-                          onClick={() => { setShowNewSupplier(false); setNewSupplierName(""); setNewSupplierPhone("") }}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <p className="text-[10px] text-slate-400">Enter name & phone, then Save</p>
-                    </div>
-                  )}
-                  {errors.supplierId && <p className="text-xs text-red-500">{errors.supplierId.message}</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="stock" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Package className="w-3 h-3" /> Stock Qty <span className="text-red-500">*</span>
-                  </Label>
-                  <Input id="stock" type="number" min={0} placeholder="0" {...register("stock")}
-                    className={cn("bg-slate-50 h-9 text-sm", errors.stock && "border-red-400")} />
-                  {errors.stock && <p className="text-xs text-red-500">{errors.stock.message}</p>}
-                </div>
+              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5">
+                <p className="text-[11px] text-blue-700 font-medium">
+                  Price and stock are set when you purchase this accessory from a supplier on the Purchase page.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
@@ -903,7 +745,6 @@ function AccessoryFormDialog({
 
 export default function AccessoriesPage() {
   const [accessoryList, setAccessoryList] = useState<Accessory[]>([])
-  const [supplierList, setSupplierList] = useState<Supplier[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [brands, setBrands] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -926,7 +767,7 @@ export default function AccessoriesPage() {
         .from("categories")
         .select("name")
         .eq("tenant_id", tenantId)
-        .eq("status", "Active")
+        .in("type", ["Accessory", "Both"])
         .order("name")
       if (data) {
         setCategories(data.map((c: { name: string }) => c.name))
@@ -999,63 +840,12 @@ export default function AccessoriesPage() {
     }
   }
 
-  // ─── Add supplier inline ────────────────────────────────────────────────
-
-  async function handleAddSupplier(name: string, phone: string): Promise<Supplier | null> {
-    try {
-      const tenantId = await getTenantId()
-      const { data, error } = await supabase.from("suppliers").insert({
-        tenant_id: tenantId,
-        company_name: name,
-        contact_person: name,
-        phone: phone || "",
-        email: "",
-        address: "",
-        city: "",
-        status: "Active",
-        rating: 0,
-        total_purchases: 0,
-        outstanding_balance: 0,
-      }).select().single()
-
-      if (error || !data) {
-        toast.error("Failed to add supplier: " + (error?.message || "Unknown error"))
-        return null
-      }
-
-      const newSupplier: Supplier = {
-        id: data.id,
-        companyName: data.company_name,
-        contactPerson: data.contact_person,
-        phone: data.phone,
-        email: data.email ?? "",
-        address: data.address ?? "",
-        city: data.city ?? "",
-        status: data.status,
-        rating: data.rating ?? 0,
-        totalPurchases: 0,
-        outstandingBalance: 0,
-      }
-
-      setSupplierList(prev => [...prev, newSupplier])
-      toast.success(`Supplier "${name}" added!`)
-      return newSupplier
-    } catch {
-      toast.error("Failed to add supplier")
-      return null
-    }
-  }
-
   // ─── Fetch data from Supabase ─────────────────────────────────────────────
 
   async function fetchData() {
     try {
-      const [accessoriesRes, suppliersRes] = await Promise.all([
-        getAccessories(),
-        getSuppliers(),
-      ])
+      const accessoriesRes = await getAccessories()
       setAccessoryList(accessoriesRes)
-      setSupplierList(suppliersRes)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
@@ -1136,37 +926,25 @@ export default function AccessoriesPage() {
 
   async function handleFormSubmit(data: AccessoryFormOutput, imageUrl: string) {
     try {
+      const catalogData = {
+        name: data.name,
+        brand: data.brand,
+        sku: data.sku,
+        category: data.category,
+        purchasePrice: 0,
+        sellingPrice: 0,
+        stock: 0,
+        supplierId: "",
+        compatibleModels: data.compatibleModels ?? [],
+        description: data.description || undefined,
+        image: imageUrl || undefined,
+      }
       if (editingAccessory) {
-        await updateAccessory(editingAccessory.id, {
-          name: data.name,
-          brand: data.brand,
-          sku: data.sku,
-          category: data.category,
-          purchasePrice: data.purchasePrice,
-          sellingPrice: data.sellingPrice,
-          stock: data.stock,
-          supplierId: data.supplierId,
-          compatibleModels: data.compatibleModels ?? [],
-          description: data.description || undefined,
-          image: imageUrl || undefined,
-        })
+        await updateAccessory(editingAccessory.id, catalogData)
         toast.success("Accessory updated successfully")
       } else {
-        await createAccessory({
-          name: data.name,
-          brand: data.brand,
-          sku: data.sku,
-          category: data.category,
-          purchasePrice: data.purchasePrice,
-          sellingPrice: data.sellingPrice,
-          stock: data.stock,
-          supplierId: data.supplierId,
-          compatibleModels: data.compatibleModels ?? [],
-          description: data.description || undefined,
-          image: imageUrl || undefined,
-          dateAdded: format(new Date(), "yyyy-MM-dd"),
-        })
-        toast.success("Accessory added successfully")
+        await createAccessory({ ...catalogData, dateAdded: format(new Date(), "yyyy-MM-dd") })
+        toast.success("Accessory added to catalog")
       }
       await fetchData()
     } catch (err: unknown) {
@@ -1328,6 +1106,8 @@ export default function AccessoriesPage() {
       <PageHeader
         title="Accessories"
         description="Manage your accessories inventory"
+        icon={<Headphones />}
+        iconBg="bg-emerald-600"
         badge={
           <Badge variant="secondary" className="text-sm px-3 py-1">
             {accessoryList.length} products
@@ -1638,12 +1418,10 @@ export default function AccessoriesPage() {
         }}
         editingAccessory={editingAccessory}
         onSubmit={handleFormSubmit}
-        suppliers={supplierList}
         categories={categories}
         onAddCategory={handleAddCategory}
         brands={brands}
         onAddBrand={handleAddBrand}
-        onAddSupplier={handleAddSupplier}
       />
 
       {/* Delete Confirmation */}

@@ -30,7 +30,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 
 // ── Tier styling ──────────────────────────────────────────────────────────────
 const tierStyles: Record<string, { badge: string; bg: string; border: string; icon: string }> = {
@@ -176,7 +176,7 @@ export default function CustomerDetailPage() {
       const sale      = payInvoice ? customerSales.find(s => s.invoiceNumber === payInvoice) : null
       const refNumber = payInvoice || `PAYMENT-${Date.now()}`
       const { error } = await supabase.from("payments").insert({
-        tenant_id: tenantId, date: new Date().toISOString().split("T")[0], type: "Received",
+        tenant_id: tenantId, date: todayPKT(), type: "Received",
         entity_type: "Customer", entity_id: customer.id, entity_name: customer.name,
         reference_type: "Sale", reference_number: refNumber, amount, method: payMethod,
         status: "Completed", notes: payNotes || `Payment received from ${customer.name}`,
