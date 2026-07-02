@@ -11,7 +11,7 @@ interface SearchableSelectProps {
   placeholder?: string
   allowCustom?: boolean
   customWarning?: string
-  onAddNew?: (val: string) => Promise<void> | void
+  onAddNew?: (val: string) => Promise<boolean | void> | boolean | void
   disabled?: boolean
   error?: boolean
   className?: string
@@ -77,7 +77,10 @@ export function SearchableSelect({
   async function handleAddNew() {
     const trimmed = query.trim()
     if (!trimmed) return
-    if (onAddNew) await onAddNew(trimmed)
+    if (onAddNew) {
+      const result = await onAddNew(trimmed)
+      if (result === false) return  // handler signalled failure — don't select
+    }
     handleSelect(trimmed)
   }
 

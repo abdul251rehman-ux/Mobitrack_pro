@@ -30,12 +30,6 @@ interface AppUser {
   role: UserRole; status: UserStatus; lastLogin: string
 }
 
-const initialUsers: AppUser[] = [
-  { id: "u1", name: "Ahmed Khan",   email: "ahmed@mobitrack.com",  role: "Admin",   status: "Active",   lastLogin: "2026-03-12" },
-  { id: "u2", name: "Fatima Malik", email: "fatima@mobitrack.com", role: "Manager", status: "Active",   lastLogin: "2026-03-11" },
-  { id: "u3", name: "Ali Hassan",   email: "ali@mobitrack.com",    role: "Cashier", status: "Active",   lastLogin: "2026-03-10" },
-  { id: "u4", name: "Sara Ahmed",   email: "sara@mobitrack.com",   role: "Cashier", status: "Inactive", lastLogin: "2026-02-28" },
-]
 
 // ── Zod schemas ────────────────────────────────────────────────────────────────
 const shopSchema = z.object({
@@ -116,6 +110,8 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [customShopCity, setCustomShopCity] = useState("")
+  const watchedCity = shopForm.watch("city")
 
   function handleLogoFile(file: File) {
     if (!file) return
@@ -134,7 +130,7 @@ export default function SettingsPage() {
   })
   const [showLogoOnInvoice, setShowLogoOnInvoice] = useState(true)
 
-  const [users, setUsers] = useState<AppUser[]>(initialUsers)
+  const [users, setUsers] = useState<AppUser[]>([])
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [editUser, setEditUser] = useState<AppUser | null>(null)
@@ -156,14 +152,12 @@ export default function SettingsPage() {
         taxForm.reset({ taxName: "GST", taxRate: settings.taxRate ?? 17 })
         setTaxEnabled(settings.taxEnabled ?? true)
         invoiceForm.reset({ prefix: settings.invoicePrefix || "INV", nextNumber: "2026-0053", footerText: settings.receiptFooter || "Thank you for your business!", termsText: "All sales are final. No returns after 7 days." })
-        if (profiles.length > 0) {
-          setUsers(profiles.map((p: any) => ({
-            id: p.id, name: p.name || "Unknown", email: p.email || "",
-            role: (p.role || "Cashier") as UserRole,
-            status: (p.status?.toLowerCase() === "active" ? "Active" : "Inactive") as UserStatus,
-            lastLogin: p.lastLogin || "Never",
-          })))
-        }
+        setUsers(profiles.map((p: any) => ({
+          id: p.id, name: p.name || "Unknown", email: p.email || "",
+          role: (p.role || "Cashier") as UserRole,
+          status: (p.status?.toLowerCase() === "active" ? "Active" : "Inactive") as UserStatus,
+          lastLogin: p.lastLogin || "Never",
+        })))
       } catch (err) {
         toast.error("Failed to load settings"); console.error(err)
       } finally {
@@ -174,9 +168,11 @@ export default function SettingsPage() {
   }, [])
 
   async function onShopSubmit(data: ShopForm) {
+    if (data.city === "Other" && !customShopCity.trim()) { toast.error("Please enter a city name"); return }
+    const finalCity = data.city === "Other" ? customShopCity.trim() : data.city
     setSaving(true)
     try {
-      await updateTenant({ name: data.shopName, address: data.address, city: data.city, phone: data.phone, email: data.email, currency: data.currency, logo: logoPreview ?? "" })
+      await updateTenant({ name: data.shopName, address: data.address, city: finalCity, phone: data.phone, email: data.email, currency: data.currency, logo: logoPreview ?? "" })
       toast.success("Shop profile saved successfully")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save shop profile")
@@ -307,14 +303,22 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">City</Label>
-                      <Select defaultValue={shopForm.getValues("city")} onValueChange={(v) => shopForm.setValue("city", v)}>
+                      <Select defaultValue={shopForm.getValues("city")} onValueChange={(v) => { shopForm.setValue("city", v); if (v !== "Other") setCustomShopCity("") }}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select city" /></SelectTrigger>
-                        <SelectContent>
-                          {["Lahore","Karachi","Islamabad","Rawalpindi","Faisalabad","Multan","Peshawar","Quetta"].map((c) => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                        <SelectContent className="max-h-60">
+                          {["Lahore","Karachi","Islamabad","Rawalpindi","Faisalabad","Peshawar","Multan","Quetta","Sialkot","Gujranwala","Bahawalpur","Sargodha","Sukkur","Larkana","Sheikhupura","Rahim Yar Khan","Jhang","Dera Ghazi Khan","Gujrat","Mirpur","Hyderabad","Abbottabad","Mardan","Kasur","Dera Ismail Khan","Okara","Mingora","Nawabshah","Chiniot","Sahiwal","Muzaffarabad","Turbat","Wah Cantt","Attock","Jhelum","Mandi Bahauddin","Hafizabad","Narowal","Muzaffargarh","Layyah","Mianwali","Bhakkar","Toba Tek Singh","Pakpattan","Vehari","Other"].map((c) => (
+                            <SelectItem key={c} value={c} className={c === "Other" ? "font-medium text-blue-600 border-t border-slate-100 mt-1 pt-1" : ""}>{c}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      {watchedCity === "Other" && (
+                        <Input
+                          placeholder="Enter city name..."
+                          value={customShopCity}
+                          onChange={e => setCustomShopCity(e.target.value)}
+                          className={`h-8 text-xs mt-1 ${!customShopCity.trim() ? "border-amber-400" : ""}`}
+                        />
+                      )}
                     </div>
                   </div>
 

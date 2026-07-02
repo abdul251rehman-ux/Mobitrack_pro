@@ -69,6 +69,7 @@ interface AuthContextType {
 }
 
 const STORAGE_KEY = "mobitrack_session"
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12 hours
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
@@ -78,12 +79,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // On mount: restore session from localStorage
+  // On mount: restore session from localStorage (expires after SESSION_TTL_MS)
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
-        setUser(JSON.parse(saved))
+        const parsed = JSON.parse(saved)
+        const loginedAt: number = parsed._loginedAt ?? 0
+        const expired = Date.now() - loginedAt > SESSION_TTL_MS
+        if (expired) {
+          localStorage.removeItem(STORAGE_KEY)
+        } else {
+          const { _loginedAt: _, ...authUser } = parsed
+          setUser(authUser)
+        }
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY)
@@ -133,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setUser(authUser)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...authUser, _loginedAt: Date.now() }))
       return true
     } catch (err) {
       console.error("Login exception:", err)
@@ -177,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { success: false, error: "Failed to create shop: " + tenantErr?.message }
         }
 
-        // Create profile with password
+        // Create profile
         const { error: profileErr } = await supabase
           .from("profiles")
           .insert({
@@ -199,6 +208,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Create tenant settings
         await supabase.from("tenant_settings").insert({ tenant_id: tenant.id })
+
+        // Seed default catalog for this tenant
+        const tid = tenant.id
+        await Promise.all([
+          supabase.from("brands").insert([
+            { tenant_id: tid, name: "Samsung",  logo_initials: "SA", country: "South Korea",  status: "Active", is_system: true },
+            { tenant_id: tid, name: "Apple",    logo_initials: "AP", country: "United States", status: "Active", is_system: true },
+            { tenant_id: tid, name: "Xiaomi",   logo_initials: "XI", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Oppo",     logo_initials: "OP", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Vivo",     logo_initials: "VI", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Realme",   logo_initials: "RE", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "OnePlus",  logo_initials: "ON", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Huawei",   logo_initials: "HW", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Nokia",    logo_initials: "NO", country: "Finland",       status: "Active", is_system: true },
+            { tenant_id: tid, name: "Tecno",    logo_initials: "TE", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Infinix",  logo_initials: "IN", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Itel",     logo_initials: "IT", country: "China",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Google",   logo_initials: "GO", country: "United States", status: "Active", is_system: true },
+            { tenant_id: tid, name: "Sony",     logo_initials: "SO", country: "Japan",         status: "Active", is_system: true },
+            { tenant_id: tid, name: "Motorola", logo_initials: "MO", country: "United States", status: "Active", is_system: true },
+          ]),
+          supabase.from("storage_options").insert([
+            { tenant_id: tid, name: "16GB",  is_system: true },
+            { tenant_id: tid, name: "32GB",  is_system: true },
+            { tenant_id: tid, name: "64GB",  is_system: true },
+            { tenant_id: tid, name: "128GB", is_system: true },
+            { tenant_id: tid, name: "256GB", is_system: true },
+            { tenant_id: tid, name: "512GB", is_system: true },
+            { tenant_id: tid, name: "1TB",   is_system: true },
+          ]),
+          supabase.from("ram_options").insert([
+            { tenant_id: tid, name: "2GB",  is_system: true },
+            { tenant_id: tid, name: "3GB",  is_system: true },
+            { tenant_id: tid, name: "4GB",  is_system: true },
+            { tenant_id: tid, name: "6GB",  is_system: true },
+            { tenant_id: tid, name: "8GB",  is_system: true },
+            { tenant_id: tid, name: "12GB", is_system: true },
+            { tenant_id: tid, name: "16GB", is_system: true },
+          ]),
+          supabase.from("colors").insert([
+            { tenant_id: tid, name: "Black",     is_system: true },
+            { tenant_id: tid, name: "White",     is_system: true },
+            { tenant_id: tid, name: "Gold",      is_system: true },
+            { tenant_id: tid, name: "Silver",    is_system: true },
+            { tenant_id: tid, name: "Blue",      is_system: true },
+            { tenant_id: tid, name: "Green",     is_system: true },
+            { tenant_id: tid, name: "Red",       is_system: true },
+            { tenant_id: tid, name: "Purple",    is_system: true },
+            { tenant_id: tid, name: "Pink",      is_system: true },
+            { tenant_id: tid, name: "Gray",      is_system: true },
+            { tenant_id: tid, name: "Midnight",  is_system: true },
+            { tenant_id: tid, name: "Starlight", is_system: true },
+          ]),
+        ])
 
         return { success: true }
       } catch (err) {

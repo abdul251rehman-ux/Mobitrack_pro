@@ -30,21 +30,16 @@ import {
   DialogTitle, DialogDescription,
 } from "@/components/ui/dialog"
 import { formatCurrency } from "@/lib/utils"
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-const CITIES = [
-  "Lahore", "Karachi", "Islamabad", "Faisalabad",
-  "Rawalpindi", "Peshawar", "Multan",
-] as const
+import { CITIES } from "@/lib/constants"
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 const supplierSchema = z.object({
   companyName:   z.string().min(2, "Company name must be at least 2 characters"),
   contactPerson: z.string().min(2, "Contact person name required"),
   phone:         z.string().min(7, "Valid phone number required"),
-  email:         z.string().email("Valid email required"),
+  email:         z.string().email("Valid email").optional().or(z.literal("")),
   address:       z.string().min(5, "Address required"),
-  city:          z.enum(["Lahore","Karachi","Islamabad","Faisalabad","Rawalpindi","Peshawar","Multan"]),
+  city:          z.string().min(1, "City required"),
   notes:         z.string().optional(),
   status:        z.enum(["Active","Inactive"]),
 })
@@ -222,8 +217,24 @@ function SupplierFormDialog({
   const statusValue = watch("status")
   const cityValue   = watch("city")
 
+  // When editing a supplier whose city isn't in the preset list, treat as "Other"
+  const [customCity, setCustomCity] = useState("")
+  useEffect(() => {
+    if (editing?.city && !CITIES.slice(0, -1).includes(editing.city as any)) {
+      setValue("city", "Other")
+      setCustomCity(editing.city)
+    } else {
+      setCustomCity("")
+    }
+  }, [editing, setValue])
+
   const onSubmit = (data: SupplierForm) => {
-    onSave(data, editing?.id)
+    if (data.city === "Other" && !customCity.trim()) {
+      toast.error("Please enter a city name")
+      return
+    }
+    const finalCity = data.city === "Other" ? customCity.trim() : data.city
+    onSave({ ...data, city: finalCity }, editing?.id)
   }
 
   return (
@@ -256,7 +267,7 @@ function SupplierFormDialog({
               {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
             </div>
             <div className="space-y-1">
-              <Label className="text-xs" htmlFor="email">Email <span className="text-red-500">*</span></Label>
+              <Label className="text-xs" htmlFor="email">Email <span className="text-slate-400 text-[10px]">(optional)</span></Label>
               <Input id="email" type="email" placeholder="contact@company.pk" {...register("email")} className={`h-8 text-xs ${errors.email ? "border-red-400" : ""}`} />
               {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
             </div>
@@ -268,10 +279,23 @@ function SupplierFormDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">City <span className="text-red-500">*</span></Label>
-            <Select value={cityValue} onValueChange={(v) => setValue("city", v as SupplierForm["city"])}>
+            <Select value={cityValue} onValueChange={(v) => { setValue("city", v, { shouldValidate: true }); if (v !== "Other") setCustomCity("") }}>
               <SelectTrigger className={`h-8 text-xs ${errors.city ? "border-red-400" : ""}`}><SelectValue placeholder="Select city" /></SelectTrigger>
-              <SelectContent>{CITIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}</SelectContent>
+              <SelectContent className="max-h-60">
+                {CITIES.map((c) => (
+                  <SelectItem key={c} value={c} className={c === "Other" ? "font-medium text-blue-600 border-t border-slate-100 mt-1 pt-1" : ""}>{c}</SelectItem>
+                ))}
+              </SelectContent>
             </Select>
+            {cityValue === "Other" && (
+              <Input
+                placeholder="Enter city name..."
+                value={customCity}
+                onChange={e => setCustomCity(e.target.value)}
+                className={`h-8 text-xs mt-1 ${!customCity.trim() ? "border-amber-400" : ""}`}
+                autoFocus
+              />
+            )}
             {errors.city && <p className="text-xs text-red-500">{errors.city.message}</p>}
           </div>
           <div className="space-y-1">
@@ -420,7 +444,7 @@ export default function SuppliersPage() {
           companyName:        data.companyName,
           contactPerson:      data.contactPerson,
           phone:              data.phone,
-          email:              data.email,
+          email:              data.email || "",
           address:            data.address,
           city:               data.city,
           totalPurchases:     0,

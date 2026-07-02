@@ -68,6 +68,7 @@ export async function updateCustomer(id: string, data: Partial<Customer>): Promi
       .from('customers')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select()
       .single()
 
@@ -80,10 +81,12 @@ export async function updateCustomer(id: string, data: Partial<Customer>): Promi
 
 export async function deleteCustomer(id: string): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const { error } = await supabase
       .from('customers')
       .delete()
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to delete customer: ${error.message}`)
   } catch (err) {

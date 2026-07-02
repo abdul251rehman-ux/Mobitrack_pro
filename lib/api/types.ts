@@ -182,12 +182,16 @@ export interface DbCustomer {
   tenant_id: string
   name: string
   phone: string
+  cnic: string | null
+  whatsapp: string | null
   email: string | null
   address: string | null
+  city: string | null
   total_purchases: number
   total_spent: number
-  last_purchase_date: string
+  last_purchase_date: string | null
   loyalty_tier: string
+  credit_limit: number | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -209,6 +213,7 @@ export interface DbSale {
   amount_received: number
   change_due: number
   status: string
+  warranty_days: number | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -225,6 +230,7 @@ export interface DbSaleItem {
   unit_price: number
   discount: number
   line_total: number
+  imei: string | null
 }
 
 export interface DbPurchase {
@@ -257,6 +263,7 @@ export interface DbPurchaseItem {
   product_name: string
   product_type: string
   quantity: number
+  returned_qty: number
   unit_cost: number
   total: number
   imeis: string[] | null
@@ -642,7 +649,13 @@ export interface DbUsedPhone {
   functional_issues: string[] | null
   accessories_included: string[] | null
   source_type: string | null
+  source_customer_id: string | null
   source_customer_name: string | null
+  source_phone: string | null
+  source_cnic: string | null
+  source_address: string | null
+  supplier_id: string | null
+  supplier_name: string | null
   pta_status: string | null
   warranty_days: number | null
   condition_notes: string | null
@@ -775,16 +788,25 @@ export function toDbSupplier(s: Partial<Supplier>, tenantId: string): Partial<Db
 }
 
 export function toCustomer(db: DbCustomer): Customer {
+  const totalSpent = db.total_spent ?? 0
+  const tier: Customer['loyaltyTier'] =
+    totalSpent >= 500000 ? "Platinum" :
+    totalSpent >= 200000 ? "Gold" :
+    totalSpent >= 50000  ? "Silver" : "Bronze"
   return {
     id: db.id,
     name: db.name,
     phone: db.phone,
+    cnic: db.cnic ?? undefined,
+    whatsapp: db.whatsapp ?? undefined,
     email: db.email ?? undefined,
     address: db.address ?? undefined,
+    city: db.city ?? undefined,
     totalPurchases: db.total_purchases,
-    totalSpent: db.total_spent,
-    lastPurchaseDate: db.last_purchase_date,
-    loyaltyTier: db.loyalty_tier as Customer['loyaltyTier'],
+    totalSpent,
+    lastPurchaseDate: db.last_purchase_date ?? undefined,
+    loyaltyTier: tier,
+    creditLimit: db.credit_limit ?? undefined,
     notes: db.notes ?? undefined,
   }
 }
@@ -793,12 +815,21 @@ export function toDbCustomer(c: Partial<Customer>, tenantId: string): Partial<Db
   const db: Record<string, unknown> = { tenant_id: tenantId }
   if (c.name !== undefined) db.name = c.name
   if (c.phone !== undefined) db.phone = c.phone
+  if (c.cnic !== undefined) db.cnic = c.cnic || null
+  if (c.whatsapp !== undefined) db.whatsapp = c.whatsapp || null
   if (c.email !== undefined) db.email = c.email || null
   if (c.address !== undefined) db.address = c.address || null
+  if (c.city !== undefined) db.city = c.city || null
   if (c.totalPurchases !== undefined) db.total_purchases = c.totalPurchases
-  if (c.totalSpent !== undefined) db.total_spent = c.totalSpent
-  if (c.lastPurchaseDate !== undefined) db.last_purchase_date = c.lastPurchaseDate
-  if (c.loyaltyTier !== undefined) db.loyalty_tier = c.loyaltyTier
+  if (c.totalSpent !== undefined) {
+    db.total_spent = c.totalSpent
+    // Auto-calculate loyalty tier from total spent
+    const s = c.totalSpent
+    db.loyalty_tier = s >= 500000 ? "Platinum" : s >= 200000 ? "Gold" : s >= 50000 ? "Silver" : "Bronze"
+  }
+  if (c.lastPurchaseDate !== undefined) db.last_purchase_date = c.lastPurchaseDate || null
+  if (c.loyaltyTier !== undefined && c.totalSpent === undefined) db.loyalty_tier = c.loyaltyTier
+  if (c.creditLimit !== undefined) db.credit_limit = c.creditLimit ?? null
   if (c.notes !== undefined) db.notes = c.notes || null
   return db as Partial<DbCustomer>
 }
@@ -820,6 +851,7 @@ export function toSale(db: DbSale, items: DbSaleItem[]): Sale {
     amountReceived: db.amount_received,
     changeDue: db.change_due,
     status: db.status as Sale['status'],
+    warrantyDays: db.warranty_days ?? undefined,
     notes: db.notes ?? undefined,
   }
 }
@@ -833,6 +865,7 @@ export function toSaleItem(db: DbSaleItem): SaleItem {
     unitPrice: db.unit_price,
     discount: db.discount,
     lineTotal: db.line_total,
+    imei: db.imei ?? undefined,
   }
 }
 
@@ -851,6 +884,7 @@ export function toDbSale(s: Partial<Sale>, tenantId: string): Partial<DbSale> {
   if (s.amountReceived !== undefined) db.amount_received = s.amountReceived
   if (s.changeDue !== undefined) db.change_due = s.changeDue
   if (s.status !== undefined) db.status = s.status
+  if (s.warrantyDays !== undefined) db.warranty_days = s.warrantyDays ?? null
   if (s.notes !== undefined) db.notes = s.notes || null
   return db as Partial<DbSale>
 }
@@ -893,10 +927,12 @@ export function toPurchase(db: DbPurchase, items: DbPurchaseItem[]): Purchase {
 
 export function toPurchaseItem(db: DbPurchaseItem): PurchaseItem {
   return {
+    id: db.id,
     productId: db.product_id,
     productName: db.product_name,
     productType: db.product_type as PurchaseItem['productType'],
     quantity: db.quantity,
+    returnedQty: db.returned_qty ?? 0,
     unitCost: db.unit_cost,
     total: db.total,
     imeis: db.imeis ?? undefined,
@@ -931,6 +967,7 @@ export function toDbPurchaseItem(item: PurchaseItem, purchaseId: string, tenantI
     product_name: item.productName,
     product_type: item.productType,
     quantity: item.quantity,
+    returned_qty: item.returnedQty ?? 0,
     unit_cost: item.unitCost,
     total: item.total,
     imeis: item.imeis ?? undefined,
@@ -1523,8 +1560,14 @@ export function toUsedPhone(db: DbUsedPhone): UsedPhone {
     battery_health: db.battery_health ?? undefined,
     functional_issues: db.functional_issues ?? [],
     accessories_included: db.accessories_included ?? [],
-    source_type: (db.source_type ?? 'purchased') as UsedPhone['source_type'],
+    source_type: (db.source_type ?? 'walk_in') as UsedPhone['source_type'],
+    source_customer_id: db.source_customer_id ?? undefined,
     source_customer_name: db.source_customer_name ?? undefined,
+    source_phone: db.source_phone ?? undefined,
+    source_cnic: db.source_cnic ?? undefined,
+    source_address: db.source_address ?? undefined,
+    supplier_id: db.supplier_id ?? undefined,
+    supplier_name: db.supplier_name ?? undefined,
     purchase_price: db.purchase_price,
     refurbishment_cost: db.refurbishment_cost ?? 0,
     selling_price: db.selling_price,

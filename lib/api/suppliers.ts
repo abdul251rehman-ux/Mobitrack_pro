@@ -68,6 +68,7 @@ export async function updateSupplier(id: string, data: Partial<Supplier>): Promi
       .from('suppliers')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select()
       .single()
 
@@ -80,10 +81,12 @@ export async function updateSupplier(id: string, data: Partial<Supplier>): Promi
 
 export async function deleteSupplier(id: string): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const { error } = await supabase
       .from('suppliers')
       .delete()
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to delete supplier: ${error.message}`)
   } catch (err) {

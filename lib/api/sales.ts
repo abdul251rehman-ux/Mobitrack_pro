@@ -129,10 +129,12 @@ export async function createSale(
 
 export async function updateSaleStatus(id: string, status: string): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const { error } = await supabase
       .from('sales')
       .update({ status })
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to update sale status: ${error.message}`)
   } catch (err) {

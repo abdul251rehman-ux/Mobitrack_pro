@@ -131,6 +131,7 @@ export async function createReturn(
 
 export async function updateReturnStatus(id: string, status: ReturnStatus): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const updateData: Record<string, unknown> = { status }
     if (status === 'Completed' || status === 'Rejected') {
       updateData.resolved_at = new Date().toISOString()
@@ -140,6 +141,7 @@ export async function updateReturnStatus(id: string, status: ReturnStatus): Prom
       .from('returns')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to update return status: ${error.message}`)
   } catch (err) {

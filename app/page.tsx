@@ -160,13 +160,15 @@ export default function DashboardPage() {
   const mobileMap = useMemo(() => new Map(mobiles.map(m => [m.id, m.purchasePrice])), [mobiles])
   const accMap    = useMemo(() => new Map(accessories.map(a => [a.id, a.purchasePrice])), [accessories])
 
-  const periodProfit = useMemo(() => filteredSales.reduce((total, sale) =>
-    total + sale.items.reduce((sub, item) => {
+  const periodProfit = useMemo(() => filteredSales.reduce((total, sale) => {
+    const itemProfit = sale.items.reduce((sub, item) => {
       const cost = item.productType === "Mobile"
-        ? (mobileMap.get(item.productId) ?? item.unitPrice * 0.82)
-        : (accMap.get(item.productId) ?? item.unitPrice * 0.75)
-      return sub + (item.unitPrice - cost) * item.quantity - item.discount
-    }, 0), 0), [filteredSales, mobileMap, accMap])
+        ? (mobileMap.get(item.productId) ?? 0)
+        : (accMap.get(item.productId) ?? 0)
+      return sub + (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
+    }, 0)
+    return total + itemProfit - (sale.discount ?? 0)
+  }, 0), [filteredSales, mobileMap, accMap])
 
   const salesSparkData = useMemo(() => {
     const base = (arr: typeof sales) => arr.filter(s => s.status !== "Refunded")
@@ -199,13 +201,15 @@ export default function DashboardPage() {
       const points = Math.min(10, totalDays + 1)
       return Array.from({ length: points }, (_, i) => {
         const d = format(addDays(parseISO(dateFrom), Math.round(i * totalDays / (points - 1 || 1))), "yyyy-MM-dd")
-        return { v: base(sales).filter(s => s.date <= d && s.date >= dateFrom).reduce((s, x) => s + x.total, 0) }
+        const prev = i === 0 ? dateFrom : format(addDays(parseISO(dateFrom), Math.round((i - 1) * totalDays / (points - 1 || 1)) + 1), "yyyy-MM-dd")
+        return { v: base(sales).filter(s => s.date >= prev && s.date <= d).reduce((s, x) => s + x.total, 0) }
       })
     }
     const baseMonth = period === "lastMonth" ? lastMonthKey : currentMonthKey
     return Array.from({ length: 10 }, (_, i) => {
-      const dayStr = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
-      return { v: base(sales).filter(s => s.date <= dayStr && s.date >= baseMonth + "-01").reduce((s, x) => s + x.total, 0) }
+      const dayStart = `${baseMonth}-${String((i * 3) + 1).padStart(2, "0")}`
+      const dayEnd   = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
+      return { v: base(sales).filter(s => s.date >= dayStart && s.date <= dayEnd).reduce((s, x) => s + x.total, 0) }
     })
   }, [period, sales, currentMonthKey, lastMonthKey, thisWeekStart, lastWeekStartStr, dateFrom, dateTo])
 
@@ -239,13 +243,15 @@ export default function DashboardPage() {
       const points = Math.min(10, totalDays + 1)
       return Array.from({ length: points }, (_, i) => {
         const d = format(addDays(parseISO(dateFrom), Math.round(i * totalDays / (points - 1 || 1))), "yyyy-MM-dd")
-        return { v: purchases.filter(p => p.date <= d && p.date >= dateFrom).reduce((s, x) => s + x.total, 0) }
+        const prev = i === 0 ? dateFrom : format(addDays(parseISO(dateFrom), Math.round((i - 1) * totalDays / (points - 1 || 1)) + 1), "yyyy-MM-dd")
+        return { v: purchases.filter(p => p.date >= prev && p.date <= d).reduce((s, x) => s + x.total, 0) }
       })
     }
     const baseMonth = period === "lastMonth" ? lastMonthKey : currentMonthKey
     return Array.from({ length: 10 }, (_, i) => {
-      const dayStr = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
-      return { v: purchases.filter(p => p.date <= dayStr && p.date >= baseMonth + "-01").reduce((s, x) => s + x.total, 0) }
+      const dayStart = `${baseMonth}-${String((i * 3) + 1).padStart(2, "0")}`
+      const dayEnd   = `${baseMonth}-${String((i + 1) * 3).padStart(2, "0")}`
+      return { v: purchases.filter(p => p.date >= dayStart && p.date <= dayEnd).reduce((s, x) => s + x.total, 0) }
     })
   }, [period, purchases, currentMonthKey, lastMonthKey, thisWeekStart, lastWeekStartStr, dateFrom, dateTo])
 
@@ -260,13 +266,15 @@ export default function DashboardPage() {
       const monthLabel = format(monthDate, "MMM ''yy")
       const monthSales = sales.filter(s => s.date.startsWith(monthKey) && s.status !== "Refunded")
       const revenue    = monthSales.reduce((s, x) => s + x.total, 0)
-      const profit     = monthSales.reduce((total, sale) =>
-        total + sale.items.reduce((sub, item) => {
+      const profit     = monthSales.reduce((total, sale) => {
+        const itemProfit = sale.items.reduce((sub, item) => {
           const cost = item.productType === "Mobile"
-            ? (mobileMap.get(item.productId) ?? item.unitPrice * 0.82)
-            : (accMap.get(item.productId) ?? item.unitPrice * 0.75)
-          return sub + (item.unitPrice - cost) * item.quantity - item.discount
-        }, 0), 0)
+            ? (mobileMap.get(item.productId) ?? 0)
+            : (accMap.get(item.productId) ?? 0)
+          return sub + (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
+        }, 0)
+        return total + itemProfit - (sale.discount ?? 0)
+      }, 0)
       return { month: monthLabel, Revenue: revenue, Profit: Math.max(0, profit) }
     })
   }, [mobileMap, accMap, sales])
@@ -906,7 +914,7 @@ export default function DashboardPage() {
             </ResponsiveContainer>
             <div className="mt-2 space-y-1 border-t border-slate-50 pt-2">
               {topProducts.map((p, i) => (
-                <div key={p.name} className="flex items-center justify-between text-xs">
+                <div key={i} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: BAR_COLORS[i] }} />
                     <span className="text-slate-600 truncate">{p.name}</span>

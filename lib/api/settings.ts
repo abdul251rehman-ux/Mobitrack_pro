@@ -143,6 +143,7 @@ export async function getProfileById(id: string): Promise<Profile | null> {
 
 export async function updateProfile(id: string, data: Partial<Profile>): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const updatePayload: Record<string, unknown> = {}
     if (data.name !== undefined) updatePayload.name = data.name
     if (data.phone !== undefined) updatePayload.phone = data.phone
@@ -154,6 +155,7 @@ export async function updateProfile(id: string, data: Partial<Profile>): Promise
       .from('profiles')
       .update(updatePayload)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to update profile: ${error.message}`)
   } catch (err) {
@@ -198,6 +200,7 @@ export async function updateProfileFull(id: string, data: {
   status: "Active" | "Inactive"
 }): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const payload: Record<string, unknown> = {
       name: data.name,
       email: data.email.toLowerCase().trim(),
@@ -206,7 +209,11 @@ export async function updateProfileFull(id: string, data: {
     }
     if (data.password) payload.password = data.password
 
-    const { error } = await supabase.from('profiles').update(payload).eq('id', id)
+    const { error } = await supabase
+      .from('profiles')
+      .update(payload)
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
     if (error) throw new Error(`Failed to update user: ${error.message}`)
   } catch (err) {
     throw err instanceof Error ? err : new Error('Failed to update user')

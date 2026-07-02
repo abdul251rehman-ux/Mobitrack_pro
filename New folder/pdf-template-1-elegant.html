@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MobiTrack Pro - Template 1: Elegant Blue</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; }
+
+  .page {
+    width: 794px;
+    min-height: 1123px;
+    margin: 30px auto;
+    background: #fff;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.12);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b5bdb 60%, #6366f1 100%);
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    right: -60px; top: -60px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    right: 60px; bottom: -80px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 36px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .logo-area { display: flex; align-items: center; gap: 16px; }
+  .logo-box {
+    width: 56px; height: 56px;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    backdrop-filter: blur(4px);
+  }
+  .shop-name { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
+  .shop-tagline { color: rgba(255,255,255,0.75); font-size: 12px; margin-top: 2px; }
+
+  .shop-info { text-align: right; }
+  .shop-info p { color: rgba(255,255,255,0.85); font-size: 12px; line-height: 1.7; }
+  .shop-info p strong { color: #fff; }
+
+  /* ─── DOC STRIP ─── */
+  .doc-strip {
+    background: #f8faff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 14px 36px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .doc-type { font-size: 18px; font-weight: 700; color: #1e3a8a; letter-spacing: 0.5px; }
+  .doc-meta { display: flex; gap: 28px; }
+  .doc-meta-item { text-align: right; }
+  .doc-meta-item label { display: block; font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.8px; }
+  .doc-meta-item span { font-size: 13px; font-weight: 600; color: #1e293b; }
+
+  /* ─── BODY ─── */
+  .body { padding: 28px 36px; }
+
+  /* Party cards */
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+  .party-card {
+    background: #f8faff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #3b5bdb;
+    border-radius: 8px;
+    padding: 14px 18px;
+  }
+  .party-card h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 6px; }
+  .party-card .name { font-size: 14px; font-weight: 700; color: #1e293b; }
+  .party-card p { font-size: 12px; color: #64748b; line-height: 1.6; margin-top: 2px; }
+
+  /* Table */
+  .table-wrap { border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: linear-gradient(90deg, #1e3a8a, #3b5bdb); }
+  thead th { color: #fff; font-size: 11px; font-weight: 600; padding: 11px 14px; text-align: left; letter-spacing: 0.5px; }
+  thead th:last-child { text-align: right; }
+  tbody tr { border-bottom: 1px solid #f1f5f9; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #f8faff; }
+  tbody tr:hover { background: #eff6ff; }
+  tbody td { font-size: 12px; color: #374151; padding: 10px 14px; }
+  tbody td:last-child { text-align: right; font-weight: 600; color: #1e293b; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 20px;
+    font-size: 10px; font-weight: 600;
+    background: #dbeafe; color: #1e40af;
+  }
+
+  /* Totals */
+  .totals-row { display: flex; justify-content: flex-end; margin-bottom: 28px; }
+  .totals-box {
+    width: 280px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .totals-line { display: flex; justify-content: space-between; padding: 9px 16px; font-size: 12px; border-bottom: 1px solid #f1f5f9; }
+  .totals-line:last-child { border-bottom: none; }
+  .totals-line label { color: #64748b; }
+  .totals-line span { font-weight: 600; color: #1e293b; }
+  .totals-grand { background: linear-gradient(90deg, #1e3a8a, #3b5bdb); }
+  .totals-grand label, .totals-grand span { color: #fff !important; font-size: 14px !important; font-weight: 700 !important; }
+
+  /* Notes */
+  .notes { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px 18px; margin-bottom: 24px; }
+  .notes h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #92400e; margin-bottom: 4px; }
+  .notes p { font-size: 12px; color: #78350f; }
+
+  /* Footer */
+  .footer {
+    background: #f8faff;
+    border-top: 1px solid #e2e8f0;
+    padding: 16px 36px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-sig { text-align: center; }
+  .footer-sig .sig-line { width: 140px; border-top: 1px solid #cbd5e1; margin: 0 auto 6px; }
+  .footer-sig p { font-size: 10px; color: #94a3b8; }
+  .footer-brand { font-size: 10px; color: #94a3b8; text-align: right; }
+  .footer-brand strong { color: #3b5bdb; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-box">📱</div>
+        <div>
+          <div class="shop-name">MobiTrack Pro</div>
+          <div class="shop-tagline">Mobile & Accessories Management</div>
+        </div>
+      </div>
+      <div class="shop-info">
+        <p><strong>Ahmed Khan</strong> — Owner</p>
+        <p>📞 +92-300-1234567</p>
+        <p>📍 Shop #12, Mobile Market, Lahore</p>
+        <p>✉ ahmed@mobitrackpro.com</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DOC STRIP -->
+  <div class="doc-strip">
+    <div class="doc-type">SALES INVOICE</div>
+    <div class="doc-meta">
+      <div class="doc-meta-item">
+        <label>Invoice No</label>
+        <span>#INV-2026-0042</span>
+      </div>
+      <div class="doc-meta-item">
+        <label>Date</label>
+        <span>20 May 2026</span>
+      </div>
+      <div class="doc-meta-item">
+        <label>Status</label>
+        <span style="color:#16a34a;">● Paid</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- Parties -->
+    <div class="parties">
+      <div class="party-card">
+        <h4>Bill To (Customer)</h4>
+        <div class="name">Ali Hassan</div>
+        <p>📞 +92-321-9876543</p>
+        <p>📍 Gulberg, Lahore</p>
+      </div>
+      <div class="party-card">
+        <h4>Payment Info</h4>
+        <div class="name">Cash Payment</div>
+        <p>Due Date: 20 May 2026</p>
+        <p>Ref: WALK-IN</p>
+      </div>
+    </div>
+
+    <!-- Items Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Item Description</th>
+            <th>IMEI / Code</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>
+              <strong>Samsung Galaxy S24 Ultra</strong><br>
+              <span style="font-size:11px;color:#64748b;">256GB, Titanium Black</span>
+            </td>
+            <td><span class="badge">359274-12-345678-9</span></td>
+            <td>1</td>
+            <td>Rs 285,000</td>
+            <td>Rs 285,000</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>
+              <strong>Samsung Clear Case</strong><br>
+              <span style="font-size:11px;color:#64748b;">S24 Ultra Compatible</span>
+            </td>
+            <td><span class="badge">ACC-0089</span></td>
+            <td>2</td>
+            <td>Rs 1,500</td>
+            <td>Rs 3,000</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>
+              <strong>Screen Protector</strong><br>
+              <span style="font-size:11px;color:#64748b;">Tempered Glass 9H</span>
+            </td>
+            <td><span class="badge">ACC-0201</span></td>
+            <td>1</td>
+            <td>Rs 800</td>
+            <td>Rs 800</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Totals -->
+    <div class="totals-row">
+      <div class="totals-box">
+        <div class="totals-line"><label>Subtotal</label><span>Rs 288,800</span></div>
+        <div class="totals-line"><label>Discount (2%)</label><span>− Rs 5,776</span></div>
+        <div class="totals-line"><label>Tax / GST</label><span>Rs 0</span></div>
+        <div class="totals-line totals-grand"><label>Total Amount</label><span>Rs 283,024</span></div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="notes">
+      <h4>Terms & Notes</h4>
+      <p>Goods once sold will not be returned. Warranty claims subject to manufacturer policy. Thank you for shopping with MobiTrack Pro!</p>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-sig">
+      <div class="sig-line"></div>
+      <p>Customer Signature</p>
+    </div>
+    <div class="footer-brand">
+      <p>Generated by <strong>MobiTrack Pro</strong></p>
+      <p>20 May 2026 · mobitrackpro.com</p>
+    </div>
+    <div class="footer-sig">
+      <div class="sig-line"></div>
+      <p>Authorized Signature</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

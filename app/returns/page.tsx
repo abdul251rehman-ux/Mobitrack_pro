@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import {
   RotateCcw, Search, Plus, Eye, CheckCircle2, XCircle,
   Clock, ArrowLeftRight, Package, AlertTriangle,
@@ -91,8 +92,9 @@ const REASON_COLORS: Record<ReturnReason, string> = {
 // ─── New-item template ────────────────────────────────────────────────────────
 
 interface NewReturnItem {
+  productId: string      // real product id from sale_items, used for inventory restock
   productName: string
-  productType: "Mobile" | "Accessory"
+  productType: "Mobile" | "Accessory" | "UsedPhone"
   quantity: number
   unitPrice: number
   condition: ReturnItem["condition"]
@@ -100,6 +102,7 @@ interface NewReturnItem {
 }
 
 const EMPTY_ITEM: NewReturnItem = {
+  productId: "",
   productName: "",
   productType: "Mobile",
   quantity: 1,
@@ -111,6 +114,10 @@ const EMPTY_ITEM: NewReturnItem = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReturnsPage() {
+  const searchParams = useSearchParams()
+  const autoInvoice = searchParams.get("invoice") ?? ""
+  const autoOpened = useRef(false)
+
   // ── Data state ────────────────────────────────────────────────────────────
   const [returnsList, setReturnsList] = useState<Return[]>([])
   const [salesList, setSalesList] = useState<Sale[]>([])
@@ -135,6 +142,34 @@ export default function ReturnsPage() {
     }
     fetchData()
   }, [])
+
+  // Auto-open create dialog and lookup invoice when arriving from sales list with ?invoice=
+  useEffect(() => {
+    if (autoInvoice && !loading && salesList.length > 0 && !autoOpened.current) {
+      autoOpened.current = true
+      setNewInvoice(autoInvoice)
+      setShowCreate(true)
+      // Auto-lookup after state settles
+      setTimeout(() => {
+        const match = salesList.find(s => s.invoiceNumber?.toLowerCase() === autoInvoice.toLowerCase())
+        if (match) {
+          setNewCustomerName(match.customerName)
+          setNewCustomerPhone(match.customerPhone)
+          if (match.items?.length > 0) {
+            setNewItems(match.items.map(si => ({
+              productId: si.productId ?? "",
+              productName: si.productName,
+              productType: si.productType as "Mobile" | "Accessory" | "UsedPhone",
+              quantity: si.quantity,
+              unitPrice: si.unitPrice,
+              condition: "Good" as ReturnItem["condition"],
+              imei: si.imei ?? "",
+            })))
+          }
+        }
+      }, 0)
+    }
+  }, [autoInvoice, loading, salesList])
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [search, setSearch] = useState("")
@@ -224,12 +259,13 @@ export default function ReturnsPage() {
       if (match.items && match.items.length > 0) {
         setNewItems(
           match.items.map((si) => ({
+            productId: si.productId ?? "",
             productName: si.productName,
-            productType: (si.productType === "UsedPhone" ? "Mobile" : si.productType) as "Mobile" | "Accessory",
+            productType: si.productType as "Mobile" | "Accessory" | "UsedPhone",
             quantity: si.quantity,
             unitPrice: si.unitPrice,
             condition: "Good" as ReturnItem["condition"],
-            imei: "",
+            imei: si.imei ?? "",
           }))
         )
         toast.success(`Invoice found — ${match.items.length} item(s) pre-filled from sale`)
@@ -275,13 +311,13 @@ export default function ReturnsPage() {
       return
     }
 
-    const nextNum = returnsList.length + 1
     const refundAmount = calcRefundTotal()
 
-    const items: ReturnItem[] = newItems.map((it, idx) => ({
-      productId: `ret-prod-${Date.now()}-${idx}`,
+    const items: ReturnItem[] = newItems.map((it) => ({
+      productId: it.productId || `ret-${Date.now()}`,
       productName: it.productName,
-      productType: it.productType,
+      // DB return_items CHECK only allows Mobile/Accessory — map UsedPhone → Mobile
+      productType: (it.productType === "UsedPhone" ? "Mobile" : it.productType) as ReturnItem["productType"],
       quantity: it.quantity,
       unitPrice: it.unitPrice,
       lineTotal: it.quantity * it.unitPrice,
@@ -289,9 +325,15 @@ export default function ReturnsPage() {
       condition: it.condition,
     }))
 
+    // Generate return number from DB count to avoid clashes
+    const tenantId = await getTenantId()
+    const { count } = await supabase.from("returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId)
+    const nextNum = (count ?? returnsList.length) + 1
+    const dateTag = todayPKT().replace(/-/g, "").slice(0, 8)
+
     const newReturn: Return = {
       id: `ret-${String(nextNum).padStart(3, "0")}`,
-      returnNumber: `RET-2026-${String(nextNum).padStart(4, "0")}`,
+      returnNumber: `RET-${dateTag}-${String(nextNum).padStart(4, "0")}`,
       date: todayPKT(),
       saleId: `sale-lookup-${newInvoice}`,
       invoiceNumber: newInvoice,
@@ -336,7 +378,6 @@ export default function ReturnsPage() {
 
       // Finance: record cash refund as money OUT of the account
       if (newRefundType === "cash" && newAccountId && refundAmount > 0) {
-        const tenantId = await getTenantId()
         await supabase.from("finance_transactions").insert({
           tenant_id: tenantId,
           date: newReturn.date,
@@ -352,7 +393,7 @@ export default function ReturnsPage() {
           .from("finance_accounts").select("current_balance").eq("id", newAccountId).single()
         if (accRow) {
           await supabase.from("finance_accounts")
-            .update({ current_balance: Math.max(0, (accRow as any).current_balance - refundAmount) })
+            .update({ current_balance: (accRow as any).current_balance - refundAmount })
             .eq("id", newAccountId)
         }
         // tag return with account
@@ -390,6 +431,38 @@ export default function ReturnsPage() {
 
   async function rejectReturn(id: string) {
     try {
+      const tenantId = await getTenantId()
+
+      // Reverse cash refund that was issued when the return was created
+      const { data: retRow } = await supabase
+        .from("returns")
+        .select("refund_type, account_id, refund_amount")
+        .eq("id", id)
+        .single()
+
+      if (retRow && (retRow as any).refund_type === "cash" && (retRow as any).account_id && (retRow as any).refund_amount > 0) {
+        const accId = (retRow as any).account_id
+        const amount = (retRow as any).refund_amount
+        const { data: accRow } = await supabase
+          .from("finance_accounts").select("current_balance").eq("id", accId).single()
+        if (accRow) {
+          await supabase.from("finance_accounts")
+            .update({ current_balance: (accRow as any).current_balance + amount })
+            .eq("id", accId)
+        }
+        // Record the reversal transaction
+        await supabase.from("finance_transactions").insert({
+          tenant_id: tenantId,
+          date: todayPKT(),
+          type: "return_reversal",
+          account_id: accId,
+          amount,
+          reference_type: "Return",
+          reference_number: id,
+          description: `Return rejected — refund reversed`,
+        })
+      }
+
       await updateReturnStatus(id, "Rejected")
       setReturnsList((prev) =>
         prev.map((r) =>
@@ -398,23 +471,91 @@ export default function ReturnsPage() {
             : r
         )
       )
-      toast.success("Return rejected")
+      toast.success("Return rejected — cash refund reversed")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to reject return")
     }
   }
 
   async function completeReturn(id: string) {
+    const ret = returnsList.find(r => r.id === id)
+    if (!ret) return
     try {
+      const tenantId = await getTenantId()
+
+      // ── 1. Reverse inventory — all steps must succeed before marking Completed
+      if (ret.restockItems) {
+        for (const item of ret.items) {
+          if (item.imei) {
+            // Determine whether this is a new-phone (imei_records with product_id)
+            // or a used phone (used_phones table). Phantom imei_records rows
+            // created by the old bulk-add bug have product_id = NULL — treat those
+            // the same as used phones.
+            const { data: imeiRow, error: imeiErr } = await supabase.from("imei_records")
+              .select("id, product_id, device_status")
+              .eq("imei_number", item.imei).eq("tenant_id", tenantId)
+              .not("product_id", "is", null)   // only real new-phone records
+              .maybeSingle()
+
+            if (imeiErr) throw new Error(`IMEI lookup failed: ${imeiErr.message}`)
+
+            if (imeiRow) {
+              // ── Real new phone from purchases ──
+              if ((imeiRow as any).device_status !== "sold") {
+                throw new Error(`Phone with IMEI ${item.imei} is not marked as sold — cannot restock`)
+              }
+              const { error: restoreErr } = await supabase.from("imei_records")
+                .update({ device_status: "in_stock", sold_date: null, customer_name: null, customer_phone: null, customer_id: null })
+                .eq("id", (imeiRow as any).id)
+              if (restoreErr) throw new Error(`Failed to restore IMEI record: ${restoreErr.message}`)
+
+              const pid = (imeiRow as any).product_id
+              if (pid) {
+                const { data: mob } = await supabase.from("mobiles").select("stock").eq("id", pid).single()
+                if (mob) {
+                  const { error: stockErr } = await supabase.from("mobiles")
+                    .update({ stock: (mob as any).stock + 1 }).eq("id", pid)
+                  if (stockErr) throw new Error(`Failed to update mobile stock: ${stockErr.message}`)
+                }
+              }
+            } else {
+              // ── Used phone — restore in used_phones ──
+              const { data: usedRow, error: usedLookupErr } = await supabase.from("used_phones")
+                .select("id, status").eq("imei_number", item.imei).eq("tenant_id", tenantId).maybeSingle()
+              if (usedLookupErr) throw new Error(`Used phone lookup failed: ${usedLookupErr.message}`)
+              if (!usedRow) throw new Error(`No phone found with IMEI ${item.imei} — cannot restock`)
+              if ((usedRow as any).status !== "sold") {
+                throw new Error(`Used phone with IMEI ${item.imei} is not marked as sold — cannot restock`)
+              }
+              const { error: usedErr } = await supabase.from("used_phones")
+                .update({ status: "in_stock", sold_date: null, source_customer_name: null })
+                .eq("id", (usedRow as any).id).eq("tenant_id", tenantId)
+              if (usedErr) throw new Error(`Failed to restore used phone: ${usedErr.message}`)
+              // Also restore any phantom imei_records row from old bulk-add bug
+              await supabase.from("imei_records")
+                .update({ device_status: "in_stock", sold_date: null, customer_name: null })
+                .eq("imei_number", item.imei).eq("tenant_id", tenantId).is("product_id", null)
+            }
+          } else if (item.productType === "Accessory") {
+            const { data: acc, error: accErr } = await supabase.from("accessories")
+              .select("stock").eq("id", item.productId).eq("tenant_id", tenantId).maybeSingle()
+            if (accErr) throw new Error(`Accessory lookup failed: ${accErr.message}`)
+            if (!acc) throw new Error(`Accessory not found — cannot restock`)
+            const { error: updErr } = await supabase.from("accessories")
+              .update({ stock: (acc as any).stock + item.quantity }).eq("id", item.productId)
+            if (updErr) throw new Error(`Failed to update accessory stock: ${updErr.message}`)
+          }
+        }
+      }
+
+      // Finance was already deducted when the return was created (Pending state).
+      // No second deduction here — just mark as Completed.
+
       await updateReturnStatus(id, "Completed")
-      setReturnsList((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? { ...r, status: "Completed" as ReturnStatus, resolvedAt: new Date().toISOString() }
-            : r
-        )
-      )
-      toast.success("Return completed — refund processed")
+      setReturnsList(prev => prev.map(r =>
+        r.id === id ? { ...r, status: "Completed" as ReturnStatus, resolvedAt: new Date().toISOString() } : r
+      ))
+      toast.success("Return completed — inventory restocked & refund recorded")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to complete return")
     }

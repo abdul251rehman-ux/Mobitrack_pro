@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Plus, Pencil, Trash2, Award, Smartphone, Package, Globe, Search, Calendar } from "lucide-react"
+import { Plus, Pencil, Trash2, Award, Smartphone, Package, Globe, Search, Lock, Calendar } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 
@@ -18,6 +18,7 @@ interface Brand {
   status: "Active" | "Inactive"
   description: string
   createdAt: string
+  isSystem: boolean
 }
 
 import { DataTable } from "@/components/shared/data-table"
@@ -94,6 +95,7 @@ export default function BrandsPage() {
           status: (b.status ?? "Active") as Brand["status"],
           description: (b.description ?? "") as string,
           createdAt: (b.created_at ?? new Date().toISOString()) as string,
+          isSystem: (b.is_system ?? false) as boolean,
         }
       })
       setList(mapped)
@@ -176,6 +178,7 @@ export default function BrandsPage() {
 
   async function handleDelete() {
     if (!deleteTarget) return
+    if (deleteTarget.isSystem) { toast.error("System brands cannot be deleted"); return }
     try {
       const { error } = await supabase.from("brands").delete().eq("id", deleteTarget.id)
       if (error) throw error
@@ -199,7 +202,14 @@ export default function BrandsPage() {
               <span className="text-white text-[10px] font-bold">{b.logoInitials}</span>
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-800">{b.name}</p>
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-semibold text-slate-800">{b.name}</p>
+                {b.isSystem && (
+                  <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">
+                    <Lock className="w-2 h-2" /> System
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] text-slate-400 flex items-center gap-0.5 mt-0.5">
                 <Globe className="w-2.5 h-2.5" />{b.country}
               </p>
@@ -255,24 +265,33 @@ export default function BrandsPage() {
     {
       id: "actions",
       header: "Actions",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-0.5">
-          <button
-            onClick={() => openEdit(row.original)}
-            className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
-            title="Edit"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setDeleteTarget(row.original)}
-            className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const b = row.original
+        return (
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => openEdit(b)}
+              className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+              title="Edit"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            {b.isSystem ? (
+              <span className="p-1 text-amber-300 cursor-not-allowed" title="System brand — cannot be deleted">
+                <Lock className="w-3.5 h-3.5" />
+              </span>
+            ) : (
+              <button
+                onClick={() => setDeleteTarget(b)}
+                className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )
+      },
     },
   ], [])
 
@@ -353,7 +372,14 @@ export default function BrandsPage() {
                       <span className="text-white text-[10px] font-bold">{brand.logoInitials}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{brand.name}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-xs font-semibold text-slate-800 truncate">{brand.name}</p>
+                        {brand.isSystem && (
+                          <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
+                            <Lock className="w-2 h-2" />
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-slate-400 flex items-center gap-0.5">
                         <Globe className="w-2.5 h-2.5" />{brand.country}
                       </p>
@@ -381,9 +407,15 @@ export default function BrandsPage() {
                     <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => openEdit(brand)}>
                       <Pencil className="w-3 h-3" />Edit
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-red-500 border-red-200 hover:bg-red-50" onClick={() => setDeleteTarget(brand)}>
-                      <Trash2 className="w-3 h-3" />Delete
-                    </Button>
+                    {brand.isSystem ? (
+                      <Button variant="outline" size="sm" disabled className="flex-1 h-7 text-[10px] gap-1 text-amber-400 border-amber-200 cursor-not-allowed opacity-60">
+                        <Lock className="w-3 h-3" />Locked
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-red-500 border-red-200 hover:bg-red-50" onClick={() => setDeleteTarget(brand)}>
+                        <Trash2 className="w-3 h-3" />Delete
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

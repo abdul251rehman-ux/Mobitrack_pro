@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MobiTrack Pro - Sales Invoice</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #dde3ef; }
+
+  .page {
+    width: 794px;
+    min-height: 1123px;
+    margin: 30px auto;
+    background: #ffffff;
+    box-shadow: 0 16px 64px rgba(30,58,138,0.18), 0 2px 8px rgba(30,58,138,0.08);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ══════════════════════════════════════
+     HEADER — slim, blue gradient
+  ══════════════════════════════════════ */
+  .header {
+    background: linear-gradient(110deg, #1e3a8a 0%, #2563eb 45%, #4f46e5 100%);
+    padding: 18px 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Large soft circle — right side depth */
+  .header::before {
+    content: '';
+    position: absolute;
+    right: -70px; top: -70px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+    pointer-events: none;
+  }
+  /* Small circle bottom-right */
+  .header::after {
+    content: '';
+    position: absolute;
+    right: 100px; bottom: -50px;
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+    pointer-events: none;
+  }
+
+  /* Brand left */
+  .brand { display: flex; align-items: center; gap: 13px; position: relative; z-index: 1; }
+  .logo-mark {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.12);
+    border: 1.5px solid rgba(255,255,255,0.22);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-mark svg { width: 24px; height: 24px; }
+  .brand-name { font-size: 16px; font-weight: 800; color: #fff; letter-spacing: 0.1px; }
+  .brand-sub  { font-size: 9px; color: rgba(255,255,255,0.48); letter-spacing: 1.4px; text-transform: uppercase; margin-top: 1px; }
+
+  /* Contact right */
+  .header-contact { text-align: right; position: relative; z-index: 1; }
+  .header-contact .owner { font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+  .header-contact p  { font-size: 10px; color: rgba(255,255,255,0.58); line-height: 1.75; }
+
+  /* ══════════════════════════════════════
+     DOC IDENTITY STRIP
+  ══════════════════════════════════════ */
+  .doc-strip {
+    padding: 11px 44px;
+    background: #f8faff;
+    border-bottom: 1px solid #e4e9f5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .doc-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #1e3a8a;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+  .doc-meta { display: flex; gap: 32px; }
+  .meta-item { text-align: right; }
+  .meta-item label { display: block; font-size: 7.5px; text-transform: uppercase; letter-spacing: 1.3px; color: #a0aec0; margin-bottom: 2px; }
+  .meta-item span  { font-size: 11.5px; font-weight: 700; color: #1e293b; }
+  .meta-item.paid span { color: #16a34a; }
+
+  /* Gradient rule */
+  .rule { height: 2.5px; background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 40%, #4f46e5 80%, #7c3aed 100%); }
+
+  /* ══════════════════════════════════════
+     BODY
+  ══════════════════════════════════════ */
+  .body { padding: 28px 44px 32px; flex: 1; }
+
+  /* ── Party cards ── */
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 26px; }
+
+  .party-card {
+    border: 1px solid #e4e9f5;
+    border-radius: 9px;
+    padding: 15px 18px;
+    background: #fafbff;
+    position: relative;
+    overflow: hidden;
+  }
+  .party-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2.5px;
+    background: linear-gradient(90deg, #2563eb, #4f46e5);
+    border-radius: 9px 9px 0 0;
+  }
+  .party-card h4 {
+    font-size: 7.5px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #2563eb; font-weight: 700; margin-bottom: 8px;
+  }
+  .party-card .p-name { font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 5px; }
+  .party-card p { font-size: 10.5px; color: #64748b; line-height: 1.85; }
+
+  /* ── Table ── */
+  .table-wrap {
+    border: 1px solid #e4e9f5;
+    border-radius: 9px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 10px rgba(30,58,138,0.05);
+  }
+  .table-head-bar {
+    background: linear-gradient(90deg, #f0f4ff, #f5f3ff);
+    border-bottom: 1px solid #e4e9f5;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .table-head-bar span { font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; color: #64748b; }
+  .count-badge {
+    font-size: 8.5px; font-weight: 700;
+    color: #2563eb;
+    background: #dbeafe;
+    border: 1px solid #bfdbfe;
+    border-radius: 20px;
+    padding: 2px 9px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  thead tr { background: #f8faff; }
+  thead th {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    padding: 10px 20px;
+    text-align: left;
+    border-bottom: 1px solid #e4e9f5;
+  }
+  thead th.r { text-align: right; }
+  thead th.c { text-align: center; }
+
+  tbody tr { border-bottom: 1px solid #f1f5fb; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #fafbff; }
+  tbody td { padding: 12px 20px; vertical-align: top; font-size: 12px; color: #374151; }
+
+  .sr-num { font-size: 10.5px; font-weight: 600; color: #bfdbfe; }
+  .item-name { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+  .item-sub  { font-size: 9.5px; color: #94a3b8; margin-top: 2px; }
+  .code-pill {
+    display: inline-block; margin-top: 5px;
+    font-size: 8.5px; font-family: 'Courier New', monospace;
+    background: #f1f5f9; color: #475569;
+    border: 1px solid #e2e8f0; border-radius: 4px;
+    padding: 1.5px 6px; letter-spacing: 0.2px;
+  }
+  .td-c { text-align: center; font-weight: 600; color: #374151; }
+  .td-r { text-align: right; color: #475569; }
+  .td-amt { text-align: right; font-size: 13px; font-weight: 800; color: #0f172a; }
+
+  /* ── Totals + Notes ── */
+  .bottom-section { display: flex; gap: 20px; align-items: flex-start; }
+
+  .notes-block { flex: 1; }
+  .notes-block h4 {
+    font-size: 7.5px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #94a3b8; font-weight: 700; margin-bottom: 9px;
+  }
+  .notes-block p { font-size: 10.5px; color: #64748b; line-height: 1.85; }
+
+  .totals-block { width: 252px; flex-shrink: 0; }
+  .t-line {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid #f1f5fb;
+  }
+  .t-line:last-of-type { border-bottom: none; }
+  .t-line label { font-size: 11px; color: #64748b; }
+  .t-line span  { font-size: 11.5px; font-weight: 600; color: #1e293b; }
+  .t-line.disc span { color: #dc2626; }
+
+  .grand-box {
+    margin-top: 12px;
+    background: linear-gradient(110deg, #1e3a8a 0%, #2563eb 55%, #4f46e5 100%);
+    border-radius: 9px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 6px 20px rgba(37,99,235,0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  .grand-box::after {
+    content: '';
+    position: absolute; right: -20px; top: -20px;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+  }
+  .grand-box label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.2px; color: rgba(255,255,255,0.55); }
+  .grand-amt { font-size: 20px; font-weight: 900; color: #fff; letter-spacing: -0.4px; }
+
+  /* ── Signatures ── */
+  .sigs {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 32px;
+    padding-top: 22px;
+    border-top: 1px solid #f1f5fb;
+  }
+  .sig { text-align: center; }
+  .sig-line { width: 110px; border-top: 1px solid #e2e8f0; margin: 0 auto 7px; }
+  .sig p { font-size: 8.5px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ══════════════════════════════════════
+     FOOTER
+  ══════════════════════════════════════ */
+  .footer {
+    background: #f8faff;
+    border-top: 1px solid #e4e9f5;
+    padding: 12px 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+  }
+  .footer p { font-size: 9.5px; color: #94a3b8; }
+  .footer strong { color: #2563eb; font-weight: 700; }
+
+  .footer-rule { height: 3px; background: linear-gradient(90deg, #1e3a8a, #2563eb, #4f46e5, #7c3aed); }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ══ HEADER ══ -->
+  <div class="header">
+    <div class="brand">
+      <div class="logo-mark">
+        <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 22 L4 6 L14 19 L24 6 L24 22" stroke="rgba(255,255,255,0.92)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">MobiTrack Pro</div>
+        <div class="brand-sub">Management System</div>
+      </div>
+    </div>
+    <div class="header-contact">
+      <div class="owner">Ahmed Khan &mdash; Owner</div>
+      <p>+92-300-1234567</p>
+      <p>Shop #12, Mobile Market, Lahore</p>
+    </div>
+  </div>
+
+  <!-- ══ DOC STRIP ══ -->
+  <div class="doc-strip">
+    <div class="doc-title">Sales Invoice</div>
+    <div class="doc-meta">
+      <div class="meta-item">
+        <label>Invoice No</label>
+        <span>INV-2026-0042</span>
+      </div>
+      <div class="meta-item">
+        <label>Date</label>
+        <span>20 May 2026</span>
+      </div>
+      <div class="meta-item paid">
+        <label>Status</label>
+        <span>Paid</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- ══ BODY ══ -->
+  <div class="body">
+
+    <!-- Parties -->
+    <div class="parties">
+      <div class="party-card">
+        <h4>Billed To</h4>
+        <div class="p-name">Ali Hassan</div>
+        <p>+92-321-9876543<br>Gulberg, Lahore</p>
+      </div>
+      <div class="party-card">
+        <h4>Payment Details</h4>
+        <div class="p-name">Cash Payment</div>
+        <p>Due Date: 20 May 2026<br>Reference: WALK-IN-042</p>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-head-bar">
+        <span>Products &amp; Items</span>
+        <span class="count-badge">3 Items</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34px">#</th>
+            <th>Description</th>
+            <th>IMEI / Code</th>
+            <th class="c" style="width:48px">Qty</th>
+            <th class="r" style="width:96px">Unit Rate</th>
+            <th class="r" style="width:96px">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="sr-num">01</span></td>
+            <td>
+              <div class="item-name">Samsung Galaxy S24 Ultra</div>
+              <div class="item-sub">256 GB &middot; Titanium Black &middot; Android 14</div>
+              <span class="code-pill">IMEI: 359274-12-345678-9</span>
+            </td>
+            <td><span class="code-pill">Verified</span></td>
+            <td class="td-c">1</td>
+            <td class="td-r">Rs 285,000</td>
+            <td class="td-amt">Rs 285,000</td>
+          </tr>
+          <tr>
+            <td><span class="sr-num">02</span></td>
+            <td>
+              <div class="item-name">Samsung Clear Case</div>
+              <div class="item-sub">S24 Ultra Compatible &middot; Transparent</div>
+              <span class="code-pill">ACC-0089</span>
+            </td>
+            <td><span class="code-pill">Accessory</span></td>
+            <td class="td-c">2</td>
+            <td class="td-r">Rs 1,500</td>
+            <td class="td-amt">Rs 3,000</td>
+          </tr>
+          <tr>
+            <td><span class="sr-num">03</span></td>
+            <td>
+              <div class="item-name">Tempered Glass 9H</div>
+              <div class="item-sub">Screen Protector &middot; Anti-glare Coating</div>
+              <span class="code-pill">ACC-0201</span>
+            </td>
+            <td><span class="code-pill">Accessory</span></td>
+            <td class="td-c">1</td>
+            <td class="td-r">Rs 800</td>
+            <td class="td-amt">Rs 800</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bottom: notes + totals -->
+    <div class="bottom-section">
+      <div class="notes-block">
+        <h4>Terms &amp; Conditions</h4>
+        <p>Goods once sold will not be returned. Warranty claims are subject to manufacturer policy. All prices are in Pakistani Rupees (PKR). Thank you for choosing MobiTrack Pro.</p>
+      </div>
+      <div class="totals-block">
+        <div class="t-line"><label>Subtotal</label><span>Rs 288,800</span></div>
+        <div class="t-line disc"><label>Discount (2%)</label><span>&minus; Rs 5,776</span></div>
+        <div class="t-line"><label>Tax / GST</label><span>Rs 0</span></div>
+        <div class="grand-box">
+          <label>Grand Total</label>
+          <span class="grand-amt">Rs 283,024</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Signatures -->
+    <div class="sigs">
+      <div class="sig">
+        <div class="sig-line"></div>
+        <p>Customer Signature</p>
+      </div>
+      <div class="sig">
+        <div class="sig-line"></div>
+        <p>Cashier / Sales Rep</p>
+      </div>
+      <div class="sig">
+        <div class="sig-line"></div>
+        <p>Authorized Signature</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ FOOTER ══ -->
+  <div class="footer">
+    <p>Generated by <strong>MobiTrack Pro</strong></p>
+    <p>INV-2026-0042 &middot; 20 May 2026</p>
+    <p>mobitrackpro.com</p>
+  </div>
+  <div class="footer-rule"></div>
+
+</div>
+</body>
+</html>

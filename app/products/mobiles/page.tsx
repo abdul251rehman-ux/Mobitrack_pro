@@ -4,10 +4,11 @@ import { useState, useMemo, useRef, useEffect } from "react"
 import Image from "next/image"
 import {
   Plus, Search, Grid3X3, List, Smartphone, Copy, Eye, Pencil, Trash2, Filter,
-  TrendingUp, Package, DollarSign, AlertTriangle,
+  TrendingUp, Package, DollarSign, AlertTriangle, ShoppingBag,
   Tag, Hash, Palette, HardDrive, Cpu, Truck, FileText, ArrowDownLeft, ArrowUpRight, Layers,
   ImageIcon, X as XIcon, Upload,
 } from "lucide-react"
+import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -688,13 +689,11 @@ function MobileFormDrawer({
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                {isEditing ? <Pencil className="w-5 h-5 text-white" /> : <Plus className="w-5 h-5 text-white" />}
+                <Pencil className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white leading-tight">
-                  {isEditing ? "Edit Mobile Phone" : "Add New Mobile Phone"}
-                </h2>
-                <p className="text-xs text-white/70 mt-0.5">Fill in the details to add a new device.</p>
+                <h2 className="text-base font-bold text-white leading-tight">Edit Mobile Phone</h2>
+                <p className="text-xs text-white/70 mt-0.5">Update details for this catalog entry.</p>
               </div>
             </div>
             <button type="button" onClick={handleClose}
@@ -1852,71 +1851,20 @@ export default function MobilesPage() {
 
   // ─── Fetch iPhone models from DB ─────────────────────────────────────────
 
-  async function fetchAndroidModels() {
-    try {
-      const tenantId = await getTenantId()
-      const { data } = await supabase
-        .from("android_models")
-        .select("name")
-        .eq("tenant_id", tenantId)
-        .order("name")
-      if (data) setAndroidModels(data.map((d: { name: string }) => d.name))
-    } catch {
-      // empty — table may not exist yet
-    }
-  }
-
   async function handleAddAndroidModel(name: string): Promise<boolean> {
-    try {
-      const tenantId = await getTenantId()
-      const { error } = await supabase.from("android_models").insert({
-        tenant_id: tenantId,
-        name: name.trim(),
-      })
-      if (error) { toast.error("Failed to add model: " + error.message); return false }
-      setAndroidModels(prev => Array.from(new Set([...prev, name.trim()])).sort())
-      toast.success(`Model "${name.trim()}" added!`)
-      return true
-    } catch {
-      toast.error("Failed to add model")
-      return false
-    }
-  }
-
-  async function fetchIphoneModels() {
-    try {
-      const tenantId = await getTenantId()
-      const { data } = await supabase
-        .from("iphone_models")
-        .select("name")
-        .eq("tenant_id", tenantId)
-        .order("name")
-      if (data) {
-        setIphoneModels(data.map((d: { name: string }) => d.name))
-      }
-    } catch {
-      // empty
-    }
+    const trimmed = name.trim()
+    if (!trimmed) return false
+    setAndroidModels(prev => Array.from(new Set([...prev, trimmed])).sort())
+    toast.success(`Model "${trimmed}" added!`)
+    return true
   }
 
   async function handleAddIphoneModel(name: string): Promise<boolean> {
-    try {
-      const tenantId = await getTenantId()
-      const { error } = await supabase.from("iphone_models").insert({
-        tenant_id: tenantId,
-        name: name.trim(),
-      })
-      if (error) {
-        toast.error("Failed to add model: " + error.message)
-        return false
-      }
-      setIphoneModels(prev => Array.from(new Set([...prev, name.trim()])).sort())
-      toast.success(`Model "${name.trim()}" added!`)
-      return true
-    } catch {
-      toast.error("Failed to add model")
-      return false
-    }
+    const trimmed = name.trim()
+    if (!trimmed) return false
+    setIphoneModels(prev => Array.from(new Set([...prev, trimmed])).sort())
+    toast.success(`Model "${trimmed}" added!`)
+    return true
   }
 
   // ─── Fetch storage options from DB ──────────────────────────────────────────
@@ -2030,6 +1978,9 @@ export default function MobilesPage() {
       ])
       setMobileList(mobilesRes)
       setSupplierList(suppliersRes)
+      // Seed model lists from existing catalog entries
+      setAndroidModels(Array.from(new Set(mobilesRes.filter(m => m.deviceType !== "iphone").map(m => m.model))).sort())
+      setIphoneModels(Array.from(new Set(mobilesRes.filter(m => m.deviceType === "iphone").map(m => m.model))).sort())
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
@@ -2043,8 +1994,6 @@ export default function MobilesPage() {
     fetchColors()
     fetchMobileCategories()
     fetchConditions()
-    fetchAndroidModels()
-    fetchIphoneModels()
     fetchStorageOptions()
     fetchRamOptions()
   }, [])
@@ -2052,10 +2001,11 @@ export default function MobilesPage() {
   // ─── Derived stats ────────────────────────────────────────────────────────
 
   const stats = useMemo(() => {
-    const total = mobileList.length
-    const totalStock = mobileList.reduce((s, m) => s + m.stock, 0)
+    const inStock = mobileList.filter(m => m.stock > 0)
+    const total = inStock.length
+    const totalStock = inStock.reduce((s, m) => s + m.stock, 0)
     const outOfStock = mobileList.filter(m => m.stock === 0).length
-    const totalValue = mobileList.reduce((s, m) => s + m.sellingPrice * m.stock, 0)
+    const totalValue = inStock.reduce((s, m) => s + m.sellingPrice * m.stock, 0)
     return { total, totalStock, outOfStock, totalValue }
   }, [mobileList])
 
@@ -2063,6 +2013,7 @@ export default function MobilesPage() {
 
   const filtered = useMemo(() => {
     return mobileList.filter(m => {
+      if (m.stock === 0) return false
       const q = search.toLowerCase()
       const matchSearch =
         !q ||
@@ -2084,11 +2035,6 @@ export default function MobilesPage() {
   }, [mobileList, search, brandFilter, categoryFilter, deviceTypeFilter, stockFilter])
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
-
-  function handleAdd() {
-    setEditingMobile(null)
-    setDialogOpen(true)
-  }
 
   function handleEdit(mobile: Mobile) {
     setEditingMobile(mobile)
@@ -2261,13 +2207,6 @@ export default function MobilesPage() {
         },
       },
       {
-        accessorKey: "stock",
-        header: "Stock",
-        cell: ({ row }) => (
-          <span className="font-medium text-slate-700">{row.original.stock}</span>
-        ),
-      },
-      {
         accessorKey: "condition",
         header: "Condition",
         cell: ({ row }) => <StatusBadge status={row.original.condition} />,
@@ -2343,7 +2282,7 @@ export default function MobilesPage() {
       {/* Header */}
       <PageHeader
         title="Mobile Phones"
-        description="Manage your mobile phone inventory"
+        description="Catalog is built automatically from purchases — edit entries here"
         icon={<Smartphone />}
         iconBg="bg-blue-600"
         badge={
@@ -2352,10 +2291,12 @@ export default function MobilesPage() {
           </Badge>
         }
         action={
-          <Button onClick={handleAdd} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add New Mobile
-          </Button>
+          <Link href="/purchases/new">
+            <Button className="gap-2">
+              <ShoppingBag className="w-4 h-4" />
+              New Purchase
+            </Button>
+          </Link>
         }
       />
 
@@ -2496,8 +2437,7 @@ export default function MobilesPage() {
             <EmptyState
               icon={Smartphone}
               title="No mobile phones found"
-              description="Try adjusting your filters or add a new mobile phone"
-              action={{ label: "Add Mobile Phone", onClick: handleAdd }}
+              description="Create a purchase order to add phones to the catalog automatically"
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -2522,8 +2462,7 @@ export default function MobilesPage() {
             <EmptyState
               icon={Smartphone}
               title="No mobile phones found"
-              description="Try adjusting your filters or add a new mobile phone"
-              action={{ label: "Add Mobile Phone", onClick: handleAdd }}
+              description="Create a purchase order to add phones to the catalog automatically"
             />
           ) : (
             <>

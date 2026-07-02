@@ -5,7 +5,8 @@ import {
   CheckCircle2, ChevronLeft, ChevronRight, X, BatteryMedium, Smartphone, Tag,
   TrendingUp, Package, Battery, Star, MoreVertical, Camera, Upload,
   ArrowUpRight, ArrowDownRight, Minus, Info, User, Calendar, DollarSign,
-  ShoppingBag, Wrench, Shield, ChevronDown,
+  ShoppingBag, Wrench, Shield, ChevronDown, ChevronUp, Lock, Unlock, Trash2, Copy,
+  Pencil, Check, Banknote, Landmark, Wallet,
 } from "lucide-react"
 import {
   FUNCTIONAL_ISSUES,
@@ -23,10 +24,15 @@ import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
+import { getSuppliers } from "@/lib/api/suppliers"
+import { getCustomers } from "@/lib/api/customers"
+import { getFinanceAccounts, createWithdrawal } from "@/lib/api/finance"
+import type { Supplier, Customer } from "@/data/types"
+import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
 import { toast } from "sonner"
 
-// ─── Grade / Status Meta ──────────────────────────────────────────────────────
+// â”€â”€â”€ Grade / Status Meta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const GRADE_META: Record<ConditionGrade, { bg: string; text: string; border: string; ring: string; label: string }> = {
   "A+": { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", ring: "ring-emerald-400", label: "A+" },
@@ -69,15 +75,16 @@ const BODY_LABEL: Record<BodyCondition, string> = {
 }
 
 const SOURCE_LABEL: Record<SourceType, string> = {
-  customer_trade_in:    "Customer Trade-In",
-  purchased:            "Purchased",
+  customer_trade_in:    "Existing Customer",
+  walk_in:              "Walk-in Seller",
+  purchased:            "Supplier",
   refurbished_in_house: "Refurbished In-House",
   auction:              "Auction",
 }
 
 const PAGE_SIZE = 12
 
-// ─── Badge Components ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Badge Components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function GradeBadge({ grade, size = "sm" }: { grade: ConditionGrade; size?: "sm" | "lg" }) {
   const m = GRADE_META[grade]
@@ -115,7 +122,7 @@ function BatteryBar({ value }: { value?: number }) {
   )
 }
 
-// ─── Phone Card (Grid View) ───────────────────────────────────────────────────
+// â”€â”€â”€ Phone Card (Grid View) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PhoneCard({
   phone,
@@ -162,7 +169,7 @@ function PhoneCard({
         <div>
           <p className="text-xs text-slate-400 font-medium">{phone.brand}</p>
           <h3 className="text-sm font-semibold text-slate-900 leading-tight">{phone.model}</h3>
-          <p className="text-xs text-slate-400">{phone.storage} · {phone.color}</p>
+          <p className="text-xs text-slate-400">{phone.storage} Â· {phone.color}</p>
         </div>
 
         {/* Battery */}
@@ -210,7 +217,7 @@ function PhoneCard({
   )
 }
 
-// ─── Phone Row (List View) ────────────────────────────────────────────────────
+// â”€â”€â”€ Phone Row (List View) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PhoneRow({ phone, onView, onEdit, onSell }: {
   phone: UsedPhone
@@ -228,7 +235,7 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
           <GradeBadge grade={phone.condition_grade} />
           <div>
             <p className="text-sm font-semibold text-slate-900">{phone.model}</p>
-            <p className="text-xs text-slate-400">{phone.brand} · {phone.storage} · {phone.color}</p>
+            <p className="text-xs text-slate-400">{phone.brand} Â· {phone.storage} Â· {phone.color}</p>
           </div>
         </div>
       </td>
@@ -275,7 +282,7 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
   )
 }
 
-// ─── Details Slide-Over ───────────────────────────────────────────────────────
+// â”€â”€â”€ Details Slide-Over â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
   phone: UsedPhone
@@ -297,7 +304,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
             <GradeBadge grade={phone.condition_grade} size="lg" />
             <div>
               <h2 className="text-lg font-bold text-slate-900">{phone.model}</h2>
-              <p className="text-sm text-slate-500">{phone.brand} · {phone.storage} · {phone.color}</p>
+              <p className="text-sm text-slate-500">{phone.brand} Â· {phone.storage} Â· {phone.color}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
@@ -342,7 +349,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
               {[
                 { label: "Screen", value: SCREEN_LABEL[phone.screen_condition] },
                 { label: "Body",   value: BODY_LABEL[phone.body_condition]     },
-                { label: "Battery Health", value: phone.battery_health ? `${phone.battery_health}%` : "Not checked" },
+                ...(phone.brand.toLowerCase() === "apple" ? [{ label: "Battery Health", value: phone.battery_health ? `${phone.battery_health}%` : "Not checked" }] : []),
                 { label: "PTA Status", value: PTA_META[phone.pta_status].label },
                 { label: "Warranty",   value: `${phone.warranty_days} days`    },
               ].map(({ label, value }) => (
@@ -351,7 +358,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
                   <span className="font-medium text-slate-800">{value}</span>
                 </div>
               ))}
-              {phone.battery_health && (
+              {phone.brand.toLowerCase() === "apple" && phone.battery_health && (
                 <div className="pt-1">
                   <BatteryBar value={phone.battery_health} />
                 </div>
@@ -398,11 +405,10 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Device Details</h3>
             <div className="space-y-2">
               {[
-                { label: "IMEI",        value: phone.imei_number },
-                { label: "RAM",         value: phone.ram },
-                { label: "Source",      value: SOURCE_LABEL[phone.source_type] },
-                { label: "Acquired",    value: formatDate(phone.purchased_date) },
-                phone.source_customer_name && { label: "From Customer", value: phone.source_customer_name },
+                { label: "IMEI",     value: phone.imei_number },
+                phone.brand.toLowerCase() !== "apple" && phone.ram && { label: "RAM", value: phone.ram },
+                { label: "Source",   value: SOURCE_LABEL[phone.source_type] },
+                { label: "Acquired", value: formatDate(phone.purchased_date) },
                 phone.sold_date && { label: "Sold On", value: formatDate(phone.sold_date) },
               ].filter(Boolean).map(({ label, value }: any) => (
                 <div key={label} className="flex justify-between text-sm">
@@ -410,6 +416,45 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
                   <span className="font-medium text-slate-800 text-right">{value}</span>
                 </div>
               ))}
+
+              {/* Source person / supplier details */}
+              {(phone.source_type === "walk_in" || phone.source_type === "customer_trade_in") && (phone.source_customer_name || (phone as any).source_phone || (phone as any).source_cnic) && (
+                <div className="mt-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">
+                    {phone.source_type === "walk_in" ? "Seller Details" : "Customer Details"}
+                  </p>
+                  {phone.source_customer_name && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Name</span>
+                      <span className="font-medium text-slate-800">{phone.source_customer_name}</span>
+                    </div>
+                  )}
+                  {(phone as any).source_phone && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Phone</span>
+                      <span className="font-medium text-slate-800">{(phone as any).source_phone}</span>
+                    </div>
+                  )}
+                  {(phone as any).source_cnic && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">CNIC</span>
+                      <span className="font-medium text-slate-800">{(phone as any).source_cnic}</span>
+                    </div>
+                  )}
+                  {(phone as any).source_address && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Address</span>
+                      <span className="font-medium text-slate-800 text-right max-w-[60%]">{(phone as any).source_address}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {phone.source_type === "purchased" && ((phone as any).supplier_name) && (
+                <div className="mt-2 rounded-lg bg-orange-50 border border-orange-100 px-3 py-2">
+                  <p className="text-[10px] font-bold text-orange-600 uppercase tracking-wide mb-1">Supplier</p>
+                  <span className="text-sm font-medium text-slate-800">{(phone as any).supplier_name}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -462,7 +507,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
   )
 }
 
-// ─── Mark as Sold Dialog ──────────────────────────────────────────────────────
+// â”€â”€â”€ Mark as Sold Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function MarkAsSoldDialog({ phone, onClose, onSold }: {
   phone: UsedPhone
@@ -486,7 +531,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
           <div className="p-6 border-b border-slate-100">
             <h2 className="text-lg font-bold text-slate-900">Mark as Sold</h2>
-            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model} · Grade {phone.condition_grade}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model} Â· Grade {phone.condition_grade}</p>
           </div>
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
@@ -500,7 +545,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (₨)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (â‚¨)</label>
               <input
                 type="number"
                 value={finalPrice}
@@ -526,7 +571,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
   )
 }
 
-// ─── Trade-In Calculator ──────────────────────────────────────────────────────
+// â”€â”€â”€ Trade-In Calculator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; brands: string[] }) {
   const [brand, setBrand] = useState("")
@@ -619,7 +664,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Market Price (New / Avg Used) — ₨</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Market Price (New / Avg Used) â€” â‚¨</label>
               <input
                 type="number"
                 value={marketPrice}
@@ -649,7 +694,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2">
-                  Formula: Market × {GRADE_MULTIPLIER[grade]} (grade) × battery factor. Prices rounded to nearest ₨500.
+                  Formula: Market Ã— {GRADE_MULTIPLIER[grade]} (grade) Ã— battery factor. Prices rounded to nearest â‚¨500.
                 </p>
               </div>
             )}
@@ -669,11 +714,1230 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
   )
 }
 
-// ─── Add / Edit Dialog (5-step) ───────────────────────────────────────────────
+// â”€â”€â”€ Bulk Add Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+type BulkRow = {
+  id: string
+  brand: string; model: string; color: string; storage: string; ram: string
+  pta_status: UsedPTAStatus; condition_grade: ConditionGrade
+  screen_condition: ScreenCondition; body_condition: BodyCondition
+  imei_number: string; purchase_price: string; selling_price: string
+  warranty_days: string; battery_health: string; condition_notes: string
+  expanded: boolean
+  rowError?: string
+}
+
+type LockState = {
+  brand: boolean; model: boolean; color: boolean; storage: boolean; ram: boolean
+  pta_status: boolean; condition_grade: boolean; screen_condition: boolean
+  body_condition: boolean; purchase_price: boolean; selling_price: boolean; warranty_days: boolean
+}
+
+const BULK_EMPTY_ROW: Omit<BulkRow, "id"> = {
+  brand: "", model: "", color: "", storage: "128GB", ram: "4GB",
+  pta_status: "approved", condition_grade: "B",
+  screen_condition: "perfect", body_condition: "minor_wear",
+  imei_number: "", purchase_price: "", selling_price: "",
+  warranty_days: "7", battery_health: "", condition_notes: "",
+  expanded: false,
+}
+
+function makeBulkRow(expanded = true): BulkRow {
+  return { ...BULK_EMPTY_ROW, id: Math.random().toString(36).slice(2, 9), expanded }
+}
+
+// ─── CatalogCombo: searchable dropdown with always-visible "+ Add New" footer ──
+// Lock icon lives INSIDE the trigger (left side).
+// Footer always shows "+ Add New [label]" — clicking opens inline input row.
+
+function CatalogCombo({
+  value, onChange, options, onAdd, onEdit, onDelete,
+  placeholder, label, error, locked, onToggleLock, disabled,
+}: {
+  value: string; onChange: (v: string) => void
+  options: string[]; onAdd?: (v: string) => Promise<void>
+  onEdit?: (old: string, nw: string) => Promise<void>
+  onDelete?: (v: string) => Promise<void>
+  placeholder?: string; label?: string
+  error?: boolean; locked?: boolean
+  onToggleLock?: () => void; disabled?: boolean
+}) {
+  const [query, setQuery] = useState("")
+  const [open, setOpen] = useState(false)
+  const [managing, setManaging] = useState(false)
+  const [addingNew, setAddingNew] = useState(false)   // "Add New" footer expanded
+  const [newName, setNewName] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [editingVal, setEditingVal] = useState<string | null>(null)
+  const [editInput, setEditInput] = useState("")
+  const [deletingVal, setDeletingVal] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const newInputRef = useRef<HTMLInputElement>(null)
+
+  const q = query.trim().toLowerCase()
+  const unique = Array.from(new Set(options.map(o => o.trim()).filter(Boolean)))
+  const filtered = q ? unique.filter(o => o.toLowerCase().includes(q)) : unique
+
+  function close() {
+    setOpen(false); setManaging(false); setAddingNew(false)
+    setQuery(""); setNewName(""); setEditingVal(null); setDeletingVal(null)
+  }
+
+  async function handleSaveNew() {
+    if (!onAdd || !newName.trim() || saving) return
+    setSaving(true)
+    try { await onAdd(newName.trim()); onChange(newName.trim()); close() }
+    catch { toast.error("Failed to add") }
+    finally { setSaving(false) }
+  }
+  async function handleEdit(oldVal: string) {
+    if (!onEdit || !editInput.trim() || saving) return
+    setSaving(true)
+    try { await onEdit(oldVal, editInput.trim()); setEditingVal(null); setEditInput("") } catch { }
+    finally { setSaving(false) }
+  }
+  async function handleDelete(val: string) {
+    if (!onDelete || saving) return
+    setSaving(true)
+    try { await onDelete(val); setDeletingVal(null) } catch { }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="relative">
+      {/* Trigger */}
+      <div className={cn(
+        "flex items-center h-9 rounded-lg border bg-white transition-colors",
+        "focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500",
+        disabled ? "opacity-50 pointer-events-none bg-slate-50"
+        : error ? "border-red-400 bg-red-50"
+        : locked ? "border-blue-400 bg-blue-50"
+        : "border-slate-300 hover:border-slate-400"
+      )}>
+        {/* Lock icon — left side, only when lockable */}
+        {onToggleLock !== undefined && (
+          <button type="button" onClick={e => { e.stopPropagation(); onToggleLock() }}
+            title={locked ? "Locked — next card inherits this value" : "Click to lock for next card"}
+            className={cn(
+              "flex items-center justify-center w-7 h-full rounded-l-lg border-r shrink-0 transition-colors",
+              locked ? "border-blue-300 bg-blue-100 text-blue-600 hover:bg-blue-200"
+                     : "border-slate-200 text-slate-300 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-200"
+            )}>
+            {locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+          </button>
+        )}
+        <div className="flex-1 flex items-center px-2.5 gap-1 min-w-0">
+          {value && !open ? (
+            <>
+              <span className="text-sm text-slate-800 flex-1 truncate font-medium">{value}</span>
+              <button type="button" onClick={() => { onChange(""); setQuery("") }}
+                className="text-slate-300 hover:text-red-400 shrink-0 p-0.5"><X className="w-3 h-3" /></button>
+            </>
+          ) : (
+            <input ref={inputRef} value={open ? query : ""}
+              onChange={e => { setQuery(e.target.value); setOpen(true); setManaging(false); setAddingNew(false) }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  if (filtered[0] && !managing && !addingNew) { onChange(filtered[0]); close() }
+                }
+                if (e.key === "Escape") close()
+              }}
+              placeholder={value || placeholder || "Type to search…"}
+              className="flex-1 text-sm bg-transparent outline-none min-w-0 placeholder:text-slate-400" />
+          )}
+          <button type="button" onClick={() => { setOpen(v => !v); if (!open) setTimeout(() => inputRef.current?.focus(), 40) }}
+            className="shrink-0 p-0.5">
+            <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", open && "rotate-180")} />
+          </button>
+        </div>
+      </div>
+
+      {/* Dropdown panel */}
+      {open && (
+        <>
+          <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ minWidth: 260, width: "max-content", maxWidth: 360, left: 0 }}>
+            {!managing ? (
+              <>
+                {/* Option list — onWheel stops propagation so page doesn't scroll while hovering list */}
+                <div className="max-h-44 overflow-y-auto" onWheel={e => e.stopPropagation()}>
+                  {filtered.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-slate-400 text-center">
+                      {q ? `No results for "${query}"` : "No options yet"}
+                    </div>
+                  ) : filtered.map((opt, i) => (
+                    <button key={`${opt}-${i}`} type="button"
+                      onClick={() => { onChange(opt); close() }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-slate-50",
+                        opt === value && "bg-blue-50 text-blue-700 font-semibold"
+                      )}>
+                      {opt === value
+                        ? <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        : <span className="w-3.5 shrink-0" />}
+                      <span className="truncate">{opt}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Always-visible "Add New" footer ── */}
+                {onAdd && (
+                  <div className="border-t border-slate-100">
+                    {!addingNew ? (
+                      <button type="button"
+                        onClick={() => { setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 40) }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-colors">
+                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                          <Plus className="w-3 h-3 text-blue-600" />
+                        </div>
+                        Add New {label ?? ""}
+                      </button>
+                    ) : (
+                      <div className="p-2.5 space-y-2 bg-blue-50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-blue-700">New {label ?? "item"}</span>
+                          <button type="button" onClick={() => { setAddingNew(false); setNewName("") }}
+                            className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                        <input
+                          ref={newInputRef}
+                          value={newName}
+                          onChange={e => setNewName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") { e.preventDefault(); handleSaveNew() }
+                            if (e.key === "Escape") { setAddingNew(false); setNewName("") }
+                          }}
+                          placeholder={`e.g. ${label === "Brand" ? "OnePlus" : label === "Color" ? "Midnight Blue" : label === "Storage" ? "256GB" : label === "RAM" ? "6GB" : "Name…"}`}
+                          className="w-full h-8 text-sm border border-blue-300 rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                        <button type="button" onClick={handleSaveNew} disabled={!newName.trim() || saving}
+                          className="w-full h-8 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                          {saving ? "Adding…" : `Add ${newName.trim() ? `"${newName.trim()}"` : label ?? "item"}`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Manage panel */
+              <>
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-100">
+                  <button type="button" onClick={() => setManaging(false)} className="text-slate-400 hover:text-slate-700">
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-xs font-semibold text-slate-600 flex-1">Manage list</span>
+                  <button type="button" onClick={close} className="text-slate-300 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="max-h-52 overflow-y-auto divide-y divide-slate-50" onWheel={e => e.stopPropagation()}>
+                  {unique.length === 0 && <div className="px-3 py-3 text-xs text-slate-400 text-center">No items yet</div>}
+                  {unique.map(item => (
+                    <div key={item} className="flex items-center gap-1.5 px-3 py-1.5 group hover:bg-slate-50">
+                      {editingVal === item ? (
+                        <>
+                          <input autoFocus value={editInput} onChange={e => setEditInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") handleEdit(item); if (e.key === "Escape") { setEditingVal(null); setEditInput("") } }}
+                            className="flex-1 h-6 text-xs rounded-md border border-blue-300 px-2 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                          <button type="button" onClick={() => handleEdit(item)} disabled={saving}
+                            className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 px-1 shrink-0">Save</button>
+                          <button type="button" onClick={() => { setEditingVal(null); setEditInput("") }}
+                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">✕</button>
+                        </>
+                      ) : deletingVal === item ? (
+                        <>
+                          <span className="flex-1 text-xs text-red-600 truncate">{item}</span>
+                          <button type="button" onClick={() => handleDelete(item)} disabled={saving}
+                            className="text-[10px] font-bold text-red-600 hover:text-red-700 px-1 shrink-0">Delete?</button>
+                          <button type="button" onClick={() => setDeletingVal(null)}
+                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">No</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 text-xs text-slate-700 truncate">{item}</span>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {onEdit && <button type="button" onClick={() => { setEditingVal(item); setEditInput(item) }}
+                              className="p-1 rounded hover:bg-blue-50 text-slate-300 hover:text-blue-500 transition-colors">
+                              <Pencil className="w-3 h-3" /></button>}
+                            {onDelete && <button type="button" onClick={() => setDeletingVal(item)}
+                              className="p-1 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors">
+                              <Trash2 className="w-3 h-3" /></button>}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="fixed inset-0 z-40" onClick={close} />
+        </>
+      )}
+    </div>
+  )
+}
+
+function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOptions, ramOptions, suppliers, accounts,
+  onAddBrand, onEditBrand, onDeleteBrand,
+  onAddModel, onEditModel, onDeleteModel,
+  onAddColor, onEditColor, onDeleteColor,
+  onAddStorage, onEditStorage, onDeleteStorage,
+  onAddRam, onEditRam, onDeleteRam,
+}: {
+  onClose: () => void
+  onSaved: (phones: UsedPhone[]) => void
+  brands: string[]
+  models: { name: string; brandName: string; deviceType: "iphone" | "android" }[]
+  colors: string[]
+  storageOptions: string[]
+  ramOptions: string[]
+  suppliers: Supplier[]
+  accounts: FinanceAccount[]
+  onAddBrand: (v: string) => Promise<void>
+  onEditBrand: (old: string, nw: string) => Promise<void>
+  onDeleteBrand: (v: string) => Promise<void>
+  onAddModel: (brand: string, v: string) => Promise<void>
+  onEditModel: (old: string, nw: string) => Promise<void>
+  onDeleteModel: (v: string) => Promise<void>
+  onAddColor: (v: string) => Promise<void>
+  onEditColor: (old: string, nw: string) => Promise<void>
+  onDeleteColor: (v: string) => Promise<void>
+  onAddStorage: (v: string) => Promise<void>
+  onEditStorage: (old: string, nw: string) => Promise<void>
+  onDeleteStorage: (v: string) => Promise<void>
+  onAddRam: (v: string) => Promise<void>
+  onEditRam: (old: string, nw: string) => Promise<void>
+  onDeleteRam: (v: string) => Promise<void>
+}) {
+  const [supplierId, setSupplierId] = useState("")
+  const [supplierErr, setSupplierErr] = useState(false)
+  const [amountPaid, setAmountPaid] = useState("")
+  const [accountId, setAccountId] = useState("")
+  const [purchaseDate, setPurchaseDate] = useState(todayPKT())
+  const [rows, setRows] = useState<BulkRow[]>([makeBulkRow()])
+  const [locks, setLocks] = useState<LockState>({
+    brand: false, model: false, color: false, storage: false, ram: false,
+    pta_status: false, condition_grade: false, screen_condition: false,
+    body_condition: false, purchase_price: false, selling_price: false, warranty_days: false,
+  })
+  const [saving, setSaving] = useState(false)
+  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
+  const [dirty, setDirty] = useState(false)
+
+  const toggleLock = (key: keyof LockState) =>
+    setLocks(prev => ({ ...prev, [key]: !prev[key] }))
+
+  const updateRow = (id: string, key: keyof BulkRow, val: string) => {
+    setDirty(true)
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [key]: val, rowError: undefined } : r))
+  }
+
+  const addRow = () => {
+    setDirty(true)
+    const last = rows[rows.length - 1]
+    const next = makeBulkRow()
+    const lockKeys = Object.keys(locks) as (keyof LockState)[]
+    lockKeys.forEach(k => { if (locks[k]) (next as any)[k] = (last as any)[k] })
+    setRows(prev => [...prev, next])
+  }
+
+  const duplicateRow = (id: string) => {
+    setDirty(true)
+    const src = rows.find(r => r.id === id)
+    if (!src) return
+    const next: BulkRow = { ...src, id: Math.random().toString(36).slice(2, 9), imei_number: "", rowError: undefined, expanded: true }
+    setRows(prev => {
+      const idx = prev.findIndex(r => r.id === id)
+      const copy = [...prev]
+      copy.splice(idx + 1, 0, next)
+      return copy
+    })
+  }
+
+  const removeRow = (id: string) => {
+    if (rows.length === 1) return
+    setRows(prev => prev.filter(r => r.id !== id))
+  }
+
+  const handleClose = () => {
+    if (dirty && rows.some(r => r.brand || r.model || r.imei_number || r.purchase_price)) {
+      if (!window.confirm("Discard all unsaved phones?")) return
+    }
+    onClose()
+  }
+
+  const validate = (): boolean => {
+    let ok = true
+    if (!supplierId) { setSupplierErr(true); ok = false }
+    if (!purchaseDate) { toast.error("Select a purchase date"); ok = false }
+
+    const imeisSeen = new Set<string>()
+    const updatedRows = rows.map((r, i) => {
+      const n = i + 1
+      if (!r.brand) return { ...r, rowError: `Row ${n}: brand required` }
+      if (!r.model.trim()) return { ...r, rowError: `Row ${n}: model required` }
+      if (!r.imei_number) return { ...r, rowError: `Row ${n}: IMEI required` }
+      if (!/^\d{15}$/.test(r.imei_number)) return { ...r, rowError: `Row ${n}: IMEI must be 15 digits` }
+      if (imeisSeen.has(r.imei_number)) return { ...r, rowError: `Row ${n}: duplicate IMEI in this batch` }
+      imeisSeen.add(r.imei_number)
+      if (!r.purchase_price || isNaN(Number(r.purchase_price)) || Number(r.purchase_price) <= 0)
+        return { ...r, rowError: `Row ${n}: enter a valid buy price` }
+      if (!r.selling_price || isNaN(Number(r.selling_price)) || Number(r.selling_price) <= 0)
+        return { ...r, rowError: `Row ${n}: enter a valid sell price` }
+      return { ...r, rowError: undefined }
+    })
+
+    const firstErr = updatedRows.find(r => r.rowError)
+    if (firstErr) { ok = false; setRows(updatedRows) }
+    return ok
+  }
+
+  const handleSave = async () => {
+    if (!validate()) {
+      toast.error("Fix the highlighted errors before saving")
+      return
+    }
+    setSaving(true)
+    setSaveProgress({ done: 0, total: rows.length })
+    const tenantId = await getTenantId()
+    const selectedSupplier = suppliers.find(s => s.id === supplierId)
+    const supplierName = selectedSupplier?.companyName ?? ""
+
+    // Pre-flight: check for IMEI duplicates already in DB
+    const imeiList = rows.map(r => r.imei_number)
+    const { data: existing } = await supabase
+      .from("used_phones")
+      .select("id, imei_number, status, brand, model, sold_date, source_customer_name")
+      .eq("tenant_id", tenantId)
+      .in("imei_number", imeiList)
+    if (existing && existing.length > 0) {
+      const soldPhones = existing.filter((e: any) => e.status === "sold")
+      const activePhones = existing.filter((e: any) => e.status !== "sold")
+      if (activePhones.length > 0) {
+        const dupes = activePhones.map((e: any) => e.imei_number).join(", ")
+        toast.error(`Already in stock: IMEI ${dupes}`)
+        setSaving(false)
+        setSaveProgress(null)
+        return
+      }
+      if (soldPhones.length > 0) {
+        const msg = soldPhones.map((e: any) => `${e.imei_number} (${e.brand} ${e.model}, sold ${e.sold_date ?? "previously"})`).join("\n")
+        const ok = window.confirm(
+          `${soldPhones.length} phone(s) were previously in your system as sold:\n\n${msg}\n\nReactivate and update with new purchase details?`
+        )
+        if (!ok) { setSaving(false); setSaveProgress(null); return }
+        for (const sold of soldPhones) {
+          const row = rows.find(r => r.imei_number === (sold as any).imei_number)
+          if (!row) continue
+          await supabase.from("used_phones").update({
+            status: "in_stock",
+            purchase_price: Number(row.purchase_price),
+            selling_price: Number(row.selling_price),
+            condition_grade: row.condition_grade,
+            screen_condition: row.screen_condition,
+            body_condition: row.body_condition,
+            battery_health: row.battery_health ? Number(row.battery_health) : null,
+            condition_notes: row.condition_notes.trim() || null,
+            pta_status: row.pta_status,
+            purchased_date: purchaseDate,
+            source_type: "purchased",
+            source_customer_name: supplierName,
+            sold_date: null,
+            warranty_days: Number(row.warranty_days) || 7,
+          }).eq("id", (sold as any).id).eq("tenant_id", tenantId)
+        }
+        const soldImeis = new Set(soldPhones.map((e: any) => e.imei_number))
+        rows.splice(0, rows.length, ...rows.filter(r => !soldImeis.has(r.imei_number)))
+        if (rows.length === 0) {
+          toast.success(`${soldPhones.length} phone(s) reactivated successfully`)
+          setSaving(false)
+          setSaveProgress(null)
+          const { data: refreshed } = await supabase.from("used_phones").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(soldPhones.length)
+          if (refreshed) onSaved(refreshed as UsedPhone[])
+          return
+        }
+      }
+    }
+
+    const insertPayload = rows.map(r => ({
+      tenant_id: tenantId,
+      brand: r.brand, model: r.model.trim(), color: r.color,
+      storage: r.storage, ram: r.ram,
+      imei_number: r.imei_number,
+      source_type: "purchased" as const,
+      source_customer_name: supplierName,
+      purchased_date: purchaseDate,
+      purchase_price: Number(r.purchase_price),
+      selling_price: Number(r.selling_price),
+      refurbishment_cost: 0,
+      condition_grade: r.condition_grade,
+      screen_condition: r.screen_condition,
+      body_condition: r.body_condition,
+      battery_health: r.battery_health ? Number(r.battery_health) : null,
+      functional_issues: [] as string[],
+      accessories_included: [] as string[],
+      condition_notes: r.condition_notes.trim() || null,
+      pta_status: r.pta_status,
+      status: "in_stock" as const,
+      warranty_days: Number(r.warranty_days) || 7,
+      photos: [] as string[],
+    }))
+
+    try {
+      const { data: inserted, error } = await supabase
+        .from("used_phones")
+        .insert(insertPayload)
+        .select()
+      if (error) throw new Error(error.message)
+
+      // Record purchase in purchases table + finance
+      const grandTotal = rows.reduce((s, r) => s + Number(r.purchase_price), 0)
+      const paid = parseFloat(amountPaid) || 0
+      const balanceDue = Math.max(0, grandTotal - paid)
+      const payStatus = paid <= 0 ? "Unpaid" : paid >= grandTotal ? "Paid" : "Partial"
+      const dateTag = purchaseDate.replace(/-/g, "")
+      const { data: poRows } = await supabase.from("purchases").select("po_number")
+        .eq("tenant_id", tenantId).eq("date", purchaseDate).like("po_number", `PO-${dateTag}-%`)
+      let maxSeq = 0
+      for (const row of (poRows ?? [])) {
+        const parts = (row.po_number as string).split("-")
+        const n = parseInt(parts[parts.length - 1], 10)
+        if (!isNaN(n) && n > maxSeq) maxSeq = n
+      }
+      const poNumber = `PO-${dateTag}-${String(maxSeq + 1).padStart(3, "0")}`
+      const purchaseItems = rows.map(r => ({
+        productId: r.imei_number,
+        productName: `${r.brand} ${r.model.trim()}`,
+        productType: "UsedPhone",
+        quantity: 1,
+        unitCost: Number(r.purchase_price),
+        total: Number(r.purchase_price),
+        imeis: [r.imei_number],
+      }))
+      const { data: purchaseRecord } = await supabase.from("purchases").insert({
+        tenant_id: tenantId,
+        po_number: poNumber,
+        date: purchaseDate,
+        supplier_id: supplierId,
+        supplier_name: supplierName,
+        subtotal: grandTotal,
+        shipping_cost: 0,
+        tax_amount: 0,
+        grand_total: grandTotal,
+        amount_paid: paid,
+        balance_due: balanceDue,
+        payment_status: payStatus,
+        payment_method: accountId ? (accounts.find(a => a.id === accountId)?.type === "cash" ? "Cash" : "Bank Transfer") : "Cash",
+        items: purchaseItems,
+        notes: null,
+      }).select("id").single()
+
+      // Finance: debit account if payment made
+      if (paid > 0 && accountId && purchaseRecord) {
+        await supabase.from("finance_transactions").insert({
+          tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
+          account_id: accountId, amount: paid,
+          reference_type: "Purchase", reference_number: poNumber,
+          description: `Used phones purchase ${poNumber} â€” ${supplierName}`,
+        })
+        const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", accountId).single()
+        if (accRow) {
+          await supabase.from("finance_accounts").update({
+            current_balance: (accRow as any).current_balance - paid,
+          }).eq("id", accountId)
+        }
+      }
+      // Update supplier outstanding balance if partial/unpaid
+      if (balanceDue > 0) {
+        const { data: supRow } = await supabase.from("suppliers").select("outstanding_balance").eq("id", supplierId).single()
+        if (supRow) {
+          await supabase.from("suppliers").update({
+            outstanding_balance: ((supRow as any).outstanding_balance ?? 0) + balanceDue,
+          }).eq("id", supplierId)
+        }
+      }
+
+      const saved = (inserted as any[]).map(row => ({
+        ...BULK_EMPTY_ROW,
+        id: row.id,
+        imei_number: row.imei_number ?? "",
+        brand: row.brand ?? "",
+        model: row.model ?? "",
+        color: row.color ?? "",
+        storage: row.storage ?? "",
+        ram: row.ram ?? "",
+        condition_grade: (row.condition_grade ?? "B") as ConditionGrade,
+        screen_condition: (row.screen_condition ?? "perfect") as ScreenCondition,
+        body_condition: (row.body_condition ?? "minor_wear") as BodyCondition,
+        battery_health: row.battery_health ?? undefined,
+        functional_issues: row.functional_issues ?? [],
+        accessories_included: row.accessories_included ?? [],
+        source_type: (row.source_type ?? "purchased") as SourceType,
+        source_customer_name: row.source_customer_name ?? undefined,
+        purchase_price: row.purchase_price ?? 0,
+        refurbishment_cost: row.refurbishment_cost ?? 0,
+        selling_price: row.selling_price ?? 0,
+        pta_status: (row.pta_status ?? "pending") as UsedPTAStatus,
+        status: "in_stock" as PhoneStatus,
+        warranty_days: row.warranty_days ?? 7,
+        condition_notes: row.condition_notes ?? undefined,
+        photos: row.photos ?? [],
+        purchased_date: row.purchased_date ?? purchaseDate,
+        sold_date: undefined,
+        created_at: row.created_at ?? new Date().toISOString(),
+      } as UsedPhone))
+
+      toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added â€” ${poNumber}`)
+      onSaved(saved)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to save â€” no phones were added")
+    } finally {
+      setSaving(false)
+      setSaveProgress(null)
+    }
+  }
+
+  const grandTotal  = rows.reduce((s, r) => s + (Number(r.purchase_price) || 0), 0)
+  const totalProfit = rows.reduce((s, r) => s + ((Number(r.selling_price) || 0) - (Number(r.purchase_price) || 0)), 0)
+  const allExpanded = rows.every(r => r.expanded)
+  const completedCount = rows.filter(r => r.brand && r.model && r.imei_number.length === 15 && Number(r.purchase_price) > 0 && Number(r.selling_price) > 0).length
+
+  const toggleExpandAll = () =>
+    setRows(prev => prev.map(r => ({ ...r, expanded: !allExpanded })))
+
+  return (
+    <div className="-m-3 sm:-m-4 md:-m-6 bg-slate-100 flex flex-col" style={{ minHeight: "calc(100vh - 64px)" }}>
+
+      {/* ── Fixed top bar ── */}
+      <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3 flex-shrink-0 sticky top-0 z-30">
+        <button onClick={handleClose}
+          className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 transition-colors text-sm font-medium shrink-0">
+          <ChevronLeft className="w-4 h-4" /> Back
+        </button>
+        <div className="w-px h-4 bg-slate-200" />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-sm font-bold text-slate-900">Bulk Add Used Phones</h1>
+          <p className="text-xs text-slate-400">
+            {rows.length} phone{rows.length !== 1 ? "s" : ""}
+            {completedCount > 0 && <span className="text-emerald-600"> · {completedCount} ready</span>}
+            {saveProgress && <span className="text-blue-600 font-medium"> · Saving {saveProgress.done}/{saveProgress.total}…</span>}
+          </p>
+        </div>
+        <button onClick={toggleExpandAll}
+          className="text-xs text-slate-500 hover:text-slate-800 px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shrink-0">
+          {allExpanded ? "Collapse all" : "Expand all"}
+        </button>
+        <button onClick={handleSave} disabled={saving}
+          className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center gap-2 shrink-0">
+          {saving
+            ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <CheckCircle2 className="w-4 h-4" />}
+          Save {rows.length} Phone{rows.length !== 1 ? "s" : ""}
+        </button>
+      </div>
+
+      {/* ── Scrollable page body ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+
+          {/* ── Purchase Order Header card ── */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800">Purchase Details</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Who did you buy from and when</p>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 1</span>
+            </div>
+            <div className="px-5 py-4">
+              <div className="flex items-end gap-6">
+
+                {/* Supplier */}
+                <div className="w-72">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Supplier <span className="text-red-500">*</span>
+                  </label>
+                  <CatalogCombo
+                    value={suppliers.find(s => s.id === supplierId)?.companyName ?? ""}
+                    onChange={v => { const s = suppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
+                    options={suppliers.map(s => s.companyName)}
+                    placeholder="Select or search supplier…"
+                    error={supplierErr}
+                  />
+                  {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Purchase Date <span className="text-red-500">*</span>
+                  </label>
+                  <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)}
+                    className={cn(
+                      "h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors bg-white",
+                      !purchaseDate ? "border-red-400 bg-red-50" : "border-slate-300"
+                    )} />
+                </div>
+
+                {/* Lock hint */}
+                <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pb-1">
+                  <Lock className="w-3 h-3 text-blue-400 shrink-0" />
+                  <span>Lock <Lock className="w-2.5 h-2.5 inline text-blue-400" /> any field on a phone card to copy it to the next</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Phone cards ── */}
+          <div className="space-y-3">
+
+          {rows.map((row, idx) => {
+            const isApple    = row.brand.toLowerCase() === "apple"
+            const hasError   = !!row.rowError
+            const isComplete = !!(row.brand && row.model && row.imei_number.length === 15 && Number(row.purchase_price) > 0 && Number(row.selling_price) > 0)
+            const rowProfit  = (Number(row.selling_price) || 0) - (Number(row.purchase_price) || 0)
+            const gradeMeta  = GRADE_META[row.condition_grade]
+            return (
+              <div key={row.id} className={cn(
+                "rounded-xl border bg-white shadow-sm transition-all",
+                hasError ? "border-red-400 ring-1 ring-red-200" : isComplete ? "border-emerald-400" : "border-slate-200"
+              )}>
+                {/* Card header */}
+                <div className="flex items-center gap-2.5 px-4 py-2.5 cursor-pointer select-none"
+                  onClick={() => setRows(prev => prev.map(r => r.id === row.id ? { ...r, expanded: !r.expanded } : r))}>
+                  <div className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
+                    isComplete ? "bg-emerald-100 text-emerald-700" : hasError ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    {isComplete ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                    {row.brand || row.model ? (
+                      <span className="text-sm font-semibold text-slate-800">
+                        {[row.brand, row.model].filter(Boolean).join(" ")}
+                        {row.color && <span className="text-slate-400 font-normal"> &middot; {row.color}</span>}
+                        {row.storage && <span className="text-slate-400 font-normal"> &middot; {row.storage}</span>}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-slate-400 italic">Phone {idx + 1} — click to fill details</span>
+                    )}
+                    {row.imei_number && (
+                      <span className={cn("text-[10px] font-mono", row.imei_number.length === 15 ? "text-emerald-600" : "text-amber-500")}>
+                        {row.imei_number.length === 15 ? row.imei_number : `${15 - row.imei_number.length} left`}
+                      </span>
+                    )}
+                    {row.condition_grade && <span className={cn("text-[10px] font-bold px-1 py-0.5 rounded", gradeMeta.bg, gradeMeta.text)}>{row.condition_grade}</span>}
+                    {Number(row.purchase_price) > 0 && <span className="text-[10px] text-slate-400">Buy {formatCurrency(Number(row.purchase_price))}</span>}
+                    {Number(row.selling_price) > 0 && <span className="text-[10px] text-slate-400">Sell {formatCurrency(Number(row.selling_price))}</span>}
+                    {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 && (
+                      <span className={cn("text-[10px] font-semibold", rowProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
+                        {rowProfit >= 0 ? "+" : ""}{formatCurrency(rowProfit)}
+                      </span>
+                    )}
+                    {hasError && <span className="text-[10px] text-red-500 font-medium">{row.rowError}</span>}
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => duplicateRow(row.id)} title="Duplicate"
+                      className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors">
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => removeRow(row.id)} disabled={rows.length === 1}
+                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-20">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    {row.expanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400 ml-0.5" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />}
+                  </div>
+                </div>
+
+                {/* Form body */}
+                {row.expanded && (() => {
+                  const brandModels = models.filter(m => m.brandName.toLowerCase() === row.brand.toLowerCase()).map(m => m.name)
+                  return (
+                  <div className="border-t border-slate-100">
+
+                    {/* ── Row 1: Brand · Model · Color · Storage / RAM ── */}
+                    <div className="px-4 pt-4 pb-3">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Device Info</p>
+                      <div className="grid grid-cols-12 gap-3">
+
+                        {/* Brand — col 2 */}
+                        <div className="col-span-2">
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                            Brand <span className="text-red-500">*</span>
+                          </label>
+                          <CatalogCombo
+                            label="Brand"
+                            value={row.brand}
+                            onChange={v => { updateRow(row.id, "brand", v); updateRow(row.id, "model", "") }}
+                            options={brands}
+                            onAdd={onAddBrand} onEdit={onEditBrand} onDelete={onDeleteBrand}
+                            placeholder="e.g. Samsung"
+                            error={!row.brand && hasError}
+                            locked={locks.brand}
+                            onToggleLock={() => toggleLock("brand")}
+                          />
+                        </div>
+
+                        {/* Model — col 4 */}
+                        <div className="col-span-4">
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                            Model <span className="text-red-500">*</span>
+                          </label>
+                          <CatalogCombo
+                            label="Model"
+                            value={row.model}
+                            onChange={v => updateRow(row.id, "model", v)}
+                            options={brandModels}
+                            onAdd={row.brand ? v => onAddModel(row.brand, v) : undefined}
+                            onEdit={row.brand ? onEditModel : undefined}
+                            onDelete={row.brand ? onDeleteModel : undefined}
+                            placeholder={row.brand ? "e.g. Galaxy S24" : "Select brand first"}
+                            error={!row.model.trim() && hasError}
+                            disabled={!row.brand}
+                          />
+                        </div>
+
+                        {/* Color — col 2 */}
+                        <div className="col-span-2">
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Color</label>
+                          <CatalogCombo
+                            label="Color"
+                            value={row.color}
+                            onChange={v => updateRow(row.id, "color", v)}
+                            options={colors}
+                            onAdd={onAddColor} onEdit={onEditColor} onDelete={onDeleteColor}
+                            placeholder="e.g. Black"
+                            locked={locks.color}
+                            onToggleLock={() => toggleLock("color")}
+                          />
+                        </div>
+
+                        {/* Storage — col 2 */}
+                        <div className="col-span-2">
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Storage</label>
+                          <CatalogCombo
+                            label="Storage"
+                            value={row.storage}
+                            onChange={v => updateRow(row.id, "storage", v)}
+                            options={storageOptions}
+                            onAdd={onAddStorage} onEdit={onEditStorage} onDelete={onDeleteStorage}
+                            placeholder="e.g. 128GB"
+                            locked={locks.storage}
+                            onToggleLock={() => toggleLock("storage")}
+                          />
+                        </div>
+
+                        {/* RAM (android) or Battery % (apple) — col 2 */}
+                        <div className="col-span-2">
+                          {isApple ? (
+                            <>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Battery %</label>
+                              <div className="relative">
+                                <input type="number" value={row.battery_health}
+                                  onChange={e => updateRow(row.id, "battery_health", e.target.value)}
+                                  placeholder="91" min="1" max="100"
+                                  className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">RAM</label>
+                              <CatalogCombo
+                                label="RAM"
+                                value={row.ram}
+                                onChange={v => updateRow(row.id, "ram", v)}
+                                options={ramOptions}
+                                onAdd={onAddRam} onEdit={onEditRam} onDelete={onDeleteRam}
+                                placeholder="e.g. 8GB"
+                                locked={locks.ram}
+                                onToggleLock={() => toggleLock("ram")}
+                              />
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Divider ── */}
+                    <div className="border-t border-dashed border-slate-100" />
+
+                    {/* ── Row 2: IMEI · Battery% (android only) · Grade · Screen · Body ── */}
+                    <div className="px-4 pt-3 pb-3">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Condition</p>
+                      <div className="grid grid-cols-12 gap-3 items-start">
+
+                        {/* IMEI — col 3 */}
+                        <div className="col-span-3">
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">IMEI <span className="text-red-500">*</span></label>
+                          <div className="relative">
+                            <input value={row.imei_number}
+                              onChange={e => updateRow(row.id, "imei_number", e.target.value.replace(/\D/g, "").slice(0, 15))}
+                              placeholder="15-digit IMEI" maxLength={15}
+                              className={cn(
+                                "w-full h-9 border rounded-lg px-2.5 pr-8 text-sm font-mono focus:outline-none focus:ring-2 transition-colors",
+                                row.imei_number.length === 15 ? "border-emerald-400 bg-emerald-50 focus:ring-emerald-400"
+                                : row.imei_number.length > 0 ? "border-amber-400 focus:ring-amber-400"
+                                : hasError ? "border-red-400 bg-red-50 focus:ring-red-400" : "border-slate-300 focus:ring-blue-500"
+                              )} />
+                            {row.imei_number.length > 0 && row.imei_number.length < 15 && (
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-amber-500 font-bold pointer-events-none">{15 - row.imei_number.length}</span>
+                            )}
+                            {row.imei_number.length === 15 && <CheckCircle2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-500" />}
+                          </div>
+                        </div>
+
+                        {/* Battery % — col 1 (android only) */}
+                        {!isApple && (
+                          <div className="col-span-1">
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Bat %</label>
+                            <div className="relative">
+                              <input type="number" value={row.battery_health}
+                                onChange={e => updateRow(row.id, "battery_health", e.target.value)}
+                                placeholder="85" min="1" max="100"
+                                className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Grade pills — col 3 */}
+                        <div className={cn(isApple ? "col-span-4" : "col-span-3")}>
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("condition_grade")}
+                              title={locks.condition_grade ? "Locked" : "Click to lock grade"}
+                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
+                                locks.condition_grade ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                              {locks.condition_grade ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Grade</label>
+                          </div>
+                          <div className="flex gap-1">
+                            {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
+                              const m = GRADE_META[g]
+                              return (
+                                <button key={g} type="button" onClick={() => updateRow(row.id, "condition_grade", g)}
+                                  className={cn(
+                                    "flex-1 h-9 rounded-lg text-xs font-bold border-2 transition-all",
+                                    row.condition_grade === g
+                                      ? cn(m.bg, m.text, m.border, "shadow-sm")
+                                      : "border-slate-200 text-slate-400 hover:border-slate-300 bg-white"
+                                  )}>
+                                  {g}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Screen — col 2 */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("screen_condition")}
+                              title={locks.screen_condition ? "Locked" : "Click to lock"}
+                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
+                                locks.screen_condition ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                              {locks.screen_condition ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Screen</label>
+                          </div>
+                          <select value={row.screen_condition} onChange={e => updateRow(row.id, "screen_condition", e.target.value as ScreenCondition)}
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
+                              locks.screen_condition ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            <option value="perfect">Perfect</option>
+                            <option value="minor_scratches">Scratches</option>
+                            <option value="cracked">Cracked</option>
+                            <option value="replaced">Replaced</option>
+                          </select>
+                        </div>
+
+                        {/* Body — col 2 */}
+                        <div className={cn(isApple ? "col-span-2" : "col-span-2")}>
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("body_condition")}
+                              title={locks.body_condition ? "Locked" : "Click to lock"}
+                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
+                                locks.body_condition ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                              {locks.body_condition ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Body</label>
+                          </div>
+                          <select value={row.body_condition} onChange={e => updateRow(row.id, "body_condition", e.target.value as BodyCondition)}
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
+                              locks.body_condition ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            <option value="perfect">Perfect</option>
+                            <option value="minor_wear">Minor Wear</option>
+                            <option value="dents">Dents</option>
+                            <option value="heavy_damage">Heavy</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Divider ── */}
+                    <div className="border-t border-dashed border-slate-100" />
+
+                    {/* ── Row 3: Pricing — BUY · SELL · Warranty · PTA · Notes ── */}
+                    <div className="px-4 pt-3 pb-4">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Pricing</p>
+                      <div className="grid grid-cols-12 gap-3 items-start">
+
+                        {/* Buy Price — col 2 */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("purchase_price")}
+                              title={locks.purchase_price ? "Locked" : "Click to lock buy price"}
+                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
+                                locks.purchase_price ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                              {locks.purchase_price ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-red-500">*</span></label>
+                          </div>
+                          <input type="number" value={row.purchase_price}
+                            onChange={e => updateRow(row.id, "purchase_price", e.target.value)}
+                            placeholder="0" min="0"
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
+                              (!row.purchase_price || Number(row.purchase_price) <= 0) && hasError
+                                ? "border-red-400 bg-red-50 focus:ring-red-400"
+                                : locks.purchase_price ? "border-blue-400 bg-blue-50 focus:ring-blue-500" : "border-slate-300 focus:ring-blue-500")} />
+                        </div>
+
+                        {/* Sell Price — col 2 */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("selling_price")}
+                              title={locks.selling_price ? "Locked" : "Click to lock sell price"}
+                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
+                                locks.selling_price ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                              {locks.selling_price ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Sell Price <span className="text-red-500">*</span></label>
+                          </div>
+                          <input type="number" value={row.selling_price}
+                            onChange={e => updateRow(row.id, "selling_price", e.target.value)}
+                            placeholder="0" min="0"
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
+                              (!row.selling_price || Number(row.selling_price) <= 0) && hasError
+                                ? "border-red-400 bg-red-50 focus:ring-red-400"
+                                : locks.selling_price ? "border-blue-400 bg-blue-50 focus:ring-blue-500" : "border-slate-300 focus:ring-blue-500")} />
+                        </div>
+
+                        {/* Profit display — col 2 */}
+                        {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 ? (
+                          <div className="col-span-2 flex flex-col justify-end">
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Margin</label>
+                            <div className={cn("h-9 flex items-center px-3 rounded-lg text-sm font-bold border",
+                              rowProfit >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200")}>
+                              {rowProfit >= 0 ? "+" : ""}{formatCurrency(rowProfit)}
+                              <span className={cn("ml-1.5 text-xs font-medium",
+                                rowProfit >= 0 ? "text-emerald-500" : "text-red-400")}>
+                                ({Number(row.selling_price) > 0 ? Math.round((rowProfit / Number(row.selling_price)) * 100) : 0}%)
+                              </span>
+                            </div>
+                          </div>
+                        ) : <div className="col-span-2" />}
+
+                        {/* Warranty — col 2 */}
+                        <div className="col-span-2">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("warranty_days")}
+                              title={locks.warranty_days ? "Locked" : "Click to lock warranty"}
+                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
+                                locks.warranty_days ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                              {locks.warranty_days ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Warranty</label>
+                          </div>
+                          <select value={row.warranty_days} onChange={e => updateRow(row.id, "warranty_days", e.target.value)}
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
+                              locks.warranty_days ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            <option value="0">No warranty</option>
+                            <option value="3">3 days</option>
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30">1 month</option>
+                            <option value="90">3 months</option>
+                          </select>
+                        </div>
+
+                        {/* PTA — col 1 */}
+                        <div className="col-span-1">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("pta_status")}
+                              title={locks.pta_status ? "Locked" : "Click to lock PTA"}
+                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
+                                locks.pta_status ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                              {locks.pta_status ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">PTA</label>
+                          </div>
+                          <select value={row.pta_status} onChange={e => updateRow(row.id, "pta_status", e.target.value as UsedPTAStatus)}
+                            className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
+                              locks.pta_status ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            <option value="approved">✓ OK</option>
+                            <option value="pending">? Pending</option>
+                            <option value="blocked">✗ Blocked</option>
+                          </select>
+                        </div>
+
+                        {/* Notes — fills remaining cols */}
+                        <div className="col-span-3">
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Notes</label>
+                          <input value={row.condition_notes} onChange={e => updateRow(row.id, "condition_notes", e.target.value)}
+                            placeholder="Accessories, issues, remarks…"
+                            className="w-full h-9 border border-slate-300 rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                  )
+                })()}
+              </div>
+            )
+          })}
+
+          {/* Add phone button */}
+          <button onClick={addRow}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-dashed border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50 hover:border-blue-400 transition-all">
+            <Plus className="w-4 h-4" /> Add Another Phone
+          </button>
+          </div>{/* end phone cards */}
+
+          {/* ── Order Summary card — bottom of page ── */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800">Order Summary</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Total cost · payment · ledger entry</p>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 3</span>
+            </div>
+            <div className="px-5 py-4">
+              <div className="grid grid-cols-3 gap-6">
+
+                {/* Items breakdown */}
+                <div className="col-span-2 space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Items</p>
+                  {rows.filter(r => r.brand || r.model || Number(r.purchase_price) > 0).length === 0 ? (
+                    <p className="text-sm text-slate-400 italic">No phones added yet</p>
+                  ) : rows.map((r, i) => (
+                    <div key={r.id} className="flex items-center gap-2 text-sm py-1 border-b border-slate-50 last:border-0">
+                      <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">{i + 1}</span>
+                      <span className="flex-1 text-slate-700 truncate">
+                        {r.brand || r.model ? `${r.brand} ${r.model}`.trim() : <span className="text-slate-300 italic">Unnamed phone</span>}
+                        {r.color && <span className="text-slate-400"> · {r.color}</span>}
+                        {r.storage && <span className="text-slate-400"> · {r.storage}</span>}
+                      </span>
+                      <span className="text-xs text-slate-400 font-mono shrink-0">
+                        {r.imei_number.length === 15 ? r.imei_number : '—'}
+                      </span>
+                      <span className="text-sm font-semibold text-slate-800 shrink-0 w-24 text-right">
+                        {Number(r.purchase_price) > 0 ? formatCurrency(Number(r.purchase_price)) : <span className="text-slate-300">—</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Payment + Totals */}
+                <div className="space-y-4">
+
+                  {/* Payment inputs */}
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Payment</p>
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Amount Paid (Rs)</label>
+                        <input type="number" min={0} placeholder="0" value={amountPaid}
+                          onChange={e => setAmountPaid(e.target.value)}
+                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Payment Account</label>
+                        <select value={accountId} onChange={e => setAccountId(e.target.value)}
+                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors">
+                          <option value="">No account</option>
+                          {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Totals */}
+                  <div className="border-t border-slate-100 pt-4 space-y-2 text-sm">
+                    <div className="flex justify-between text-slate-500">
+                      <span>{rows.length} phone{rows.length !== 1 ? "s" : ""} subtotal</span>
+                      <span className="font-semibold text-slate-800">{formatCurrency(grandTotal)}</span>
+                    </div>
+                    {parseFloat(amountPaid) > 0 && (
+                      <div className="flex justify-between text-slate-500">
+                        <span>Amount paid</span>
+                        <span className="text-emerald-600 font-semibold">− {formatCurrency(parseFloat(amountPaid))}</span>
+                      </div>
+                    )}
+                    <div className={cn(
+                      "flex justify-between font-bold pt-2 border-t border-slate-200 text-base",
+                      Math.max(0, grandTotal - parseFloat(amountPaid || "0")) === 0 && grandTotal > 0
+                        ? "text-emerald-600" : "text-slate-800"
+                    )}>
+                      <span>Balance Due</span>
+                      <span>{formatCurrency(Math.max(0, grandTotal - parseFloat(amountPaid || "0")))}</span>
+                    </div>
+                  </div>
+
+                  {/* Est. profit */}
+                  {totalProfit > 0 && (
+                    <div className="border-t border-dashed border-slate-200 pt-3 text-xs text-slate-500 space-y-1.5">
+                      <div className="flex justify-between">
+                        <span>Est. sell revenue</span>
+                        <span className="font-medium text-slate-700">{formatCurrency(rows.reduce((s, r) => s + (Number(r.selling_price) || 0), 0))}</span>
+                      </div>
+                      <div className="flex justify-between text-emerald-600 font-semibold">
+                        <span>Est. profit</span>
+                        <span>+{formatCurrency(totalProfit)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {parseFloat(amountPaid) >= grandTotal && grandTotal > 0 && (
+                    <div className="flex items-center gap-1.5 text-emerald-600 text-xs font-semibold bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-200">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Fully paid
+                    </div>
+                  )}
+
+                  <button onClick={handleSave} disabled={saving}
+                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
+                    {saving
+                      ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <CheckCircle2 className="w-4 h-4" />}
+                    Save {rows.length} Phone{rows.length !== 1 ? "s" : ""}
+                  </button>
+                  <p className="text-center text-[11px] text-slate-400">{completedCount}/{rows.length} ready to save</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-6" />
+        </div>{/* end max-w container */}
+      </div>{/* end scrollable body */}
+    </div>
+  )
+}
+
+
+// â”€â”€â”€ Add / Edit Dialog (5-step) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type FormData = {
   brand: string; model: string; color: string; storage: string; ram: string
-  imei_number: string; source_type: SourceType; source_customer_name: string
+  imei_number: string; source_type: SourceType
+  // Existing customer source
+  source_customer_id: string; source_customer_name: string
+  // Walk-in seller source
+  walkin_name: string; walkin_phone: string; walkin_cnic: string; walkin_address: string
+  // Supplier source
+  supplier_id: string; supplier_name: string
   purchased_date: string; purchase_price: string
   condition_grade: ConditionGrade; screen_condition: ScreenCondition
   body_condition: BodyCondition; battery_health: string
@@ -681,17 +1945,23 @@ type FormData = {
   refurbishment_cost: string; selling_price: string
   warranty_days: string; pta_status: UsedPTAStatus; status: PhoneStatus
   photos: string[]
+  // Payment
+  payment_amount: string; payment_account_id: string
 }
 
 const EMPTY_FORM: FormData = {
   brand: "", model: "", color: "", storage: "128GB", ram: "4GB",
-  imei_number: "", source_type: "customer_trade_in", source_customer_name: "",
+  imei_number: "", source_type: "walk_in",
+  source_customer_id: "", source_customer_name: "",
+  walkin_name: "", walkin_phone: "", walkin_cnic: "", walkin_address: "",
+  supplier_id: "", supplier_name: "",
   purchased_date: todayPKT(), purchase_price: "",
   condition_grade: "B", screen_condition: "perfect", body_condition: "minor_wear",
   battery_health: "", functional_issues: [], accessories_included: [], condition_notes: "",
   refurbishment_cost: "0", selling_price: "",
   warranty_days: "7", pta_status: "approved", status: "in_stock",
   photos: [],
+  payment_amount: "", payment_account_id: "",
 }
 
 const STEPS = ["Basic Info", "Condition", "Pricing", "Photos", "Review"]
@@ -707,18 +1977,21 @@ function Field({ label, required, children }: { label: string; required?: boolea
   )
 }
 
-function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOptions, ramOptions, onAddBrand, onAddColor, onAddStorage, onAddRam }: {
+function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOptions, ramOptions, suppliers, customers, accounts, onAddBrand, onAddColor, onAddStorage, onAddRam }: {
   editPhone: UsedPhone | null
   onClose: () => void
-  onSave: (data: Partial<UsedPhone>) => void
+  onSave: (data: Partial<UsedPhone> & { _paymentAmount?: number; _paymentAccountId?: string }) => void
   brands: string[]
   colors: string[]
   storageOptions: string[]
   ramOptions: string[]
-  onAddBrand: (name: string) => Promise<boolean>
-  onAddColor: (name: string) => Promise<boolean>
-  onAddStorage: (name: string) => Promise<boolean>
-  onAddRam: (name: string) => Promise<boolean>
+  suppliers: Supplier[]
+  customers: Customer[]
+  accounts: FinanceAccount[]
+  onAddBrand: (name: string) => Promise<void>
+  onAddColor: (name: string) => Promise<void>
+  onAddStorage: (name: string) => Promise<void>
+  onAddRam: (name: string) => Promise<void>
 }) {
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<FormData>(() => {
@@ -728,7 +2001,14 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       storage: editPhone.storage, ram: editPhone.ram,
       imei_number: editPhone.imei_number,
       source_type: editPhone.source_type,
+      source_customer_id: editPhone.source_customer_id ?? "",
       source_customer_name: editPhone.source_customer_name ?? "",
+      walkin_name: editPhone.source_type === "walk_in" ? (editPhone.source_customer_name ?? "") : "",
+      walkin_phone: editPhone.source_phone ?? "",
+      walkin_cnic: editPhone.source_cnic ?? "",
+      walkin_address: editPhone.source_address ?? "",
+      supplier_id: editPhone.supplier_id ?? "",
+      supplier_name: editPhone.supplier_name ?? "",
       purchased_date: editPhone.purchased_date,
       purchase_price: editPhone.purchase_price.toString(),
       condition_grade: editPhone.condition_grade,
@@ -744,6 +2024,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       pta_status: editPhone.pta_status,
       status: editPhone.status,
       photos: editPhone.photos,
+      payment_amount: "", payment_account_id: "",
     }
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -779,6 +2060,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
         return "Fill in brand, model, and IMEI"
       if (!/^\d{15}$/.test(form.imei_number))
         return "IMEI must be exactly 15 digits"
+      if (form.source_type === "walk_in" && !form.walkin_name.trim())
+        return "Enter the seller's name"
       if (!form.purchase_price || isNaN(Number(form.purchase_price)) || Number(form.purchase_price) <= 0)
         return "Enter a valid purchase price"
     }
@@ -805,12 +2088,26 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
   const handleSubmit = () => {
     const err = validateStep()
     if (err) { toast.error(err); return }
+    // Resolve source fields based on type
+    const isExistingCustomer = form.source_type === "customer_trade_in"
+    const isWalkIn           = form.source_type === "walk_in"
+    const isSupplier         = form.source_type === "purchased"
+
+    const paid = Number(form.payment_amount) || 0
     onSave({
       brand: form.brand, model: form.model, color: form.color,
       storage: form.storage, ram: form.ram,
       imei_number: form.imei_number,
       source_type: form.source_type,
-      source_customer_name: form.source_customer_name || undefined,
+      source_customer_id:   isExistingCustomer ? (form.source_customer_id || undefined) : undefined,
+      source_customer_name: isExistingCustomer ? (form.source_customer_name || undefined)
+                          : isWalkIn           ? (form.walkin_name || undefined)
+                          : undefined,
+      source_phone:   isWalkIn ? (form.walkin_phone || undefined) : undefined,
+      source_cnic:    isWalkIn ? (form.walkin_cnic  || undefined) : undefined,
+      source_address: isWalkIn ? (form.walkin_address || undefined) : undefined,
+      supplier_id:   isSupplier ? (form.supplier_id   || undefined) : undefined,
+      supplier_name: isSupplier ? (form.supplier_name || undefined) : undefined,
       purchased_date: form.purchased_date,
       purchase_price: Number(form.purchase_price),
       condition_grade: form.condition_grade,
@@ -826,6 +2123,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       pta_status: form.pta_status,
       status: form.status,
       photos: form.photos,
+      _paymentAmount: paid > 0 ? paid : undefined,
+      _paymentAccountId: paid > 0 && form.payment_account_id ? form.payment_account_id : undefined,
     })
   }
 
@@ -866,7 +2165,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       i < step  ? "bg-emerald-500 text-white" :
                       "bg-slate-200"
                     )}>
-                      {i < step ? "✓" : i + 1}
+                      {i < step ? "âœ“" : i + 1}
                     </span>
                     <span className="hidden sm:inline">{s}</span>
                     <span className="sm:hidden">{s.split(" ")[0]}</span>
@@ -940,9 +2239,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                               e.preventDefault()
                               if (!newColorName.trim()) return
                               setAddingColor(true)
-                              const ok = await onAddColor(newColorName.trim())
-                              setAddingColor(false)
-                              if (ok) { set("color", newColorName.trim()); setNewColorName(""); setShowNewColor(false) }
+                              try { await onAddColor(newColorName.trim()); set("color", newColorName.trim()); setNewColorName(""); setShowNewColor(false) } finally { setAddingColor(false) }
                             }
                           }} />
                         <button type="button" disabled={!newColorName.trim() || addingColor}
@@ -950,9 +2247,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           onClick={async () => {
                             if (!newColorName.trim()) return
                             setAddingColor(true)
-                            const ok = await onAddColor(newColorName.trim())
-                            setAddingColor(false)
-                            if (ok) { set("color", newColorName.trim()); setNewColorName(""); setShowNewColor(false) }
+                            try { await onAddColor(newColorName.trim()); set("color", newColorName.trim()); setNewColorName(""); setShowNewColor(false) } finally { setAddingColor(false) }
                           }}>
                           {addingColor ? "..." : "Save"}
                         </button>
@@ -981,9 +2276,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                               e.preventDefault()
                               if (!newStorageName.trim()) return
                               setAddingStorage(true)
-                              const ok = await onAddStorage(newStorageName.trim())
-                              setAddingStorage(false)
-                              if (ok) { set("storage", newStorageName.trim()); setNewStorageName(""); setShowNewStorage(false) }
+                              try { await onAddStorage(newStorageName.trim()); set("storage", newStorageName.trim()); setNewStorageName(""); setShowNewStorage(false) } finally { setAddingStorage(false) }
                             }
                           }} />
                         <button type="button" disabled={!newStorageName.trim() || addingStorage}
@@ -991,9 +2284,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           onClick={async () => {
                             if (!newStorageName.trim()) return
                             setAddingStorage(true)
-                            const ok = await onAddStorage(newStorageName.trim())
-                            setAddingStorage(false)
-                            if (ok) { set("storage", newStorageName.trim()); setNewStorageName(""); setShowNewStorage(false) }
+                            try { await onAddStorage(newStorageName.trim()); set("storage", newStorageName.trim()); setNewStorageName(""); setShowNewStorage(false) } finally { setAddingStorage(false) }
                           }}>
                           {addingStorage ? "..." : "Save"}
                         </button>
@@ -1003,7 +2294,9 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     )}
                   </Field>
                   <Field label="RAM">
-                    {!showNewRam ? (
+                    {form.brand.toLowerCase() === "apple" ? (
+                      <span className="block text-sm text-slate-400 italic py-2">Not applicable for iPhone</span>
+                    ) : !showNewRam ? (
                       <>
                         <select value={form.ram} onChange={e => set("ram", e.target.value)} className={selectCls}>
                           {ramOptions.map(r => <option key={r} value={r}>{r}</option>)}
@@ -1022,9 +2315,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                               e.preventDefault()
                               if (!newRamName.trim()) return
                               setAddingRam(true)
-                              const ok = await onAddRam(newRamName.trim())
-                              setAddingRam(false)
-                              if (ok) { set("ram", newRamName.trim()); setNewRamName(""); setShowNewRam(false) }
+                              try { await onAddRam(newRamName.trim()); set("ram", newRamName.trim()); setNewRamName(""); setShowNewRam(false) } finally { setAddingRam(false) }
                             }
                           }} />
                         <button type="button" disabled={!newRamName.trim() || addingRam}
@@ -1032,9 +2323,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           onClick={async () => {
                             if (!newRamName.trim()) return
                             setAddingRam(true)
-                            const ok = await onAddRam(newRamName.trim())
-                            setAddingRam(false)
-                            if (ok) { set("ram", newRamName.trim()); setNewRamName(""); setShowNewRam(false) }
+                            try { await onAddRam(newRamName.trim()); set("ram", newRamName.trim()); setNewRamName(""); setShowNewRam(false) } finally { setAddingRam(false) }
                           }}>
                           {addingRam ? "..." : "Save"}
                         </button>
@@ -1048,23 +2337,114 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <input type="text" value={form.imei_number} onChange={e => set("imei_number", e.target.value.replace(/\D/g,"").slice(0,15))} placeholder="15-digit IMEI" maxLength={15} className={inputCls} />
                   <p className="text-xs text-slate-400 mt-1">{form.imei_number.length}/15 digits</p>
                 </Field>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Source Type">
-                    <select value={form.source_type} onChange={e => set("source_type", e.target.value as SourceType)} className={selectCls}>
-                      {(Object.entries(SOURCE_LABEL) as [SourceType, string][]).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Customer / Source Name">
-                    <input type="text" value={form.source_customer_name} onChange={e => set("source_customer_name", e.target.value)} placeholder="Optional" className={inputCls} />
-                  </Field>
+                {/* â”€â”€ Source â”€â”€ */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Where did this phone come from?<span className="text-red-500 ml-0.5">*</span></label>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {([
+                      { type: "walk_in"           as SourceType, label: "Walk-in Seller", icon: "ðŸš¶", desc: "Person off the street" },
+                      { type: "customer_trade_in" as SourceType, label: "Our Customer",   icon: "ðŸ‘¤", desc: "Existing customer" },
+                      { type: "purchased"         as SourceType, label: "Supplier",       icon: "ðŸª", desc: "Wholesaler / dealer" },
+                    ]).map(opt => (
+                      <button
+                        key={opt.type}
+                        type="button"
+                        onClick={() => set("source_type", opt.type)}
+                        className={cn(
+                          "flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-center transition-all",
+                          form.source_type === opt.type
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        )}
+                      >
+                        <span className="text-xl">{opt.icon}</span>
+                        <span className="text-xs font-semibold leading-tight">{opt.label}</span>
+                        <span className="text-[10px] text-slate-400 leading-tight">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Walk-in seller details */}
+                  {form.source_type === "walk_in" && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Seller Details</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Full Name <span className="text-red-500">*</span></label>
+                          <input type="text" value={form.walkin_name} onChange={e => set("walkin_name", e.target.value)} placeholder="e.g. Ali Raza" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number</label>
+                          <input type="tel" value={form.walkin_phone} onChange={e => set("walkin_phone", e.target.value)} placeholder="e.g. 0300-1234567" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">CNIC</label>
+                          <input type="text" value={form.walkin_cnic} onChange={e => set("walkin_cnic", e.target.value)} placeholder="Optional" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Address</label>
+                          <input type="text" value={form.walkin_address} onChange={e => set("walkin_address", e.target.value)} placeholder="Optional" className={inputCls} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Existing customer picker */}
+                  {form.source_type === "customer_trade_in" && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Select Customer</p>
+                      <select
+                        value={form.source_customer_id}
+                        onChange={e => {
+                          const c = customers.find(c => c.id === e.target.value)
+                          set("source_customer_id", e.target.value)
+                          set("source_customer_name", c?.name ?? "")
+                        }}
+                        className={selectCls}
+                      >
+                        <option value="">-- Select customer --</option>
+                        {customers.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}{c.phone ? ` Â· ${c.phone}` : ""}</option>
+                        ))}
+                      </select>
+                      {form.source_customer_id && (() => {
+                        const c = customers.find(x => x.id === form.source_customer_id)
+                        return c ? (
+                          <div className="flex items-center gap-2 mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                            <span className="font-semibold">{c.name}</span>
+                            {c.phone && <span className="text-slate-500">Â· {c.phone}</span>}
+                          </div>
+                        ) : null
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Supplier picker */}
+                  {form.source_type === "purchased" && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Select Supplier</p>
+                      <select
+                        value={form.supplier_id}
+                        onChange={e => {
+                          const s = suppliers.find(s => s.id === e.target.value)
+                          set("supplier_id", e.target.value)
+                          set("supplier_name", s?.companyName ?? "")
+                        }}
+                        className={selectCls}
+                      >
+                        <option value="">-- Select supplier --</option>
+                        {suppliers.map(s => (
+                          <option key={s.id} value={s.id}>{s.companyName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Date Acquired">
                     <input type="date" value={form.purchased_date} onChange={e => set("purchased_date", e.target.value)} className={inputCls} />
                   </Field>
-                  <Field label="Purchase Price (₨)" required>
+                  <Field label="Purchase Price (â‚¨)" required>
                     <input type="number" value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
@@ -1093,12 +2473,12 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     ))}
                   </div>
                   <p className="text-xs text-slate-400 mt-1.5">
-                    {form.condition_grade === "A+" ? "Like new — no visible wear" :
-                     form.condition_grade === "A"  ? "Excellent — very minor wear" :
-                     form.condition_grade === "B+" ? "Good — light scratches, minor issues" :
+                    {form.condition_grade === "A+" ? "Like new â€” no visible wear" :
+                     form.condition_grade === "A"  ? "Excellent â€” very minor wear" :
+                     form.condition_grade === "B+" ? "Good â€” light scratches, minor issues" :
                      form.condition_grade === "B"  ? "Moderate wear, functional" :
                      form.condition_grade === "C"  ? "Heavy wear, multiple issues" :
-                     "Poor — significant damage"}
+                     "Poor â€” significant damage"}
                   </p>
                 </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1113,10 +2493,12 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     </select>
                   </Field>
                 </div>
-                <Field label="Battery Health (%)">
-                  <input type="number" value={form.battery_health} onChange={e => set("battery_health", e.target.value)} placeholder="e.g. 85" min={0} max={100} className={inputCls} />
-                  {form.battery_health && <BatteryBar value={Number(form.battery_health)} />}
-                </Field>
+                {form.brand.toLowerCase() === "apple" && (
+                  <Field label="Battery Health (%)">
+                    <input type="number" value={form.battery_health} onChange={e => set("battery_health", e.target.value)} placeholder="e.g. 85" min={0} max={100} className={inputCls} />
+                    {form.battery_health && <BatteryBar value={Number(form.battery_health)} />}
+                  </Field>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Functional Issues</label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1171,10 +2553,10 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
             {step === 2 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Refurbishment Cost (₨)">
+                  <Field label="Refurbishment Cost (â‚¨)">
                     <input type="number" value={form.refurbishment_cost} onChange={e => set("refurbishment_cost", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
-                  <Field label="Selling Price (₨)" required>
+                  <Field label="Selling Price (â‚¨)" required>
                     <input type="number" value={form.selling_price} onChange={e => set("selling_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
@@ -1216,6 +2598,45 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     </select>
                   </Field>
                 </div>
+                {/* Payment — only for new phones */}
+                {!editPhone && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Payment</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Field label="Amount Paid (₨)">
+                        <input
+                          type="number"
+                          value={form.payment_amount}
+                          onChange={e => set("payment_amount", e.target.value)}
+                          placeholder={`0 of ${form.purchase_price || "?"}`}
+                          min={0}
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Pay From Account">
+                        <select value={form.payment_account_id} onChange={e => set("payment_account_id", e.target.value)} className={selectCls}>
+                          <option value="">-- Select account --</option>
+                          {accounts.map(a => (
+                            <option key={a.id} value={a.id}>
+                              {a.name} ({a.type === "cash" ? "Cash" : a.type === "bank" ? "Bank" : "Mobile Wallet"}) · ₨{a.currentBalance.toLocaleString()}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                    {form.payment_amount && Number(form.payment_amount) > 0 && !form.payment_account_id && (
+                      <p className="text-xs text-amber-600 flex items-center gap-1">
+                        <Info className="w-3.5 h-3.5" /> Select an account to record the payment
+                      </p>
+                    )}
+                    {form.payment_amount && Number(form.payment_amount) > 0 && form.payment_account_id && (
+                      <p className="text-xs text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        ₨{Number(form.payment_amount).toLocaleString()} will be deducted from your account on save
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1261,8 +2682,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Device</p>
                     {[
                       { l: "Brand/Model", v: `${form.brand} ${form.model}` },
-                      { l: "Color/Storage", v: `${form.color} · ${form.storage}` },
-                      { l: "RAM", v: form.ram },
+                      { l: "Color/Storage", v: `${form.color} Â· ${form.storage}` },
+                      ...(form.brand.toLowerCase() !== "apple" ? [{ l: "RAM", v: form.ram }] : []),
                       { l: "IMEI", v: form.imei_number },
                       { l: "Source", v: SOURCE_LABEL[form.source_type] },
                       { l: "Date", v: formatDate(form.purchased_date) },
@@ -1279,7 +2700,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       { l: "Grade",   v: form.condition_grade },
                       { l: "Screen",  v: SCREEN_LABEL[form.screen_condition] },
                       { l: "Body",    v: BODY_LABEL[form.body_condition] },
-                      { l: "Battery", v: form.battery_health ? `${form.battery_health}%` : "Not checked" },
+                      ...(form.brand.toLowerCase() === "apple" ? [{ l: "Battery", v: form.battery_health ? `${form.battery_health}%` : "Not checked" }] : []),
                       { l: "Issues",  v: form.functional_issues.length === 0 ? "None" : `${form.functional_issues.length} issue(s)` },
                     ].map(({l,v}) => (
                       <div key={l} className="flex justify-between text-sm">
@@ -1358,7 +2779,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function UsedPhonesPage() {
   const [phones, setPhones] = useState<UsedPhone[]>([])
@@ -1378,20 +2799,36 @@ export default function UsedPhonesPage() {
   const [selectedPhone, setSelectedPhone] = useState<UsedPhone | null>(null)
   const [showDetails, setShowDetails]     = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showBulkDialog, setShowBulkDialog] = useState(false)
   const [editPhone, setEditPhone]         = useState<UsedPhone | null>(null)
   const [showCalculator, setShowCalculator] = useState(false)
   const [sellPhone, setSellPhone]         = useState<UsedPhone | null>(null)
 
-  // ── Dynamic dropdown data ─────────────────────────────────────────────────
+  // â”€â”€ Dynamic dropdown data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [brands, setBrands] = useState<string[]>([])
+  const [models, setModels] = useState<{ name: string; brandName: string; deviceType: "iphone" | "android"; dbId: string; table: "iphone_models" | "android_models" }[]>([])
   const [colors, setColors] = useState<string[]>([])
   const [storageOptions, setStorageOptions] = useState<string[]>([])
   const [ramOptions, setRamOptions] = useState<string[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
 
   async function fetchBrands() {
     const tenantId = await getTenantId()
     const { data } = await supabase.from("brands").select("name").eq("tenant_id", tenantId).eq("status", "Active").order("name")
     if (data) setBrands(data.map(d => d.name))
+  }
+
+  async function fetchModels() {
+    const tenantId = await getTenantId()
+    const [iRes, aRes] = await Promise.all([
+      supabase.from("iphone_models").select("id, name, brand_name").eq("tenant_id", tenantId).order("name"),
+      supabase.from("android_models").select("id, name, brand_name").eq("tenant_id", tenantId).order("name"),
+    ])
+    const iphones = (iRes.data ?? []).map((m: any) => ({ name: m.name, brandName: m.brand_name || "Apple", deviceType: "iphone" as const, dbId: m.id, table: "iphone_models" as const }))
+    const androids = (aRes.data ?? []).map((m: any) => ({ name: m.name, brandName: m.brand_name || "", deviceType: "android" as const, dbId: m.id, table: "android_models" as const }))
+    setModels([...iphones, ...androids])
   }
 
   async function fetchColors() {
@@ -1412,43 +2849,114 @@ export default function UsedPhonesPage() {
     if (data) setRamOptions(data.map(d => d.name))
   }
 
-  async function handleAddBrand(name: string): Promise<boolean> {
+  // All handlers return Promise<void> to match CreatableCombobox / QuickCatPopover signatures
+  async function handleAddBrand(name: string): Promise<void> {
     const tenantId = await getTenantId()
     const { error } = await supabase.from("brands").insert({ tenant_id: tenantId, name: name.trim(), logo_initials: name.trim().substring(0, 2).toUpperCase(), status: "Active" })
-    if (error) { toast.error("Failed: " + error.message); return false }
+    if (error) throw new Error(error.message)
     setBrands(prev => [...new Set([...prev, name.trim()])].sort())
-    toast.success(`Brand "${name.trim()}" added!`)
-    return true
+    toast.success(`Brand "${name.trim()}" added`)
+  }
+  async function handleEditBrand(oldVal: string, newVal: string): Promise<void> {
+    const { error } = await supabase.from("brands").update({ name: newVal }).eq("name", oldVal)
+    if (error) throw new Error(error.message)
+    setBrands(prev => prev.map(b => b === oldVal ? newVal : b).sort())
+    toast.success("Brand updated")
+  }
+  async function handleDeleteBrand(val: string): Promise<void> {
+    const { error } = await supabase.from("brands").delete().eq("name", val)
+    if (error) throw new Error(error.message)
+    setBrands(prev => prev.filter(b => b !== val))
+    toast.success(`"${val}" deleted`)
   }
 
-  async function handleAddColor(name: string): Promise<boolean> {
+  async function handleAddModel(brand: string, name: string): Promise<void> {
+    const tenantId = await getTenantId()
+    const isApple = brand.toLowerCase() === "apple"
+    const table = isApple ? "iphone_models" : "android_models"
+    const { data, error } = await supabase.from(table).insert({ tenant_id: tenantId, name: name.trim(), brand_name: brand, is_system: false }).select("id").single()
+    if (error) throw new Error(error.message)
+    setModels(prev => [...prev, { name: name.trim(), brandName: brand, deviceType: isApple ? "iphone" : "android", dbId: (data as any).id, table }])
+    toast.success(`Model "${name.trim()}" added`)
+  }
+  async function handleEditModel(oldVal: string, newVal: string): Promise<void> {
+    const m = models.find(x => x.name === oldVal)
+    if (!m) return
+    const { error } = await supabase.from(m.table).update({ name: newVal }).eq("id", m.dbId)
+    if (error) throw new Error(error.message)
+    setModels(prev => prev.map(x => x.dbId === m.dbId ? { ...x, name: newVal } : x))
+    toast.success("Model updated")
+  }
+  async function handleDeleteModel(val: string): Promise<void> {
+    const m = models.find(x => x.name === val)
+    if (!m) return
+    const { error } = await supabase.from(m.table).delete().eq("id", m.dbId)
+    if (error) throw new Error(error.message)
+    setModels(prev => prev.filter(x => x.dbId !== m.dbId))
+    toast.success(`"${val}" deleted`)
+  }
+
+  async function handleAddColor(name: string): Promise<void> {
     const tenantId = await getTenantId()
     const { error } = await supabase.from("colors").insert({ tenant_id: tenantId, name: name.trim() })
-    if (error) { toast.error("Failed: " + error.message); return false }
+    if (error) throw new Error(error.message)
     setColors(prev => [...new Set([...prev, name.trim()])].sort())
-    toast.success(`Color "${name.trim()}" added!`)
-    return true
+    toast.success(`Color "${name.trim()}" added`)
+  }
+  async function handleEditColor(oldVal: string, newVal: string): Promise<void> {
+    const { error } = await supabase.from("colors").update({ name: newVal }).eq("name", oldVal)
+    if (error) throw new Error(error.message)
+    setColors(prev => prev.map(c => c === oldVal ? newVal : c).sort())
+    toast.success("Color updated")
+  }
+  async function handleDeleteColor(val: string): Promise<void> {
+    const { error } = await supabase.from("colors").delete().eq("name", val)
+    if (error) throw new Error(error.message)
+    setColors(prev => prev.filter(c => c !== val))
+    toast.success(`"${val}" deleted`)
   }
 
-  async function handleAddStorage(name: string): Promise<boolean> {
+  async function handleAddStorage(name: string): Promise<void> {
     const tenantId = await getTenantId()
     const { error } = await supabase.from("storage_options").insert({ tenant_id: tenantId, name: name.trim() })
-    if (error) { toast.error("Failed: " + error.message); return false }
+    if (error) throw new Error(error.message)
     setStorageOptions(prev => [...new Set([...prev, name.trim()])].sort())
-    toast.success(`Storage "${name.trim()}" added!`)
-    return true
+    toast.success(`Storage "${name.trim()}" added`)
+  }
+  async function handleEditStorage(oldVal: string, newVal: string): Promise<void> {
+    const { error } = await supabase.from("storage_options").update({ name: newVal }).eq("name", oldVal)
+    if (error) throw new Error(error.message)
+    setStorageOptions(prev => prev.map(s => s === oldVal ? newVal : s).sort())
+    toast.success("Storage updated")
+  }
+  async function handleDeleteStorage(val: string): Promise<void> {
+    const { error } = await supabase.from("storage_options").delete().eq("name", val)
+    if (error) throw new Error(error.message)
+    setStorageOptions(prev => prev.filter(s => s !== val))
+    toast.success(`"${val}" deleted`)
   }
 
-  async function handleAddRam(name: string): Promise<boolean> {
+  async function handleAddRam(name: string): Promise<void> {
     const tenantId = await getTenantId()
     const { error } = await supabase.from("ram_options").insert({ tenant_id: tenantId, name: name.trim() })
-    if (error) { toast.error("Failed: " + error.message); return false }
+    if (error) throw new Error(error.message)
     setRamOptions(prev => [...new Set([...prev, name.trim()])].sort())
-    toast.success(`RAM "${name.trim()}" added!`)
-    return true
+    toast.success(`RAM "${name.trim()}" added`)
+  }
+  async function handleEditRam(oldVal: string, newVal: string): Promise<void> {
+    const { error } = await supabase.from("ram_options").update({ name: newVal }).eq("name", oldVal)
+    if (error) throw new Error(error.message)
+    setRamOptions(prev => prev.map(r => r === oldVal ? newVal : r).sort())
+    toast.success("RAM updated")
+  }
+  async function handleDeleteRam(val: string): Promise<void> {
+    const { error } = await supabase.from("ram_options").delete().eq("name", val)
+    if (error) throw new Error(error.message)
+    setRamOptions(prev => prev.filter(r => r !== val))
+    toast.success(`"${val}" deleted`)
   }
 
-  // ── Fetch data from Supabase ──────────────────────────────────────────────
+  // â”€â”€ Fetch data from Supabase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function fetchPhones() {
     try {
       const data = await getUsedPhones()
@@ -1463,12 +2971,16 @@ export default function UsedPhonesPage() {
   useEffect(() => {
     fetchPhones()
     fetchBrands()
+    fetchModels()
     fetchColors()
     fetchStorageOptions()
     fetchRamOptions()
+    getSuppliers().then(setSuppliers).catch(() => {})
+    getCustomers().then(setCustomers).catch(() => {})
+    getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
   }, [])
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const stats = useMemo(() => {
     const totalInvested = phones.reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
     const revenueSold   = phones.filter(p => p.status === "sold").reduce((s, p) => s + p.selling_price, 0)
@@ -1480,7 +2992,7 @@ export default function UsedPhonesPage() {
     return { total: phones.length, totalInvested, revenueSold, gradeCount, profitSold }
   }, [phones])
 
-  // ── Filtered ───────────────────────────────────────────────────────────────
+  // â”€â”€ Filtered â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const filtered = useMemo(() => {
     let res = [...phones]
     if (search)     res = res.filter(p => `${p.brand} ${p.model} ${p.color} ${p.imei_number}`.toLowerCase().includes(search.toLowerCase()))
@@ -1499,80 +3011,96 @@ export default function UsedPhonesPage() {
 
   const resetPage = () => setPage(1)
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleView = (p: UsedPhone) => { setSelectedPhone(p); setShowDetails(true) }
   const handleEdit = (p: UsedPhone) => { setEditPhone(p); setShowAddDialog(true); setShowDetails(false) }
   const handleSell = (p: UsedPhone) => { setSellPhone(p); setShowDetails(false) }
 
-  const handleSave = async (data: Partial<UsedPhone>) => {
+  const handleSave = async (data: Partial<UsedPhone> & { _paymentAmount?: number; _paymentAccountId?: string }) => {
+    const { _paymentAmount, _paymentAccountId, ...phoneData } = data
     try {
       if (editPhone) {
-        // Optimistic local update
-        setPhones(prev => prev.map(p => p.id === editPhone.id ? { ...p, ...data } : p))
-        // Persist to Supabase
-        await updateUsedPhone(editPhone.id, data as Record<string, unknown>).catch(() => {})
+        const updated = await updateUsedPhone(editPhone.id, phoneData)
+        setPhones(prev => prev.map(p => p.id === editPhone.id ? updated : p))
         toast.success("Phone updated successfully")
       } else {
-        const newPhone: UsedPhone = {
-          id: `used-${Date.now()}`,
-          imei_number: "", brand: "", model: "", color: "", storage: "", ram: "",
-          condition_grade: "B", screen_condition: "perfect", body_condition: "minor_wear",
-          functional_issues: [], accessories_included: [],
-          source_type: "customer_trade_in", purchase_price: 0, refurbishment_cost: 0,
-          selling_price: 0, pta_status: "approved", status: "in_stock", warranty_days: 7,
-          photos: [], purchased_date: todayPKT(),
-          created_at: new Date().toISOString(),
-          ...data,
-        }
-        setPhones(prev => [newPhone, ...prev])
-        // Persist to Supabase
-        await createUsedPhone({
-          brand: newPhone.brand,
-          model: newPhone.model,
-          imei_number: newPhone.imei_number,
-          color: newPhone.color,
-          storage: newPhone.storage,
-          ram: newPhone.ram,
-          condition_grade: newPhone.condition_grade,
-          screen_condition: newPhone.screen_condition ?? 'perfect',
-          body_condition: newPhone.body_condition ?? 'perfect',
-          battery_health: newPhone.battery_health,
-          functional_issues: newPhone.functional_issues ?? [],
-          accessories_included: newPhone.accessories_included ?? [],
-          source_type: newPhone.source_type ?? 'purchased',
-          source_customer_name: newPhone.source_customer_name,
-          purchase_price: newPhone.purchase_price,
-          refurbishment_cost: newPhone.refurbishment_cost ?? 0,
-          selling_price: newPhone.selling_price,
-          pta_status: newPhone.pta_status ?? 'pending',
-          status: 'in_stock',
-          warranty_days: newPhone.warranty_days ?? 7,
-          condition_notes: newPhone.condition_notes,
-          photos: newPhone.photos ?? [],
-          purchased_date: newPhone.purchased_date,
+        const created = await createUsedPhone({
+          brand: phoneData.brand ?? "",
+          model: phoneData.model ?? "",
+          imei_number: phoneData.imei_number ?? "",
+          color: phoneData.color ?? "",
+          storage: phoneData.storage ?? "",
+          ram: phoneData.ram ?? "",
+          condition_grade: phoneData.condition_grade ?? "B",
+          screen_condition: phoneData.screen_condition ?? "perfect",
+          body_condition: phoneData.body_condition ?? "perfect",
+          battery_health: phoneData.battery_health,
+          functional_issues: phoneData.functional_issues ?? [],
+          accessories_included: phoneData.accessories_included ?? [],
+          source_type: phoneData.source_type ?? "walk_in",
+          source_customer_id: phoneData.source_customer_id,
+          source_customer_name: phoneData.source_customer_name,
+          source_phone: (phoneData as any).source_phone,
+          source_cnic: (phoneData as any).source_cnic,
+          source_address: (phoneData as any).source_address,
+          supplier_id: (phoneData as any).supplier_id,
+          supplier_name: (phoneData as any).supplier_name,
+          purchase_price: phoneData.purchase_price ?? 0,
+          refurbishment_cost: phoneData.refurbishment_cost ?? 0,
+          selling_price: phoneData.selling_price ?? 0,
+          pta_status: phoneData.pta_status ?? "pending",
+          status: "in_stock",
+          warranty_days: phoneData.warranty_days ?? 7,
+          condition_notes: phoneData.condition_notes,
+          photos: phoneData.photos ?? [],
+          purchased_date: phoneData.purchased_date ?? todayPKT(),
           sold_date: undefined,
-        }).catch(() => {})
+        })
+        // Deduct from finance account if payment was made
+        if (_paymentAmount && _paymentAmount > 0 && _paymentAccountId) {
+          try {
+            await createWithdrawal({
+              accountId: _paymentAccountId,
+              amount: _paymentAmount,
+              date: phoneData.purchased_date ?? todayPKT(),
+              description: `Used phone purchase: ${phoneData.brand ?? ""} ${phoneData.model ?? ""} (IMEI: ${phoneData.imei_number ?? ""})`,
+            })
+            // Refresh finance accounts list so balances stay current
+            getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
+          } catch (finErr) {
+            toast.error(`Phone saved but payment recording failed: ${finErr instanceof Error ? finErr.message : "Unknown error"}`)
+          }
+        }
+        setPhones(prev => [created, ...prev])
         toast.success("Phone added successfully")
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to save phone")
+      return
     }
     setShowAddDialog(false)
     setEditPhone(null)
   }
 
   const handleSoldConfirm = async (id: string, customerName: string, price: number) => {
-    setPhones(prev => prev.map(p => p.id === id ? {
-      ...p,
-      status: "sold",
-      selling_price: price,
-      sold_date: todayPKT(),
-      source_customer_name: customerName,
-    } : p))
-    // Persist to Supabase
-    await updateUsedPhone(id, { status: 'Sold', sellingPrice: price } as Record<string, unknown>).catch(() => {})
+    try {
+      const updated = await updateUsedPhone(id, {
+        status: "sold",
+        selling_price: price,
+        sold_date: todayPKT(),
+        source_customer_name: customerName,
+      })
+      setPhones(prev => prev.map(p => p.id === id ? updated : p))
+      toast.success("Phone marked as sold!")
+    } catch {
+      toast.error("Failed to mark as sold")
+    }
     setSellPhone(null)
-    toast.success("Phone marked as sold!")
+  }
+
+  const handleBulkSaved = (saved: UsedPhone[]) => {
+    setPhones(prev => [...saved, ...prev])
+    setShowBulkDialog(false)
   }
 
   const hasFilters = gradeFilter || brandFilter || statusFilter || ptaFilter || minPrice || maxPrice || minBattery
@@ -1595,13 +3123,45 @@ export default function UsedPhonesPage() {
     )
   }
 
+  // Full-page bulk add â€” renders instead of the list page
+  if (showBulkDialog) {
+    return (
+      <BulkAddDialog
+        onClose={() => setShowBulkDialog(false)}
+        onSaved={handleBulkSaved}
+        brands={brands}
+        models={models}
+        colors={colors}
+        storageOptions={storageOptions}
+        ramOptions={ramOptions}
+        suppliers={suppliers}
+        accounts={financeAccounts}
+        onAddBrand={handleAddBrand}
+        onEditBrand={handleEditBrand}
+        onDeleteBrand={handleDeleteBrand}
+        onAddModel={handleAddModel}
+        onEditModel={handleEditModel}
+        onDeleteModel={handleDeleteModel}
+        onAddColor={handleAddColor}
+        onEditColor={handleEditColor}
+        onDeleteColor={handleDeleteColor}
+        onAddStorage={handleAddStorage}
+        onEditStorage={handleEditStorage}
+        onDeleteStorage={handleDeleteStorage}
+        onAddRam={handleAddRam}
+        onEditRam={handleEditRam}
+        onDeleteRam={handleDeleteRam}
+      />
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Used / Refurbished Phones</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{phones.length} phones · {phones.filter(p => p.status === "in_stock").length} available</p>
+          <p className="text-slate-500 text-sm mt-0.5">{phones.length} phones Â· {phones.filter(p => p.status === "in_stock").length} available</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
@@ -1611,15 +3171,15 @@ export default function UsedPhonesPage() {
             <Calculator className="w-3.5 h-3.5" /> Trade-In Calc
           </button>
           <button
-            onClick={() => { setEditPhone(null); setShowAddDialog(true) }}
+            onClick={() => setShowBulkDialog(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
           >
-            <Plus className="w-3.5 h-3.5" /> Add Phone
+            <Plus className="w-3.5 h-3.5" /> Add Phone(s)
           </button>
         </div>
       </div>
 
-      {/* Stats — Row 1: Inventory summary + 6 grades */}
+      {/* Stats â€” Row 1: Inventory summary + 6 grades */}
       <div className="space-y-2">
         <div className="grid grid-cols-8 gap-2">
           {/* Inventory Summary */}
@@ -1650,7 +3210,7 @@ export default function UsedPhonesPage() {
             </div>
           </div>
 
-          {/* Grade breakdown — 6 cards */}
+          {/* Grade breakdown â€” 6 cards */}
           {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
             const m = GRADE_META[g]
             const count = stats.gradeCount[g]
@@ -1676,7 +3236,7 @@ export default function UsedPhonesPage() {
           })}
         </div>
 
-        {/* Row 2: Financial summary — 3 cards */}
+        {/* Row 2: Financial summary â€” 3 cards */}
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
             <div className="flex items-center justify-between mb-1.5">
@@ -1806,11 +3366,11 @@ export default function UsedPhonesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (₨)</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (â‚¨)</label>
               <input type="number" value={minPrice} onChange={e => { setMinPrice(e.target.value); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (₨)</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (â‚¨)</label>
               <input type="number" value={maxPrice} onChange={e => { setMaxPrice(e.target.value); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -1884,7 +3444,7 @@ export default function UsedPhonesPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-500">
-            Page {page} of {totalPages} · {filtered.length} phones
+            Page {page} of {totalPages} Â· {filtered.length} phones
           </p>
           <div className="flex items-center gap-1">
             <button
@@ -1939,6 +3499,9 @@ export default function UsedPhonesPage() {
           colors={colors}
           storageOptions={storageOptions}
           ramOptions={ramOptions}
+          suppliers={suppliers}
+          customers={customers}
+          accounts={financeAccounts}
           onAddBrand={handleAddBrand}
           onAddColor={handleAddColor}
           onAddStorage={handleAddStorage}

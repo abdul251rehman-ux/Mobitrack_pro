@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase"
+
 const STORAGE_KEY = "mobitrack_session"
 
 /**
@@ -15,7 +17,13 @@ export async function getTenantId(): Promise<string> {
     const user = JSON.parse(saved)
     if (!user?.tenantId) throw new Error("No tenant found in session.")
 
-    return user.tenantId
+    const tenantId: string = user.tenantId
+
+    // Set DB-level session variable so RLS policies can enforce tenant isolation.
+    // Must be awaited — queries in the same Promise.all will fail RLS if this hasn't run first.
+    try { await supabase.rpc("set_tenant_context", { p_tenant_id: tenantId }) } catch { /* non-fatal */ }
+
+    return tenantId
   } catch {
     throw new Error("Not authenticated. Please sign in.")
   }

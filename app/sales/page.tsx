@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo, useEffect } from "react"
-import { Plus, Eye, Printer, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet } from "lucide-react"
+import { Plus, Eye, Printer, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet, BadgeCheck } from "lucide-react"
 
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -9,21 +9,28 @@ import { startOfDay, startOfWeek, startOfMonth, isAfter, parseISO } from "date-f
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import { getSales, updateSaleStatus } from "@/lib/api/sales"
+import { getSales } from "@/lib/api/sales"
 import { getTenant } from "@/lib/api/settings"
+import { getFinanceAccounts } from "@/lib/api/finance"
 import type { ShopInfo } from "@/lib/pdf/invoice"
 import { Sale } from "@/data/types"
+import type { FinanceAccount } from "@/lib/api/types"
 import { generateInvoicePDF } from "@/lib/pdf/invoice"
+import { supabase } from "@/lib/supabase"
+import { getTenantId } from "@/lib/api/helpers"
 import { DataTable } from "@/components/shared/data-table"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog"
 import { formatCurrency, formatDatePKT, todayPKT } from "@/lib/utils"
 import { PAYMENT_METHODS } from "@/lib/constants"
 
@@ -78,11 +85,100 @@ export default function SalesPage() {
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [customerSearch, setCustomerSearch] = useState("")
+  const [modelSearch, setModelSearch] = useState("")
+  const [salePriceMin, setSalePriceMin] = useState("")
+  const [salePriceMax, setSalePriceMax] = useState("")
   // Universal search — matches invoice#, customer, IMEI, product name, color, price
   const [universalSearch, setUniversalSearch] = useState("")
 
-  // ── Dialog state ────────────────────────────────────────────────────────────
-  const [refundTarget, setRefundTarget] = useState<Sale | null>(null)
+  // ── Finance accounts for collect payment ────────────────────────────────────
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
+  useEffect(() => {
+    getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
+  }, [])
+
+  // ── Collect Payment dialog state ─────────────────────────────────────────────
+  const [collectTarget, setCollectTarget] = useState<Sale | null>(null)
+  const [collectAccountId, setCollectAccountId] = useState("")
+  const [collectAmount, setCollectAmount] = useState("")
+  const [collectMethod, setCollectMethod] = useState("Cash")
+  const [collecting, setCollecting] = useState(false)
+
+  function openCollect(sale: Sale) {
+    const outstanding = sale.total - sale.amountReceived
+    setCollectTarget(sale)
+    setCollectAmount(String(outstanding > 0 ? outstanding : ""))
+    const defaultAcc = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]
+    setCollectAccountId(defaultAcc?.id ?? "")
+    setCollectMethod("Cash")
+    setCollecting(false)
+  }
+
+  async function handleCollectPayment() {
+    if (!collectTarget || collecting) return
+    const amount = parseFloat(collectAmount)
+    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
+    if (!collectAccountId) { toast.error("Select a finance account"); return }
+    setCollecting(true)
+    try {
+      const tenantId = await getTenantId()
+      const today = todayPKT()
+      const outstanding = collectTarget.total - collectTarget.amountReceived
+      const newReceived = collectTarget.amountReceived + amount
+      const newStatus = newReceived >= collectTarget.total ? "Completed" : "Pending"
+
+      // Update sale amountReceived + status
+      await supabase.from("sales")
+        .update({ amount_received: newReceived, status: newStatus })
+        .eq("id", collectTarget.id)
+
+      // Payment record
+      await supabase.from("payments").insert({
+        tenant_id: tenantId, date: today, type: "Received",
+        entity_type: "Customer",
+        entity_id: collectTarget.customerId || null,
+        entity_name: collectTarget.customerName,
+        reference_type: "Sale",
+        reference_number: collectTarget.invoiceNumber,
+        amount, method: collectMethod, status: "Completed",
+        notes: `Udhaar collection for ${collectTarget.invoiceNumber}`,
+      })
+
+      // Finance transaction + update account balance
+      await supabase.from("finance_transactions").insert({
+        tenant_id: tenantId, date: today, type: "sale_receipt",
+        account_id: collectAccountId, amount,
+        reference_type: "Sale", reference_number: collectTarget.invoiceNumber,
+        description: `Udhaar collected — ${collectTarget.invoiceNumber} (${collectTarget.customerName})`,
+      })
+      const { data: accRow } = await supabase.from("finance_accounts")
+        .select("current_balance").eq("id", collectAccountId).single()
+      if (accRow) {
+        await supabase.from("finance_accounts")
+          .update({ current_balance: (accRow as any).current_balance + amount })
+          .eq("id", collectAccountId)
+      }
+
+      // Update local state — sale record and finance account balance
+      setSalesList(prev => prev.map(s => s.id === collectTarget.id
+        ? { ...s, amountReceived: newReceived, status: newStatus as any }
+        : s
+      ))
+      setFinanceAccounts(prev => prev.map(a =>
+        a.id === collectAccountId ? { ...a, currentBalance: a.currentBalance + amount } : a
+      ))
+      toast.success(
+        newStatus === "Completed"
+          ? `Payment collected — ${collectTarget.invoiceNumber} fully paid!`
+          : `${formatCurrency(amount)} collected — ${formatCurrency(collectTarget.total - newReceived)} still outstanding`
+      )
+      setCollectTarget(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to collect payment")
+    } finally {
+      setCollecting(false)
+    }
+  }
 
   // ── Stats ───────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -101,6 +197,17 @@ export default function SalesPage() {
     const pendingSales = salesList.filter((s) => s.status === "Pending")
     const pendingTotal = pendingSales.reduce((acc, s) => acc + s.total, 0)
 
+    const completedCount = salesList.filter((s) => s.status === "Completed").length
+    const completionRate = salesList.length > 0
+      ? Math.round((completedCount / salesList.length) * 100)
+      : 0
+
+    const totalRevenue = salesList.reduce((acc, s) => acc + s.total, 0)
+    const collectedRevenue = salesList.reduce((acc, s) => acc + s.amountReceived, 0)
+    const collectionRate = totalRevenue > 0
+      ? Math.round((collectedRevenue / totalRevenue) * 100)
+      : 0
+
     return {
       todayTotal,
       todayCount: todaySales.length,
@@ -110,17 +217,31 @@ export default function SalesPage() {
       monthCount: monthSales.length,
       pendingTotal,
       pendingCount: pendingSales.length,
+      completionRate,
+      completedCount,
+      collectionRate,
+      totalRevenue,
+      collectedRevenue,
     }
   }, [salesList])
 
   // ── Filtered data ───────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
+    const priceMin = salePriceMin ? parseFloat(salePriceMin) : null
+    const priceMax = salePriceMax ? parseFloat(salePriceMax) : null
     return salesList.filter((sale) => {
       if (customerSearch && !sale.customerName.toLowerCase().includes(customerSearch.toLowerCase())) return false
       if (paymentFilter !== "all" && sale.paymentMethod !== paymentFilter) return false
       if (statusFilter !== "all" && sale.status !== statusFilter) return false
       if (dateFrom && sale.date < dateFrom) return false
       if (dateTo && sale.date > dateTo) return false
+      if (priceMin !== null && sale.total < priceMin) return false
+      if (priceMax !== null && sale.total > priceMax) return false
+      if (modelSearch.trim()) {
+        const mq = modelSearch.toLowerCase().trim()
+        const hasModel = sale.items.some(item => item.productName.toLowerCase().includes(mq))
+        if (!hasModel) return false
+      }
 
       if (universalSearch.trim()) {
         const q = universalSearch.toLowerCase().trim()
@@ -141,7 +262,7 @@ export default function SalesPage() {
 
       return true
     })
-  }, [salesList, customerSearch, paymentFilter, statusFilter, dateFrom, dateTo, universalSearch])
+  }, [salesList, customerSearch, paymentFilter, statusFilter, dateFrom, dateTo, salePriceMin, salePriceMax, modelSearch, universalSearch])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleReset() {
@@ -150,21 +271,10 @@ export default function SalesPage() {
     setPaymentFilter("all")
     setStatusFilter("all")
     setCustomerSearch("")
+    setModelSearch("")
+    setSalePriceMin("")
+    setSalePriceMax("")
     setUniversalSearch("")
-  }
-
-  async function handleRefundConfirm() {
-    if (!refundTarget) return
-    try {
-      await updateSaleStatus(refundTarget.id, "Refunded")
-      setSalesList((prev) =>
-        prev.map((s) => (s.id === refundTarget.id ? { ...s, status: "Refunded" } : s))
-      )
-      toast.success("Sale refunded successfully")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to refund sale")
-    }
-    setRefundTarget(null)
   }
 
   // ── Export Excel ─────────────────────────────────────────────────────────────
@@ -392,17 +502,31 @@ export default function SalesPage() {
               <Printer className="w-4 h-4" />
             </Button>
 
-            {/* Refund — only for Completed */}
-            {sale.status === "Completed" && (
+            {/* Collect Payment — only for Pending (credit/udhaar) */}
+            {sale.status === "Pending" && (
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50"
-                onClick={() => setRefundTarget(sale)}
-                title="Process refund"
+                className="h-8 w-8 text-amber-500 hover:text-emerald-600 hover:bg-emerald-50"
+                onClick={() => openCollect(sale)}
+                title={`Collect payment — ${formatCurrency(sale.total - sale.amountReceived)} outstanding`}
               >
-                <RotateCcw className="w-4 h-4" />
+                <BadgeCheck className="w-4 h-4" />
               </Button>
+            )}
+
+            {/* Return/Refund — links to returns page with invoice pre-filled */}
+            {sale.status === "Completed" && (
+              <Link href={`/returns?invoice=${encodeURIComponent(sale.invoiceNumber)}`}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50"
+                  title="Process return / refund"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </Button>
+              </Link>
             )}
           </div>
         )
@@ -436,8 +560,8 @@ export default function SalesPage() {
         }
       />
 
-      {/* Summary Stat Cards — 4 in one row */}
-      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+      {/* Summary Stat Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
         <StatCard
           title="Today's Sales"
           value={formatCurrency(stats.todayTotal)}
@@ -447,29 +571,63 @@ export default function SalesPage() {
           gradient="from-blue-50 to-blue-100"
         />
         <StatCard
-          title="This Week's Sales"
+          title="This Week"
           value={formatCurrency(stats.weekTotal)}
           subtext={`${stats.weekCount} transaction${stats.weekCount !== 1 ? "s" : ""}`}
           icon={TrendingUp}
-          iconBg="bg-blue-100"
+          iconBg="bg-emerald-100"
           gradient="from-emerald-50 to-emerald-100"
         />
         <StatCard
-          title="This Month's Sales"
+          title="This Month"
           value={formatCurrency(stats.monthTotal)}
           subtext={`${stats.monthCount} transaction${stats.monthCount !== 1 ? "s" : ""}`}
           icon={Calendar}
-          iconBg="bg-blue-100"
+          iconBg="bg-purple-100"
           gradient="from-purple-50 to-purple-100"
         />
         <StatCard
-          title="Outstanding (Pending)"
+          title="Outstanding"
           value={formatCurrency(stats.pendingTotal)}
-          subtext={`${stats.pendingCount} pending sale${stats.pendingCount !== 1 ? "s" : ""}`}
+          subtext={`${stats.pendingCount} pending`}
           icon={AlertCircle}
-          iconBg="bg-blue-100"
+          iconBg="bg-amber-100"
           gradient="from-amber-50 to-amber-100"
         />
+        {/* Completion rate */}
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-col justify-between">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Completion Rate</p>
+          <div className="flex items-end gap-1.5">
+            <span className={`text-2xl font-bold leading-none ${stats.completionRate >= 80 ? "text-emerald-600" : stats.completionRate >= 50 ? "text-amber-600" : "text-red-600"}`}>
+              {stats.completionRate}%
+            </span>
+            <span className="text-xs text-slate-400 mb-0.5">completed</span>
+          </div>
+          <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${stats.completionRate >= 80 ? "bg-emerald-500" : stats.completionRate >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+              style={{ width: `${stats.completionRate}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1">{stats.completedCount} of {salesList.length} sales</p>
+        </div>
+        {/* Collection rate */}
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-col justify-between">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Collection Rate</p>
+          <div className="flex items-end gap-1.5">
+            <span className={`text-2xl font-bold leading-none ${stats.collectionRate >= 80 ? "text-emerald-600" : stats.collectionRate >= 50 ? "text-amber-600" : "text-red-600"}`}>
+              {stats.collectionRate}%
+            </span>
+            <span className="text-xs text-slate-400 mb-0.5">collected</span>
+          </div>
+          <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${stats.collectionRate >= 80 ? "bg-emerald-500" : stats.collectionRate >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+              style={{ width: `${stats.collectionRate}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1">{formatCurrency(stats.collectedRevenue)} of {formatCurrency(stats.totalRevenue)}</p>
+        </div>
       </div>
 
       {/* Loading State */}
@@ -500,15 +658,53 @@ export default function SalesPage() {
 
         <div className="flex flex-wrap items-end gap-2">
           {/* Customer search */}
-          <div className="flex flex-col gap-1 min-w-0 flex-1 w-full sm:w-auto">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer Name</label>
+          <div className="flex flex-col gap-1 min-w-0 w-full sm:w-auto sm:min-w-[160px]">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
               <Input
-                placeholder="Filter by customer name..."
+                placeholder="Customer name..."
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
                 className="pl-7 h-8 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Model search */}
+          <div className="flex flex-col gap-1 min-w-0 w-full sm:w-auto sm:min-w-[150px]">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Model / Product</label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+              <Input
+                placeholder="e.g. iPhone 15, Samsung..."
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value)}
+                className="pl-7 h-8 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Sale price range */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Sale Amount (Rs)</label>
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                min="0"
+                placeholder="Min"
+                value={salePriceMin}
+                onChange={(e) => setSalePriceMin(e.target.value)}
+                className="h-8 text-xs w-20"
+              />
+              <span className="text-slate-300 text-xs">—</span>
+              <Input
+                type="number"
+                min="0"
+                placeholder="Max"
+                value={salePriceMax}
+                onChange={(e) => setSalePriceMax(e.target.value)}
+                className="h-8 text-xs w-20"
               />
             </div>
           </div>
@@ -625,13 +821,18 @@ export default function SalesPage() {
                   </span>
                 </div>
 
-                {/* Row 4: Total + Items count */}
-                <div className="flex items-center gap-2 mb-2.5">
+                {/* Row 4: Total + Items count + outstanding */}
+                <div className="flex items-center gap-2 mb-2.5 flex-wrap">
                   <span className="text-base font-bold text-slate-900">{formatCurrency(sale.total)}</span>
                   <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
                     <ShoppingCart className="w-3 h-3" />
                     {sale.items.length} item{sale.items.length !== 1 ? "s" : ""}
                   </span>
+                  {sale.status === "Pending" && sale.total - sale.amountReceived > 0 && (
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                      Udhaar: {formatCurrency(sale.total - sale.amountReceived)}
+                    </span>
+                  )}
                 </div>
 
                 {/* Row 5: Action buttons */}
@@ -663,15 +864,23 @@ export default function SalesPage() {
                     <Printer className="w-3 h-3" />
                     Print
                   </Button>
-                  {sale.status === "Completed" && (
+                  {sale.status === "Pending" && (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1 h-8 text-xs gap-1.5 text-red-500 border-red-200 hover:bg-red-50"
-                      onClick={() => setRefundTarget(sale)}
+                      className="flex-1 h-8 text-xs gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 font-semibold"
+                      onClick={() => openCollect(sale)}
                     >
-                      <RotateCcw className="w-3 h-3" />
-                      Refund
+                      <BadgeCheck className="w-3 h-3" />
+                      Collect
+                    </Button>
+                  )}
+                  {sale.status === "Completed" && (
+                    <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-red-500 border-red-200 hover:bg-red-50" asChild>
+                      <Link href={`/returns?invoice=${encodeURIComponent(sale.invoiceNumber)}`}>
+                        <RotateCcw className="w-3 h-3" />
+                        Refund
+                      </Link>
                     </Button>
                   )}
                 </div>
@@ -693,17 +902,93 @@ export default function SalesPage() {
       </>
       )}
 
-      {/* ── Refund Confirm Dialog ────────────────────────────────────────────── */}
-      <ConfirmDialog
-        open={!!refundTarget}
-        onOpenChange={(open) => !open && setRefundTarget(null)}
-        title="Process Refund"
-        description={`Are you sure you want to refund ${refundTarget?.invoiceNumber}? This will mark the sale as Refunded and cannot be undone.`}
-        confirmLabel="Yes, Refund"
-        cancelLabel="Cancel"
-        onConfirm={handleRefundConfirm}
-        variant="destructive"
-      />
+      {/* ── Collect Payment (Udhaar) Dialog ─────────────────────────────────── */}
+      <Dialog open={!!collectTarget} onOpenChange={v => { if (!v) setCollectTarget(null) }}>
+        <DialogContent className="max-w-sm w-[95vw] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900">Collect Payment</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              {collectTarget?.invoiceNumber} · {collectTarget?.customerName}
+            </DialogDescription>
+          </DialogHeader>
+
+          {collectTarget && (
+            <div className="space-y-4 py-1">
+              {/* Outstanding summary */}
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-amber-700">Total Bill</span>
+                  <span className="font-semibold text-slate-800">{formatCurrency(collectTarget.total)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-amber-700">Already Paid</span>
+                  <span className="font-semibold text-emerald-700">{formatCurrency(collectTarget.amountReceived)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold border-t border-amber-200 pt-1.5">
+                  <span className="text-amber-800">Outstanding (Udhaar)</span>
+                  <span className="text-amber-800">{formatCurrency(collectTarget.total - collectTarget.amountReceived)}</span>
+                </div>
+              </div>
+
+              {/* Amount to collect */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Amount Collecting Now (Rs)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={collectTarget.total - collectTarget.amountReceived}
+                  value={collectAmount}
+                  onChange={e => setCollectAmount(e.target.value)}
+                  className="h-9 text-sm font-semibold"
+                  autoFocus
+                />
+                {parseFloat(collectAmount) > 0 && (
+                  <p className="text-[11px] text-slate-500">
+                    Remaining after this:{" "}
+                    <span className={parseFloat(collectAmount) >= collectTarget.total - collectTarget.amountReceived ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
+                      {formatCurrency(Math.max(0, collectTarget.total - collectTarget.amountReceived - parseFloat(collectAmount)))}
+                    </span>
+                    {parseFloat(collectAmount) >= collectTarget.total - collectTarget.amountReceived && " — Fully Paid!"}
+                  </p>
+                )}
+              </div>
+
+              {/* Payment method */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Payment Method</Label>
+                <Select value={collectMethod} onValueChange={setCollectMethod}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Finance account */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Add to Account</Label>
+                <Select value={collectAccountId} onValueChange={setCollectAccountId}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select account..." /></SelectTrigger>
+                  <SelectContent>
+                    {financeAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCollectTarget(null)}>Cancel</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleCollectPayment}
+              disabled={collecting || !collectAmount || parseFloat(collectAmount) <= 0}
+            >
+              {collecting ? "Saving..." : "Collect Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

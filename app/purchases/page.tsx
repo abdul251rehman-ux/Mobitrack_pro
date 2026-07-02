@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
-import { Plus, Eye, Pencil, ShoppingBag, CalendarDays, TrendingDown, AlertCircle, RotateCcw, Truck, Package, FileText, Download } from "lucide-react"
+import { useState, useMemo, useEffect, useCallback } from "react"
+import { Plus, Eye, Pencil, ShoppingBag, CalendarDays, TrendingDown, AlertCircle, RotateCcw, Truck, Package, FileText, Download, ArrowLeft, Search } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -13,6 +13,7 @@ import { getTenantId } from "@/lib/api/helpers"
 import type { Mobile, Accessory } from "@/data/types"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { Purchase, PurchaseItem, Supplier } from "@/data/types"
+import { NewPurchaseSheet } from "@/app/purchases/new-purchase-sheet"
 import { DataTable } from "@/components/shared/data-table"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
@@ -135,6 +136,11 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
           <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => onEdit(row.original)} title="Edit purchase">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
+          <Link href={`/purchase-returns?from=${row.original.id}`}>
+            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="Return items to supplier">
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
         </div>
       ),
     },
@@ -360,28 +366,27 @@ export default function PurchasesPage() {
     return [...new Set([...mNames, ...aNames])].sort()
   }, [mobiles, accessories])
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true)
-        const [purchasesData, suppliersData, mobilesData, accessoriesData] = await Promise.all([
-          getPurchases(),
-          getSuppliers(),
-          getMobiles(),
-          getAccessories(),
-        ])
-        setPurchases(purchasesData)
-        setSuppliers(suppliersData)
-        setMobiles(mobilesData)
-        setAccessories(accessoriesData)
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to load purchases")
-      } finally {
-        setLoading(false)
-      }
+  const loadPurchases = useCallback(async () => {
+    try {
+      setLoading(true)
+      const [purchasesData, suppliersData, mobilesData, accessoriesData] = await Promise.all([
+        getPurchases(),
+        getSuppliers(),
+        getMobiles(),
+        getAccessories(),
+      ])
+      setPurchases(purchasesData)
+      setSuppliers(suppliersData)
+      setMobiles(mobilesData)
+      setAccessories(accessoriesData)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load purchases")
+    } finally {
+      setLoading(false)
     }
-    fetchData()
   }, [])
+
+  useEffect(() => { loadPurchases() }, [loadPurchases])
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [dateFrom, setDateFrom] = useState("")
@@ -389,10 +394,12 @@ export default function PurchasesPage() {
   const [supplierFilter, setSupplierFilter] = useState("all")
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all")
   const [deliveryStatusFilter, setDeliveryStatusFilter] = useState("all")
+  const [search, setSearch] = useState("")
 
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [viewPurchase, setViewPurchase] = useState<Purchase | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
+  const [newPurchaseOpen, setNewPurchaseOpen] = useState(false)
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const todayStats = useMemo(() => {
@@ -421,9 +428,21 @@ export default function PurchasesPage() {
       if (supplierFilter !== "all" && p.supplierId !== supplierFilter) return false
       if (paymentStatusFilter !== "all" && p.paymentStatus !== paymentStatusFilter) return false
       if (deliveryStatusFilter !== "all" && p.deliveryStatus !== deliveryStatusFilter) return false
+      if (search.trim()) {
+        const q = search.toLowerCase().trim()
+        const matchesHeader =
+          p.poNumber.toLowerCase().includes(q) ||
+          p.supplierName.toLowerCase().includes(q) ||
+          (p.notes ?? "").toLowerCase().includes(q)
+        const matchesItem = p.items.some(i =>
+          i.productName.toLowerCase().includes(q) ||
+          (i.imeis ?? []).some(imei => imei.toLowerCase().includes(q))
+        )
+        if (!matchesHeader && !matchesItem) return false
+      }
       return true
     })
-  }, [purchases, dateFrom, dateTo, supplierFilter, paymentStatusFilter, deliveryStatusFilter])
+  }, [purchases, dateFrom, dateTo, supplierFilter, paymentStatusFilter, deliveryStatusFilter, search])
 
   const totalPayable = useMemo(
     () =>
@@ -440,6 +459,7 @@ export default function PurchasesPage() {
     supplierFilter !== "all" ? supplierFilter : "",
     paymentStatusFilter !== "all" ? paymentStatusFilter : "",
     deliveryStatusFilter !== "all" ? deliveryStatusFilter : "",
+    search,
   ].filter(Boolean).length
 
   const handleReset = () => {
@@ -448,6 +468,7 @@ export default function PurchasesPage() {
     setSupplierFilter("all")
     setPaymentStatusFilter("all")
     setDeliveryStatusFilter("all")
+    setSearch("")
   }
 
   const handleView = (purchase: Purchase) => {
@@ -532,6 +553,41 @@ export default function PurchasesPage() {
         )
       }
 
+      // ── Sync mobiles.stock for quantity changes ────────────────────────
+      for (const newItem of editItems) {
+        if (newItem.productType !== "Mobile" || !newItem.productId) continue
+        const oldItem = editPurchase.items.find(i => i.productId === newItem.productId)
+        const oldQty = oldItem?.quantity ?? 0
+        const delta = newItem.quantity - oldQty
+        if (delta === 0) continue
+        const { data: mob } = await supabase.from("mobiles")
+          .select("stock").eq("id", newItem.productId).eq("tenant_id", tenantId).maybeSingle()
+        if (mob) {
+          await supabase.from("mobiles")
+            .update({ stock: Math.max(0, (mob as any).stock + delta) })
+            .eq("id", newItem.productId)
+        }
+        if (delta > 0) {
+          // Add placeholder imei_records for added quantity — real IMEIs unknown at edit time
+          const records = Array.from({ length: delta }, (_, i) => ({
+            tenant_id: tenantId,
+            product_id: newItem.productId,
+            imei_number: `EDIT-${editPurchase.id}-${newItem.productId}-${Date.now()}-${i}`,
+            device_status: "in_stock",
+            purchase_id: editPurchase.id,
+          }))
+          await supabase.from("imei_records").insert(records)
+        } else if (delta < 0) {
+          // Remove placeholder imei_records for reduced quantity (in_stock only — never remove sold units)
+          const { data: toRemove } = await supabase.from("imei_records")
+            .select("id").eq("product_id", newItem.productId).eq("purchase_id", editPurchase.id)
+            .eq("device_status", "in_stock").eq("tenant_id", tenantId).limit(Math.abs(delta))
+          if (toRemove && toRemove.length > 0) {
+            await supabase.from("imei_records").delete().in("id", toRemove.map((r: any) => r.id))
+          }
+        }
+      }
+
       // ── Sync payment records with supplier ledger ──────────────────────
       // If amount paid changed, update/create/delete the payment record
       // so the supplier ledger stays in sync
@@ -543,6 +599,7 @@ export default function PurchasesPage() {
           .eq("reference_number", editPurchase.poNumber)
           .eq("entity_type", "Supplier")
           .eq("type", "Paid")
+          .eq("tenant_id", tenantId)
 
         // Create a new payment record if amount > 0
         if (paid > 0) {
@@ -582,7 +639,18 @@ export default function PurchasesPage() {
 
   // ── Filter toolbar ────────────────────────────────────────────────────────
   const toolbar = (
-    <div className="flex items-center gap-1.5 shrink-0">
+    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+      {/* Universal search */}
+      <div className="relative shrink-0">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+        <Input
+          placeholder="Supplier, PO #, product, IMEI..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-8 h-8 w-56 text-xs"
+        />
+      </div>
+
       {/* Date range */}
       <div className="flex items-center gap-1 shrink-0">
         <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[108px] text-xs" />
@@ -590,7 +658,7 @@ export default function PurchasesPage() {
         <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[108px] text-xs" />
       </div>
 
-      {/* Supplier */}
+      {/* Supplier dropdown (secondary — exact match) */}
       <Select value={supplierFilter} onValueChange={setSupplierFilter}>
         <SelectTrigger className="h-8 w-32 text-xs">
           <SelectValue placeholder="All Suppliers" />
@@ -749,12 +817,10 @@ export default function PurchasesPage() {
             <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-9 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
               <Download className="w-3.5 h-3.5" />Excel
             </button>
-            <Link href="/purchases/new">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm h-9">
-                <Plus className="w-4 h-4" />
-                New Purchase
-              </Button>
-            </Link>
+            <Button onClick={() => setNewPurchaseOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm h-9">
+              <Plus className="w-4 h-4" />
+              New Purchase
+            </Button>
           </div>
         }
       />
@@ -891,6 +957,16 @@ export default function PurchasesPage() {
                     <Pencil className="w-3 h-3" />
                     Edit
                   </Button>
+                  <Link href={`/purchase-returns?from=${purchase.id}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Return
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -1056,6 +1132,13 @@ export default function PurchasesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <NewPurchaseSheet
+        open={newPurchaseOpen}
+        onClose={() => setNewPurchaseOpen(false)}
+        onCreated={loadPurchases}
+      />
+
     </PageWrapper>
   )
 }
