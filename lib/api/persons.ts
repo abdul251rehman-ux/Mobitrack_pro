@@ -20,6 +20,7 @@ export interface PersonTransaction {
   type: 'gave' | 'took'
   amount: number
   method: string
+  accountId: string | null
   notes: string
   createdAt: string
 }
@@ -115,6 +116,7 @@ export async function getPersonTransactions(personId?: string): Promise<PersonTr
     type: d.type as PersonTransaction['type'],
     amount: d.amount,
     method: d.method ?? 'Cash',
+    accountId: d.account_id ?? null,
     notes: d.notes ?? '',
     createdAt: d.created_at,
   }))
@@ -133,11 +135,29 @@ export async function createPersonTransaction(
       type: t.type,
       amount: t.amount,
       method: t.method,
+      account_id: t.accountId ?? null,
       notes: t.notes || null,
     })
     .select()
     .single()
   if (error) throw new Error(error.message)
+
+  // Update finance account balance
+  if (t.accountId) {
+    const { data: acc } = await supabase
+      .from('finance_accounts')
+      .select('current_balance')
+      .eq('id', t.accountId)
+      .single()
+    if (acc) {
+      const delta = t.type === 'gave' ? -t.amount : t.amount
+      await supabase
+        .from('finance_accounts')
+        .update({ current_balance: (acc as { current_balance: number }).current_balance + delta })
+        .eq('id', t.accountId)
+    }
+  }
+
   return {
     id: data.id,
     tenantId: data.tenant_id,
@@ -146,6 +166,7 @@ export async function createPersonTransaction(
     type: data.type,
     amount: data.amount,
     method: data.method ?? 'Cash',
+    accountId: data.account_id ?? null,
     notes: data.notes ?? '',
     createdAt: data.created_at,
   }

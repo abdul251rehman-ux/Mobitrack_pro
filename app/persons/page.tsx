@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Pencil, Trash2, Users, Phone, StickyNote, Wallet, X, Check } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Plus, Pencil, Trash2, Users, Phone, StickyNote, Wallet, X, Check, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { getPersons, createPerson, updatePerson, deletePerson } from "@/lib/api/persons"
 import type { Person } from "@/lib/api/persons"
@@ -17,6 +18,7 @@ const EMPTY: Omit<Person, "id" | "tenantId" | "createdAt"> = {
 }
 
 export default function PersonsPage() {
+  const router = useRouter()
   const [persons, setPersons] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -174,7 +176,8 @@ export default function PersonsPage() {
           <CardContent className="p-0">
             <div className="divide-y divide-slate-100">
               {filtered.map(p => (
-                <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+                <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors cursor-pointer"
+                  onClick={() => router.push(`/persons/${p.id}`)}>
                   <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
                     <span className="text-violet-700 text-xs font-bold">
                       {p.name.trim().split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
@@ -213,17 +216,18 @@ export default function PersonsPage() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
-                      onClick={() => openEdit(p)}
+                      onClick={e => { e.stopPropagation(); openEdit(p) }}
                       className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => setDeleteTarget(p)}
+                      onClick={e => { e.stopPropagation(); setDeleteTarget(p) }}
                       className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-0.5" />
                   </div>
                 </div>
               ))}

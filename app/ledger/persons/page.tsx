@@ -152,6 +152,7 @@ export default function PersonLedgerPage() {
         type: txForm.type,
         amount,
         method: txForm.method,
+        accountId: null,
         notes: txForm.notes,
       })
       setTransactions(prev => [...prev, created])
