@@ -1,7 +1,12 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { getShops, createShop, updateShop, deleteShop, getReservedSales, getConsignments } from "@/lib/api/shops"
+import {
+  getShops, createShop, updateShop, deleteShop,
+  getReservedSales, getConsignments,
+  createConsignment, recordConsignmentSale, recordConsignmentReturn,
+  confirmReservedSale, cancelReservedSale,
+} from "@/lib/api/shops"
 import { Shop, ReservedSale, Consignment, ConsignmentTransaction } from "@/data/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -1390,34 +1395,55 @@ export default function ShopsPage() {
       toast.error(err instanceof Error ? err.message : "Failed to delete shop")
     }
   }
-  const handleConfirmSale = (id: string, pm: string, notes: string) =>
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Confirmed" as const, paymentMethod: pm, notes: notes || r.notes } : r))
-  const handleCancelReservation = (id: string) =>
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Cancelled" as const } : r))
+  const handleConfirmSale = async (id: string, pm: string, notes: string) => {
+    try {
+      await confirmReservedSale(id, pm, notes)
+      setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Confirmed" as const, paymentMethod: pm, notes: notes || r.notes } : r))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm reservation")
+    }
+  }
 
-  const handleRecordSale = (conId: string, txn: ConsignmentTransaction) =>
-    setConsignmentList(prev => prev.map(c => {
-      if (c.id !== conId) return c
-      const updatedItems = c.items.map(it => {
-        const t = txn.items.find(x => x.productId === it.productId)
-        if (!t) return it
-        return { ...it, sold: it.sold + t.quantity, ...(t.imeis ? { soldImeis: [...(it.soldImeis ?? []), ...t.imeis] } : {}) }
-      })
-      return { ...c, items: updatedItems, amountCollected: c.amountCollected + txn.amount, status: recomputeStatus(updatedItems), transactions: [...c.transactions, txn] }
-    }))
+  const handleCancelReservation = async (id: string) => {
+    try {
+      await cancelReservedSale(id)
+      setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Cancelled" as const } : r))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel reservation")
+    }
+  }
 
-  const handleRecordReturn = (conId: string, txn: ConsignmentTransaction) =>
-    setConsignmentList(prev => prev.map(c => {
-      if (c.id !== conId) return c
-      const updatedItems = c.items.map(it => {
-        const t = txn.items.find(x => x.productId === it.productId)
-        if (!t) return it
-        return { ...it, returned: it.returned + t.quantity, ...(t.imeis ? { returnedImeis: [...(it.returnedImeis ?? []), ...t.imeis] } : {}) }
-      })
-      return { ...c, items: updatedItems, status: recomputeStatus(updatedItems), transactions: [...c.transactions, txn] }
-    }))
+  const handleRecordSale = async (conId: string, txn: ConsignmentTransaction) => {
+    try {
+      const updated = await recordConsignmentSale(conId, txn)
+      setConsignmentList(prev => prev.map(c => c.id === conId ? updated : c))
+      toast.success("Sale recorded")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record sale")
+    }
+  }
 
-  const handleAddConsignment = (con: Consignment) => setConsignmentList(prev => [con, ...prev])
+  const handleRecordReturn = async (conId: string, txn: ConsignmentTransaction) => {
+    try {
+      const updated = await recordConsignmentReturn(conId, txn)
+      setConsignmentList(prev => prev.map(c => c.id === conId ? updated : c))
+      toast.success("Return recorded — stock restored")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record return")
+    }
+  }
+
+  const handleAddConsignment = async (con: Consignment) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id: _id, transactions: _txns, dispatchNumber: _dn, ...rest } = con
+      const saved = await createConsignment(rest as Omit<Consignment, "id" | "transactions">)
+      setConsignmentList(prev => [saved, ...prev])
+      toast.success(`Dispatch ${saved.dispatchNumber} created`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create dispatch")
+    }
+  }
 
   // ── Tab config ──
   const tabs = [

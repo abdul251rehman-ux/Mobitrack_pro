@@ -159,6 +159,7 @@ export default function CustomerDetailPage() {
   const totalReceivedFromSales = useMemo(() => customerSales.reduce((acc, s) => acc + s.amountReceived, 0), [customerSales])
   const effectiveTotalPaid     = Math.max(totalPaid, totalReceivedFromSales)
   const outstandingBalance     = Math.max(0, totalBilled - effectiveTotalPaid)
+  const creditBalance          = effectiveTotalPaid > totalBilled ? effectiveTotalPaid - totalBilled : 0
   const avgOrder               = customerSales.length > 0 ? totalBilled / customerSales.length : 0
 
   const unpaidSales = useMemo(() => customerSales.filter(s => {
@@ -386,13 +387,23 @@ export default function CustomerDetailPage() {
               accent="border-blue-200" />
             <StatMini title="Total Paid" value={formatCurrency(effectiveTotalPaid)}
               sub="Payments received" accent="border-emerald-200" valueColor="text-emerald-700" />
-            <StatMini
-              title="Outstanding"
-              value={outstandingBalance > 0 ? formatCurrency(outstandingBalance) : "Settled"}
-              sub={outstandingBalance > 0 ? "Customer owes" : "No balance due"}
-              accent={outstandingBalance > 0 ? "border-red-200" : "border-emerald-200"}
-              valueColor={outstandingBalance > 0 ? "text-red-600" : "text-emerald-700"}
-            />
+            {creditBalance > 0 ? (
+              <StatMini
+                title="Advance / Credit"
+                value={formatCurrency(creditBalance)}
+                sub="Customer paid extra"
+                accent="border-blue-200"
+                valueColor="text-blue-700"
+              />
+            ) : (
+              <StatMini
+                title="Outstanding"
+                value={outstandingBalance > 0 ? formatCurrency(outstandingBalance) : "Settled"}
+                sub={outstandingBalance > 0 ? "Customer owes" : "No balance due"}
+                accent={outstandingBalance > 0 ? "border-red-200" : "border-emerald-200"}
+                valueColor={outstandingBalance > 0 ? "text-red-600" : "text-emerald-700"}
+              />
+            )}
           </div>
 
           {/* Row 2: 3 more stats */}
@@ -459,6 +470,9 @@ export default function CustomerDetailPage() {
             {outstandingBalance > 0 && (
               <span className="text-red-600 font-semibold ml-2">Due: {formatCurrency(outstandingBalance)}</span>
             )}
+            {creditBalance > 0 && (
+              <span className="text-blue-600 font-semibold ml-2">Credit: +{formatCurrency(creditBalance)}</span>
+            )}
           </span>
         </div>
         <div className="p-2">
@@ -521,6 +535,15 @@ export default function CustomerDetailPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {creditBalance > 0 && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-blue-700">Credit: +{formatCurrency(creditBalance)}</p>
+                <p className="text-[10px] text-blue-500 mt-0.5">Customer has advance credit on account</p>
+              </div>
+            </div>
+          )}
           {outstandingBalance > 0 && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />

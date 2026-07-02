@@ -819,11 +819,7 @@ export default function NewSalePage() {
             }
           }
         } else if (item.productType === "Accessory") {
-          // Decrement accessory stock
-          const { data: accRow } = await supabase.from("accessories").select("stock").eq("id", item.productId).single()
-          if (accRow) {
-            await supabase.from("accessories").update({ stock: Math.max(0, (accRow as any).stock - item.quantity) }).eq("id", item.productId)
-          }
+          // Stock is decremented by DB trigger (sale_item_stock_decrement) on sale_items insert — no manual update needed
         } else if (item.productType === "UsedPhone") {
           await supabase.from("used_phones")
             .update({ status: "sold", sold_date: today, source_customer_name: custName })
