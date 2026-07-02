@@ -486,7 +486,7 @@ export default function SalesPage() {
               variant="ghost"
               size="icon-sm"
               className="h-8 w-8 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50"
-              onClick={() => generateInvoicePDF(sale, shopInfo, "save")}
+              onClick={async () => generateInvoicePDF(sale, shopInfo, "save")}
               title="Download invoice PDF"
             >
               <Download className="w-4 h-4" />
@@ -496,7 +496,7 @@ export default function SalesPage() {
               variant="ghost"
               size="icon-sm"
               className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-              onClick={() => generateInvoicePDF(sale, shopInfo, "print")}
+              onClick={async () => generateInvoicePDF(sale, shopInfo, "print")}
               title="Print invoice"
             >
               <Printer className="w-4 h-4" />
@@ -850,7 +850,7 @@ export default function SalesPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 h-8 text-xs gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                    onClick={() => generateInvoicePDF(sale, shopInfo, "save")}
+                    onClick={async () => generateInvoicePDF(sale, shopInfo, "save")}
                   >
                     <Download className="w-3 h-3" />
                     PDF
@@ -859,7 +859,7 @@ export default function SalesPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 h-8 text-xs gap-1.5 text-slate-600 border-slate-200 hover:bg-slate-50"
-                    onClick={() => generateInvoicePDF(sale, shopInfo, "print")}
+                    onClick={async () => generateInvoicePDF(sale, shopInfo, "print")}
                   >
                     <Printer className="w-3 h-3" />
                     Print

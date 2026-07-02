@@ -64,9 +64,37 @@ export async function getTenantSettings(): Promise<TenantSettings> {
       .from('tenant_settings')
       .select('*')
       .eq('tenant_id', tenantId)
-      .single()
+      .maybeSingle()
 
     if (error) throw new Error(`Failed to fetch tenant settings: ${error.message}`)
+
+    // No row yet — insert defaults and return them
+    if (!data) {
+      const defaults = {
+        tenant_id: tenantId,
+        low_stock_threshold: 5,
+        default_warranty_months: 6,
+        invoice_prefix: 'INV',
+        po_prefix: 'PO',
+        return_prefix: 'RET',
+        reservation_prefix: 'RES',
+        consignment_prefix: 'CON',
+        repair_prefix: 'REP',
+        tax_enabled: false,
+        tax_rate: 0,
+        currency: 'PKR',
+        date_format: 'DD/MM/YYYY',
+        receipt_footer: '',
+      }
+      const { data: created, error: insertErr } = await supabase
+        .from('tenant_settings')
+        .insert(defaults)
+        .select('*')
+        .single()
+      if (insertErr) throw new Error(`Failed to create tenant settings: ${insertErr.message}`)
+      return toTenantSettings(created as DbTenantSettings)
+    }
+
     return toTenantSettings(data as DbTenantSettings)
   } catch (err) {
     throw err instanceof Error ? err : new Error('Failed to fetch tenant settings')

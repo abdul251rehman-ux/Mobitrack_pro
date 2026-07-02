@@ -4,6 +4,7 @@ import { Bell, Plus, Search, Settings, LogOut, User, Smartphone, Package, Shoppi
 import { useRouter } from "next/navigation"
 import { Breadcrumbs } from "./breadcrumbs"
 import { useApp } from "@/context/app-context"
+import { useAuth } from "@/context/auth-context"
 import { useGlobalSearch } from "@/hooks/use-search"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -15,6 +16,8 @@ import Link from "next/link"
 
 export function Header() {
   const { notifications, unreadCount, markAllRead, toggleMobileSidebar } = useApp()
+  const { user, logout } = useAuth()
+  const initials = user?.name ? user.name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() : "?"
   const { query, setQuery, results } = useGlobalSearch()
   const [searchOpen, setSearchOpen] = useState(false)
   const router = useRouter()
@@ -155,24 +158,24 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-slate-50 transition-colors">
               <Avatar className="w-8 h-8">
-                <AvatarFallback className="bg-blue-600 text-white text-xs font-bold">AK</AvatarFallback>
+                <AvatarFallback className="bg-blue-600 text-white text-xs font-bold">{initials}</AvatarFallback>
               </Avatar>
               <div className="text-left hidden lg:block">
-                <p className="text-xs font-semibold text-slate-800 leading-tight">Ahmed Khan</p>
-                <p className="text-[10px] text-slate-400 leading-tight">Administrator</p>
+                <p className="text-xs font-semibold text-slate-800 leading-tight">{user?.name || "User"}</p>
+                <p className="text-[10px] text-slate-400 leading-tight capitalize">{user?.role || "Staff"}</p>
               </div>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>
-              <p className="text-sm font-semibold">Ahmed Khan</p>
-              <p className="text-xs text-slate-400 font-normal">admin@mobitrack.com</p>
+              <p className="text-sm font-semibold">{user?.name || "User"}</p>
+              <p className="text-xs text-slate-400 font-normal">{user?.email || ""}</p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 cursor-pointer"><User className="w-4 h-4" /> Profile</DropdownMenuItem>
             <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => router.push("/settings")}><Settings className="w-4 h-4" /> Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 text-red-600 cursor-pointer"><LogOut className="w-4 h-4" /> Logout</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-red-600 cursor-pointer" onClick={() => logout()}><LogOut className="w-4 h-4" /> Logout</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </header>

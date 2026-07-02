@@ -987,7 +987,7 @@ export default function NewSalePage() {
               }[action]
               return (
                 <button key={action}
-                  onClick={async () => { const { generateInvoicePDF } = await import("@/lib/pdf/invoice"); generateInvoicePDF(completedSale!, shopInfo, action) }}
+                  onClick={async () => { const { generateInvoicePDF } = await import("@/lib/pdf/invoice"); await generateInvoicePDF(completedSale!, shopInfo, action) }}
                   className={`flex flex-col items-center gap-2 py-4 px-3 rounded-xl border border-slate-200 bg-white ${meta.hover} text-slate-600 transition-all group`}
                 >
                   <meta.Icon className="w-5 h-5 group-hover:scale-110 transition-transform" />

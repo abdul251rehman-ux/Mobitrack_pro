@@ -136,7 +136,7 @@ export default function SaleDetailPage() {
             variant="outline"
             size="sm"
             className="gap-1.5 text-xs"
-            onClick={() => generateInvoicePDF(sale, shopInfo, "print")}
+            onClick={async () => generateInvoicePDF(sale, shopInfo, "print")}
           >
             <Printer className="w-3.5 h-3.5" /> Print
           </Button>
@@ -144,7 +144,7 @@ export default function SaleDetailPage() {
             variant="outline"
             size="sm"
             className="gap-1.5 text-xs"
-            onClick={() => generateInvoicePDF(sale, shopInfo, "preview")}
+            onClick={async () => generateInvoicePDF(sale, shopInfo, "preview")}
           >
             <FileText className="w-3.5 h-3.5" /> Preview
           </Button>

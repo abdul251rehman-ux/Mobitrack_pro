@@ -54,16 +54,36 @@ function rr(doc: jsPDF, x: number, y: number, w: number, h: number, r: number, s
   doc.roundedRect(x, y, w, h, r, r, style)
 }
 
-export function generateInvoicePDF(
+async function urlToBase64(url: string): Promise<string> {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return ""
+  }
+}
+
+export async function generateInvoicePDF(
   sale: Sale,
   opts: Partial<InvoiceOptions> = {},
   action: "save" | "print" | "preview" = "save"
-): void {
+): Promise<void> {
   const shopName    = opts.shopName    || "MobiTrack Pro"
   const shopAddress = opts.shopAddress || ""
   const shopPhone   = opts.shopPhone   || ""
   const shopEmail   = opts.shopEmail   || ""
-  const shopLogo    = opts.shopLogo    || ""
+  const rawLogo     = opts.shopLogo    || ""
+
+  // Convert remote URL to base64 so jsPDF can embed it
+  const shopLogo = rawLogo && !rawLogo.startsWith("data:")
+    ? await urlToBase64(rawLogo)
+    : rawLogo
 
   const doc = new jsPDF("p", "mm", "a4")
   const W = 210
