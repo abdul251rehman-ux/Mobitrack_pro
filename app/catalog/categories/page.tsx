@@ -77,12 +77,12 @@ function CategoryCard({ cat, phones, loading }: {
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
               phones.length > 0 ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-400"
             }`}>
-              {loading ? "…" : `${phones.length} model${phones.length !== 1 ? "s" : ""}`}
+              {loading ? "..." : `${phones.length} model${phones.length !== 1 ? "s" : ""}`}
             </span>
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
               phones.reduce((s, p) => s + p.stock, 0) > 0 ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-400"
             }`}>
-              {loading ? "…" : `${phones.reduce((s, p) => s + p.stock, 0)} units`}
+              {loading ? "..." : `${phones.reduce((s, p) => s + p.stock, 0)} units`}
             </span>
           </div>
         </div>
@@ -112,12 +112,12 @@ function CategoryCard({ cat, phones, loading }: {
                     {phone.brand} {phone.model}
                   </p>
                   <p className="text-[10px] text-slate-400 truncate">
-                    {phone.color} · {phone.storage}
+                    {phone.color} - {phone.storage}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="text-xs font-bold text-slate-700">
-                    PKR {phone.selling_price?.toLocaleString() ?? "—"}
+                    PKR {phone.selling_price?.toLocaleString() ?? "-"}
                   </span>
                   <StockPill stock={phone.stock} />
                 </div>
@@ -201,8 +201,8 @@ export default function CategoriesPage() {
       <div className="grid grid-cols-4 gap-2.5">
         {[
           { title: "Total Categories",   value: stats.total,      sub: `${stats.totalUnits} total units`,  Icon: Layers,     bg: "bg-blue-500"    },
-          { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA · Non-PTA · JV",               Icon: Smartphone, bg: "bg-sky-500"     },
-          { title: "Android Categories", value: stats.android,    sub: "PTA · Non-PTA",                    Icon: Smartphone, bg: "bg-emerald-500" },
+          { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA - Non-PTA - JV",               Icon: Smartphone, bg: "bg-sky-500"     },
+          { title: "Android Categories", value: stats.android,    sub: "PTA - Non-PTA",                    Icon: Smartphone, bg: "bg-emerald-500" },
           { title: "Total Units",        value: stats.totalUnits, sub: "Across all categories",             Icon: Package,    bg: "bg-violet-500"  },
         ].map(card => (
           <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
@@ -212,7 +212,7 @@ export default function CategoriesPage() {
                 <card.Icon className="w-3.5 h-3.5 text-white" />
               </div>
             </div>
-            <p className="text-lg font-bold text-slate-900 leading-none">{loading ? "—" : card.value}</p>
+            <p className="text-lg font-bold text-slate-900 leading-none">{loading ? "-" : card.value}</p>
             <p className="text-[10px] text-slate-400">{card.sub}</p>
           </div>
         ))}

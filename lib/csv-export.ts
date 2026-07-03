@@ -1,26 +1,46 @@
 // ─── CSV Export Utility ─────────────────────────────────────────────────────
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+const YYYY_MM_DD  = /^\d{4}-\d{2}-\d{2}$/;
+
+function cleanText(s: string): string {
+  // Replace common mojibake sequences that appear from UTF-8 mis-read as Latin-1
+  return s
+    .replace(/â€"/g, "-")   // em-dash
+    .replace(/â€™/g, "'")   // right single quote
+    .replace(/â€œ/g, '"')   // left double quote
+    .replace(/â€/g,  '"')   // right double quote
+    .replace(/â€¢/g, "-")   // bullet
+    .replace(/Â·/g,  ".")   // middle dot
+    .replace(/Â /g,  " ")   // non-breaking space
+    .replace(/âˆ'/g, "-")   // minus sign
+}
 
 function formatCSVValue(value: unknown): string {
   if (value === null || value === undefined) return "";
 
   let str = String(value);
 
-  // Format ISO dates to a readable form
+  // Format full ISO timestamps to readable date
   if (typeof value === "string" && ISO_DATE_RE.test(value)) {
     const d = new Date(value);
     if (!isNaN(d.getTime())) {
-      str = d.toLocaleDateString("en-PK", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-      });
+      str = d.toLocaleDateString("en-GB", {
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }); // dd/mm/yyyy — universally readable in Excel
     }
   }
 
-  // Wrap in quotes if the value contains commas, quotes, or newlines
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+  // Format YYYY-MM-DD to dd/mm/yyyy for Excel
+  if (typeof value === "string" && YYYY_MM_DD.test(value)) {
+    const [y, m, d] = value.split("-");
+    str = `${d}/${m}/${y}`;
+  }
+
+  str = cleanText(str);
+
+  // Wrap in quotes if needed
+  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes(";")) {
     str = `"${str.replace(/"/g, '""')}"`;
   }
 
@@ -33,11 +53,7 @@ export interface CSVColumn {
 }
 
 /**
- * Export an array of objects to a CSV file and trigger a browser download.
- *
- * @param data    - Array of row objects
- * @param filename - Desired file name (without extension is fine; .csv will be ensured)
- * @param columns - Optional column definitions. If omitted, all keys from the first row are used.
+ * Export an array of objects to a UTF-8 BOM CSV (opens correctly in Excel without encoding issues).
  */
 export function exportToCSV(
   data: Record<string, unknown>[],
@@ -56,15 +72,14 @@ export function exportToCSV(
         .trim(),
     }));
 
-  const headerRow = cols.map((c) => formatCSVValue(c.header)).join(",");
-
+  const headerRow = cols.map((c) => `"${c.header}"`).join(",");
   const rows = data.map((row) =>
     cols.map((c) => formatCSVValue(row[c.key])).join(",")
   );
 
-  const csvContent = [headerRow, ...rows].join("\n");
+  // UTF-8 BOM (﻿) makes Excel open the file correctly without re-encoding
+  const csvContent = "﻿" + [headerRow, ...rows].join("\r\n");
 
-  // Ensure filename ends with .csv
   const safeName = filename.endsWith(".csv") ? filename : `${filename}.csv`;
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -76,8 +91,6 @@ export function exportToCSV(
   anchor.style.display = "none";
   document.body.appendChild(anchor);
   anchor.click();
-
-  // Cleanup
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }

@@ -1,4 +1,4 @@
-"use client"
+﻿﻿"use client"
 
 import React, { useState, useMemo, useEffect } from "react"
 import {
@@ -31,18 +31,18 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 type Resolution = "Refund" | "Replacement" | "Credit Note" | "Ledger Credit"
 type PRStatus   = "Pending" | "Approved" | "Completed" | "Rejected"
 
 interface ReturnLineItem {
-  purchaseItemId: string   // purchase_items.id — for returned_qty update (Fix 6)
-  productId: string        // catalog id — for precise stock deduction (Fix 8)
+  purchaseItemId: string   // purchase_items.id - for returned_qty update (Fix 6)
+  productId: string        // catalog id - for precise stock deduction (Fix 8)
   productName: string
   productType: string
   returnQty: number
-  maxQty: number           // quantity - returnedQty — what is actually returnable (Fix 2&3)
+  maxQty: number           // quantity - returnedQty - what is actually returnable (Fix 2&3)
   originalQty: number      // total purchased
   alreadyReturned: number  // how many returned in past returns
   unitCost: number
@@ -69,7 +69,7 @@ interface PurchaseReturn {
   createdAt: string
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const REASONS = [
   "Defective", "Wrong Item", "Not As Described",
@@ -97,14 +97,14 @@ const RESOLUTION_CONFIG: Record<Resolution, {
   "Refund": {
     icon: <ArrowDownCircle className="w-4 h-4" />,
     label: "Refund",
-    description: "Supplier pays you back now — cash/bank/wallet",
+    description: "Supplier pays you back now - cash/bank/wallet",
     selectedColor: "border-emerald-500 bg-emerald-50 text-emerald-700",
     hoverColor: "border-slate-200 text-slate-600 hover:bg-slate-50",
   },
   "Replacement": {
     icon: <RefreshCw className="w-4 h-4" />,
     label: "Replacement",
-    description: "Supplier sends new units — no money moves",
+    description: "Supplier sends new units - no money moves",
     selectedColor: "border-blue-500 bg-blue-50 text-blue-700",
     hoverColor: "border-slate-200 text-slate-600 hover:bg-slate-50",
   },
@@ -118,13 +118,13 @@ const RESOLUTION_CONFIG: Record<Resolution, {
   "Ledger Credit": {
     icon: <BookOpen className="w-4 h-4" />,
     label: "Ledger Credit",
-    description: "Supplier owes you — settle on next purchase",
+    description: "Supplier owes you - settle on next purchase",
     selectedColor: "border-amber-500 bg-amber-50 text-amber-700",
     hoverColor: "border-slate-200 text-slate-600 hover:bg-slate-50",
   },
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function generateReturnNumber(existing: PurchaseReturn[]): string {
   const max = existing.reduce((m, r) => {
@@ -160,7 +160,7 @@ function refundMethodFromType(type: string): string {
   return "Cash"
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function PurchaseReturnsPage() {
   const searchParams = useSearchParams()
@@ -200,7 +200,7 @@ export default function PurchaseReturnsPage() {
         if (fromId) {
           const match = purchasesData.find(p => p.id === fromId)
           if (match) {
-            setPurchaseSearchQuery(`${match.poNumber} — ${match.supplierName}`)
+            setPurchaseSearchQuery(`${match.poNumber} - ${match.supplierName}`)
             setSelectedPurchaseId(match.id)
             setNewSupplierId(match.supplierId)
             setNewSupplierName(match.supplierName)
@@ -261,16 +261,16 @@ export default function PurchaseReturnsPage() {
     }
   }
 
-  // ── Filter state ──────────────────────────────────────────────────────────
+  // â"€â"€ Filter state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [search,           setSearch]           = useState("")
   const [statusFilter,     setStatusFilter]     = useState("all")
   const [resolutionFilter, setResolutionFilter] = useState("all")
 
-  // ── Dialog state ──────────────────────────────────────────────────────────
+  // â"€â"€ Dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [showCreate, setShowCreate] = useState(false)
   const [viewReturn, setViewReturn] = useState<PurchaseReturn | null>(null)
 
-  // ── Form state ────────────────────────────────────────────────────────────
+  // â"€â"€ Form state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [selectedPurchaseId,   setSelectedPurchaseId]   = useState("")
   const [newSupplierId,        setNewSupplierId]        = useState("")
   const [newSupplierName,      setNewSupplierName]      = useState("")
@@ -297,7 +297,7 @@ export default function PurchaseReturnsPage() {
 
   function selectPurchase(purchase: Purchase) {
     setSelectedPurchaseId(purchase.id)
-    setPurchaseSearchQuery(`${purchase.poNumber} — ${purchase.supplierName}`)
+    setPurchaseSearchQuery(`${purchase.poNumber} - ${purchase.supplierName}`)
     setShowPurchaseDropdown(false)
     setNewSupplierId(purchase.supplierId)
     setNewSupplierName(purchase.supplierName)
@@ -329,7 +329,7 @@ export default function PurchaseReturnsPage() {
     setLineItems([])
   }
 
-  // ── Save — all 8 fixes applied ────────────────────────────────────────────
+  // â"€â"€ Save - all 8 fixes applied â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async function handleSave() {
     if (!selectedPurchase) { toast.error("Select a purchase first"); return }
     if (selectedLines.length === 0) { toast.error("Select at least one item to return"); return }
@@ -337,7 +337,7 @@ export default function PurchaseReturnsPage() {
       toast.error("Select which account receives the refund money"); return
     }
 
-    // FIX 2 & 3: Final validation — qty cannot exceed what is returnable
+    // FIX 2 & 3: Final validation - qty cannot exceed what is returnable
     for (const line of selectedLines) {
       if (line.returnQty > line.maxQty) {
         toast.error(`${line.productName}: max returnable is ${line.maxQty} (${line.alreadyReturned} already returned)`)
@@ -360,7 +360,7 @@ export default function PurchaseReturnsPage() {
       const today       = todayPKT()
       const method      = refundMethodFromType(selectedAccount?.type ?? "cash")
 
-      // ── Step 1: Insert purchase_return record ──────────────────────────
+      // â"€â"€ Step 1: Insert purchase_return record â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       const { data: pr, error: prErr } = await supabase
         .from("purchase_returns")
         .insert({
@@ -388,8 +388,8 @@ export default function PurchaseReturnsPage() {
         await supabase.from("purchase_returns").delete().eq("id", (pr as any).id)
       })
 
-      // ── Step 2: Update returned_qty on each purchase_item (FIX 6) ─────
-      // This prevents double-returning in future — the source of truth
+      // â"€â"€ Step 2: Update returned_qty on each purchase_item (FIX 6) â"€â"€â"€â"€â"€
+      // This prevents double-returning in future - the source of truth
       for (const line of selectedLines) {
         if (!line.purchaseItemId) continue
         const { error } = await supabase
@@ -411,12 +411,12 @@ export default function PurchaseReturnsPage() {
         }
       })
 
-      // ── Step 3: Stock deduction + IMEI handling ───────────────────────
+      // â"€â"€ Step 3: Stock deduction + IMEI handling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       for (const line of selectedLines) {
         const qty = line.returnQty
 
         if (line.productType === "Mobile") {
-          // FIX 8: Use product_id directly — no fuzzy name matching
+          // FIX 8: Use product_id directly - no fuzzy name matching
           if (line.productId) {
             const { data: mob } = await supabase
               .from("mobiles")
@@ -451,10 +451,10 @@ export default function PurchaseReturnsPage() {
             const alreadyReturned = (imeiRows ?? []).filter((r: any) => r.device_status === "returned").map((r: any) => r.imei_number)
 
             if (alreadySold.length > 0) {
-              toast.warning(`${alreadySold.length} IMEI(s) already sold — skipped from return. Sold devices cannot be returned to supplier.`)
+              toast.warning(`${alreadySold.length} IMEI(s) already sold - skipped from return. Sold devices cannot be returned to supplier.`)
             }
             if (alreadyReturned.length > 0) {
-              toast.warning(`${alreadyReturned.length} IMEI(s) were already returned previously — skipped.`)
+              toast.warning(`${alreadyReturned.length} IMEI(s) were already returned previously - skipped.`)
             }
 
             if (returnable.length > 0) {
@@ -495,10 +495,10 @@ export default function PurchaseReturnsPage() {
         }
       }
 
-      // ── Step 4: Financial effects by resolution ───────────────────────
+      // â"€â"€ Step 4: Financial effects by resolution â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
       if (newResolution === "Refund") {
-        // FIX 1: Supplier pays YOU → account balance INCREASES
+        // FIX 1: Supplier pays YOU â†' account balance INCREASES
         const { data: accRow } = await supabase
           .from("finance_accounts")
           .select("current_balance")
@@ -519,7 +519,7 @@ export default function PurchaseReturnsPage() {
           date:        today,
           type:        "purchase_return_refund",
           category:    "Purchase Return",
-          description: `Refund received — ${returnNumber} from ${newSupplierName}`,
+          description: `Refund received - ${returnNumber} from ${newSupplierName}`,
           amount:      newTotal,
           account_id:  newAccountId,
           reference:   returnNumber,
@@ -552,7 +552,7 @@ export default function PurchaseReturnsPage() {
       }
 
       if (newResolution === "Credit Note") {
-        // No cash — credit reduces what we owe; can go negative (they owe us)
+        // No cash - credit reduces what we owe; can go negative (they owe us)
         const { data: supRow } = await supabase
           .from("suppliers").select("outstanding_balance").eq("id", newSupplierId).single()
         if (supRow) {
@@ -567,12 +567,12 @@ export default function PurchaseReturnsPage() {
           entity_type: "Supplier", entity_id: newSupplierId, entity_name: newSupplierName,
           reference_type: "Purchase Return", reference_number: returnNumber,
           amount: newTotal, method: "Credit Note", status: "Completed",
-          notes: `Credit note applied — ${returnNumber}`,
+          notes: `Credit note applied - ${returnNumber}`,
         })
       }
 
       if (newResolution === "Ledger Credit") {
-        // No cash — recorded in ledger for future settlement
+        // No cash - recorded in ledger for future settlement
         const { data: supRow } = await supabase
           .from("suppliers").select("outstanding_balance").eq("id", newSupplierId).single()
         if (supRow) {
@@ -587,20 +587,20 @@ export default function PurchaseReturnsPage() {
           entity_type: "Supplier", entity_id: newSupplierId, entity_name: newSupplierName,
           reference_type: "Purchase Return", reference_number: returnNumber,
           amount: newTotal, method: "Ledger", status: "Pending",
-          notes: `Ledger credit pending settlement — ${returnNumber}`,
+          notes: `Ledger credit pending settlement - ${returnNumber}`,
         })
       }
 
-      // Replacement: no financial movement — stock deducted above, record exists for tracking
+      // Replacement: no financial movement - stock deducted above, record exists for tracking
 
-      // ── Refresh purchases so returned_qty reflects immediately in UI ───
+      // â"€â"€ Refresh purchases so returned_qty reflects immediately in UI â"€â"€â"€
       const refreshed = await getPurchases()
       setPurchases(refreshed)
 
       const newReturn = dbToReturn(pr as Record<string, unknown>)
       setReturnsList(prev => [newReturn, ...prev])
       toast.success(`${returnNumber} recorded`, {
-        description: `${newResolution} · ${formatCurrency(newTotal)} · ${newSupplierName}`,
+        description: `${newResolution} - ${formatCurrency(newTotal)} - ${newSupplierName}`,
         duration: 5000,
       })
       setShowCreate(false)
@@ -608,7 +608,7 @@ export default function PurchaseReturnsPage() {
 
     } catch (err) {
       // FIX 7: Rollback everything that succeeded before the failure
-      toast.error("Saving failed — rolling back changes...")
+      toast.error("Saving failed - rolling back changes...")
       for (const undo of rollback.reverse()) {
         try { await undo() } catch { /* best effort */ }
       }
@@ -630,7 +630,7 @@ export default function PurchaseReturnsPage() {
     }
   }
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
+  // â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const stats = useMemo(() => ({
     total:      returnsList.length,
     pending:    returnsList.filter(r => r.status === "Pending").length,
@@ -650,12 +650,12 @@ export default function PurchaseReturnsPage() {
     })
   }, [returnsList, search, statusFilter, resolutionFilter])
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   return (
     <PageWrapper>
       <PageHeader
         title="Purchase Returns"
-        description="Return items to suppliers — refunds, replacements, credit notes & ledger credits"
+        description="Return items to suppliers - refunds, replacements, credit notes & ledger credits"
         icon={<RotateCcw />}
         iconBg="bg-rose-600"
         action={
@@ -666,7 +666,7 @@ export default function PurchaseReturnsPage() {
         }
       />
 
-      {/* ── Stats ─────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-4">
         <StatCard title="Total Returns"  value={String(stats.total)}              subtext="All time"        icon={RotateCcw}    iconBg="bg-rose-100"    />
         <StatCard title="Pending"        value={String(stats.pending)}            subtext="Awaiting action" icon={Clock}        iconBg="bg-amber-100"   />
@@ -674,42 +674,53 @@ export default function PurchaseReturnsPage() {
         <StatCard title="Cash Recovered" value={formatCurrency(stats.totalValue)} subtext="Via refunds"     icon={Package}      iconBg="bg-blue-100"    />
       </div>
 
-      {/* ── Filters ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <Input placeholder="Search return # or supplier..." value={search}
-            onChange={e => setSearch(e.target.value)} className="pl-8 h-8 text-xs" />
+      {/* â"€â"€ Filters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 mb-4">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[180px] max-w-xs">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Search</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Input placeholder="Return # or supplier..." value={search}
+                onChange={e => setSearch(e.target.value)} className="pl-8 h-8 text-xs" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Status</label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="All Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="Pending">Pending</SelectItem>
+                <SelectItem value="Approved">Approved</SelectItem>
+                <SelectItem value="Completed">Completed</SelectItem>
+                <SelectItem value="Rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Resolution</label>
+            <Select value={resolutionFilter} onValueChange={setResolutionFilter}>
+              <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="All Resolutions" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Resolutions</SelectItem>
+                <SelectItem value="Refund">Refund</SelectItem>
+                <SelectItem value="Replacement">Replacement</SelectItem>
+                <SelectItem value="Credit Note">Credit Note</SelectItem>
+                <SelectItem value="Ledger Credit">Ledger Credit</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {(search || statusFilter !== "all" || resolutionFilter !== "all") && (
+            <Button variant="outline" size="sm" className="h-8 text-xs text-slate-600 hover:text-red-600 hover:border-red-300 self-end"
+              onClick={() => { setSearch(""); setStatusFilter("all"); setResolutionFilter("all") }}>
+              <RotateCcw className="w-3 h-3 mr-1" /> Reset
+            </Button>
+          )}
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="All Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Approved">Approved</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
-            <SelectItem value="Rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={resolutionFilter} onValueChange={setResolutionFilter}>
-          <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="All Resolutions" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Resolutions</SelectItem>
-            <SelectItem value="Refund">Refund</SelectItem>
-            <SelectItem value="Replacement">Replacement</SelectItem>
-            <SelectItem value="Credit Note">Credit Note</SelectItem>
-            <SelectItem value="Ledger Credit">Ledger Credit</SelectItem>
-          </SelectContent>
-        </Select>
-        {(search || statusFilter !== "all" || resolutionFilter !== "all") && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs text-slate-500"
-            onClick={() => { setSearch(""); setStatusFilter("all"); setResolutionFilter("all") }}>
-            <RotateCcw className="w-3 h-3 mr-1" /> Reset
-          </Button>
-        )}
       </div>
 
-      {/* ── List ──────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ List â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       {loading ? (
         <div className="text-center py-16 text-slate-400 text-sm">Loading...</div>
       ) : filtered.length === 0 ? (
@@ -742,12 +753,12 @@ export default function PurchaseReturnsPage() {
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span className="text-sm font-semibold text-slate-800 truncate">{ret.supplierName}</span>
-                    <span className="text-xs text-slate-400 font-mono shrink-0">· {ret.poNumber}</span>
+                    <span className="text-xs text-slate-400 font-mono shrink-0">- {ret.poNumber}</span>
                   </div>
                   <span className="text-sm font-bold text-slate-900 shrink-0">{formatCurrency(ret.totalAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-slate-400">{formatDatePKT(ret.date)} · {ret.items.length} line{ret.items.length !== 1 ? "s" : ""}</span>
+                  <span className="text-xs text-slate-400">{formatDatePKT(ret.date)} - {ret.items.length} line{ret.items.length !== 1 ? "s" : ""}</span>
                   {ret.resolution === "Refund" && ret.refundMethod && (
                     <span className="text-xs text-slate-500">via {ret.refundMethod}</span>
                   )}
@@ -758,9 +769,9 @@ export default function PurchaseReturnsPage() {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
+      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           CREATE DIALOG
-      ════════════════════════════════════════════════════════════════════ */}
+      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={showCreate} onOpenChange={v => { if (!v) { setShowCreate(false); resetForm() } }}>
         <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto w-[96vw] p-4 sm:p-6">
           <DialogHeader>
@@ -772,7 +783,7 @@ export default function PurchaseReturnsPage() {
 
           <div className="space-y-5 py-1">
 
-            {/* ── Purchase selector ──────────────────────────────────────── */}
+            {/* â"€â"€ Purchase selector â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
             <div>
               <Label className="text-xs font-semibold text-slate-600 mb-1.5 block">
                 Purchase Order <span className="text-red-500">*</span>
@@ -792,7 +803,7 @@ export default function PurchaseReturnsPage() {
                           onMouseDown={() => selectPurchase(p)}>
                           <div>
                             <span className="text-sm font-semibold text-slate-800">{p.poNumber}</span>
-                            <span className="text-xs text-slate-500 ml-2">— {p.supplierName}</span>
+                            <span className="text-xs text-slate-500 ml-2">- {p.supplierName}</span>
                           </div>
                           <div className="text-right shrink-0">
                             <span className="text-xs font-bold text-slate-900">{formatCurrency(p.total)}</span>
@@ -807,7 +818,7 @@ export default function PurchaseReturnsPage() {
               </div>
             </div>
 
-            {/* ── Supplier + Date ────────────────────────────────────────── */}
+            {/* â"€â"€ Supplier + Date â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
             {selectedPurchase && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -824,7 +835,7 @@ export default function PurchaseReturnsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-slate-400 mt-1">Auto-filled — change if returning to different person</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Auto-filled - change if returning to different person</p>
                 </div>
                 <div>
                   <Label className="text-xs font-semibold text-slate-600 mb-1.5 block">Return Date</Label>
@@ -835,11 +846,11 @@ export default function PurchaseReturnsPage() {
               </div>
             )}
 
-            {/* ── Items ─────────────────────────────────────────────────── */}
+            {/* â"€â"€ Items â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
             {lineItems.length > 0 && (
               <div>
                 <Label className="text-xs font-semibold text-slate-600 mb-2 block">
-                  Items — check items to return
+                  Items - check items to return
                   <span className="font-normal text-slate-400 ml-2">(only showing returnable items)</span>
                 </Label>
                 <div className="space-y-2">
@@ -854,7 +865,7 @@ export default function PurchaseReturnsPage() {
                             line.selected ? "border-rose-500 bg-rose-500" : "border-slate-300 bg-white"
                           )}
                           onClick={() => updateLine(idx, "selected", !line.selected)}>
-                          {line.selected && <span className="text-white text-[10px] font-bold">✓</span>}
+                          {line.selected && <span className="text-white text-[10px] font-bold">âœ"</span>}
                         </button>
 
                         <div className="flex-1 min-w-0">
@@ -867,9 +878,9 @@ export default function PurchaseReturnsPage() {
                           <p className="text-[10px] text-slate-400 mb-2">
                             Bought: {line.originalQty}
                             {line.alreadyReturned > 0 && (
-                              <span className="text-amber-600 font-semibold ml-2">· Already returned: {line.alreadyReturned}</span>
+                              <span className="text-amber-600 font-semibold ml-2">- Already returned: {line.alreadyReturned}</span>
                             )}
-                            <span className="text-emerald-600 font-semibold ml-2">· Returnable: {line.maxQty}</span>
+                            <span className="text-emerald-600 font-semibold ml-2">- Returnable: {line.maxQty}</span>
                           </p>
 
                           {line.selected && (
@@ -881,7 +892,7 @@ export default function PurchaseReturnsPage() {
                                     onClick={() => updateLine(idx, "returnQty", Math.max(1, line.returnQty - 1))}>
                                     <Minus className="w-3 h-3" />
                                   </button>
-                                  <Input type="number" min={1} max={line.maxQty} value={line.returnQty}
+                                  <Input type="number" onWheel={e => e.currentTarget.blur()} min={1} max={line.maxQty} value={line.returnQty}
                                     onChange={e => updateLine(idx, "returnQty", Math.min(line.maxQty, Math.max(1, parseInt(e.target.value) || 1)))}
                                     className="h-6 text-center text-xs px-1 w-12" />
                                   <button className="w-6 h-6 rounded border border-slate-200 flex items-center justify-center hover:bg-slate-100 shrink-0"
@@ -892,7 +903,7 @@ export default function PurchaseReturnsPage() {
                               </div>
                               <div>
                                 <Label className="text-[10px] text-slate-500 mb-1 block">Unit Cost</Label>
-                                <Input type="number" min={0} value={line.unitCost}
+                                <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={line.unitCost}
                                   onChange={e => updateLine(idx, "unitCost", parseFloat(e.target.value) || 0)}
                                   className="h-6 text-xs" />
                               </div>
@@ -937,13 +948,13 @@ export default function PurchaseReturnsPage() {
               </div>
             )}
 
-            {/* ── Resolution ────────────────────────────────────────────── */}
+            {/* â"€â"€ Resolution â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
             {selectedLines.length > 0 && (
               <div className="space-y-4">
                 <div>
                   <Label className="text-xs font-semibold text-slate-600 mb-2 block">
                     Resolution <span className="text-red-500">*</span>
-                    <span className="font-normal text-slate-400 ml-2">— how does the supplier settle this?</span>
+                    <span className="font-normal text-slate-400 ml-2">- how does the supplier settle this?</span>
                   </Label>
                   <div className="grid grid-cols-2 gap-2">
                     {(Object.entries(RESOLUTION_CONFIG) as [Resolution, typeof RESOLUTION_CONFIG[Resolution]][]).map(([key, cfg]) => (
@@ -989,14 +1000,14 @@ export default function PurchaseReturnsPage() {
                                   {formatCurrency(acc.currentBalance)}
                                   {sel && (
                                     <span className="ml-2 text-xs font-semibold text-emerald-600">
-                                      → {formatCurrency(acc.currentBalance + newTotal)} after refund
+                                      â†' {formatCurrency(acc.currentBalance + newTotal)} after refund
                                     </span>
                                   )}
                                 </p>
                               </div>
                               <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
                                 sel ? "bg-emerald-600 border-emerald-600" : "border-slate-300")}>
-                                {sel && <span className="text-white text-[10px] font-bold">✓</span>}
+                                {sel && <span className="text-white text-[10px] font-bold">âœ"</span>}
                               </div>
                             </button>
                           )
@@ -1008,7 +1019,7 @@ export default function PurchaseReturnsPage() {
                         <ArrowDownCircle className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
                         <p className="text-xs text-emerald-700">
                           <span className="font-semibold">{formatCurrency(newTotal)}</span> added to{" "}
-                          <span className="font-semibold">{selectedAccount?.name}</span> · Supplier ledger updated · Stock reduced
+                          <span className="font-semibold">{selectedAccount?.name}</span> - Supplier ledger updated - Stock reduced
                         </p>
                       </div>
                     )}
@@ -1039,7 +1050,7 @@ export default function PurchaseReturnsPage() {
                   <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
                     <BookOpen className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
                     <div className="text-xs text-amber-700">
-                      <p className="font-semibold">Recorded — settle later</p>
+                      <p className="font-semibold">Recorded - settle later</p>
                       <p className="opacity-80 mt-0.5"><span className="font-semibold">{newSupplierName}</span> owes you <span className="font-semibold">{formatCurrency(newTotal)}</span>. Deduct from next payment to them.</p>
                     </div>
                   </div>
@@ -1059,15 +1070,15 @@ export default function PurchaseReturnsPage() {
             <Button variant="outline" onClick={() => { setShowCreate(false); resetForm() }}>Cancel</Button>
             <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleSave}
               disabled={saving || selectedLines.length === 0}>
-              {saving ? "Saving..." : `Confirm Return${newTotal > 0 ? ` · ${formatCurrency(newTotal)}` : ""}`}
+              {saving ? "Saving..." : `Confirm Return${newTotal > 0 ? ` - ${formatCurrency(newTotal)}` : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ════════════════════════════════════════════════════════════════════
+      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           VIEW DIALOG
-      ════════════════════════════════════════════════════════════════════ */}
+      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={!!viewReturn} onOpenChange={v => { if (!v) setViewReturn(null) }}>
         <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto w-[96vw] p-4 sm:p-6">
           {viewReturn && (
@@ -1077,7 +1088,7 @@ export default function PurchaseReturnsPage() {
                   <div>
                     <DialogTitle className="text-base font-bold font-mono text-rose-600">{viewReturn.returnNumber}</DialogTitle>
                     <DialogDescription className="text-xs text-slate-500 mt-0.5">
-                      {viewReturn.poNumber} · {viewReturn.supplierName} · {formatDatePKT(viewReturn.date)}
+                      {viewReturn.poNumber} - {viewReturn.supplierName} - {formatDatePKT(viewReturn.date)}
                     </DialogDescription>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -1093,7 +1104,7 @@ export default function PurchaseReturnsPage() {
                   <div key={idx} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                     <div>
                       <p className="text-sm font-medium text-slate-800">{item.productName}</p>
-                      <p className="text-xs text-slate-400">{item.reason} · qty {item.returnQty}</p>
+                      <p className="text-xs text-slate-400">{item.reason} - qty {item.returnQty}</p>
                     </div>
                     <span className="text-sm font-bold text-slate-900">{formatCurrency(item.unitCost * item.returnQty)}</span>
                   </div>

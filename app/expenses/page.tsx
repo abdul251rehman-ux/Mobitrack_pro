@@ -1,4 +1,4 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useRef, useEffect } from "react"
 import {
@@ -30,7 +30,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const _now = new Date()
 const TODAY = todayPKT()
@@ -82,7 +82,7 @@ const PAYMENT_META: Record<ExpensePayment, { icon: React.ReactNode; color: strin
 
 const PAYMENT_OPTIONS: ExpensePayment[] = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card"]
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 type TabType = "all" | "daily" | "monthly" | "yearly" | "one-time" | "recurring"
 
@@ -107,11 +107,11 @@ const defaultForm: ExpenseForm = {
   isRecurring: false, recurringDay: "1", recurringMonth: "1", notes: "",
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function makeId() { return `exp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
 
-// ─── Category Badge ───────────────────────────────────────────────────────────
+// â"€â"€â"€ Category Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function CategoryBadge({ cat }: { cat: ExpenseCategory }) {
   const m = CATEGORY_META[cat]
@@ -123,7 +123,7 @@ function CategoryBadge({ cat }: { cat: ExpenseCategory }) {
   )
 }
 
-// ─── Type Badge ───────────────────────────────────────────────────────────────
+// â"€â"€â"€ Type Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function TypeBadge({ type }: { type: ExpenseType }) {
   const m = TYPE_META[type]
@@ -134,7 +134,7 @@ function TypeBadge({ type }: { type: ExpenseType }) {
   )
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+// â"€â"€â"€ Status Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function StatusBadge({ status }: { status: "Paid" | "Pending" }) {
   return status === "Paid"
@@ -142,7 +142,7 @@ function StatusBadge({ status }: { status: "Paid" | "Pending" }) {
     : <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><Clock className="h-3 w-3" /> Pending</span>
 }
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Stat Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function StatCard({ label, amount, count, countLabel, iconBg, icon, trend }: {
   label: string; amount: number; count: number; countLabel: string
@@ -157,12 +157,12 @@ function StatCard({ label, amount, count, countLabel, iconBg, icon, trend }: {
       </div>
       <p className="text-xl font-bold text-slate-900 leading-none tracking-tight mb-1 truncate">{formatCurrency(amount)}</p>
       <p className="text-[11px] font-semibold text-slate-500">{label}</p>
-      <p className="text-[10px] text-slate-400 mt-0.5">{count} {countLabel}{trend ? ` · ${trend}` : ""}</p>
+      <p className="text-[10px] text-slate-400 mt-0.5">{count} {countLabel}{trend ? ` - ${trend}` : ""}</p>
     </div>
   )
 }
 
-// ─── Add/Edit Drawer ─────────────────────────────────────────────────────────
+// â"€â"€â"€ Add/Edit Drawer â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccountId }: {
   open: boolean
@@ -296,10 +296,10 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
               <div className="grid grid-cols-2 gap-3">
                 {/* Amount */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-600">Amount (₨) <span className="text-red-500">*</span></Label>
+                  <Label className="text-xs font-semibold text-slate-600">Amount (â‚¨) <span className="text-red-500">*</span></Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">Rs</span>
-                    <Input type="number" min={0} value={form.amount} onChange={e => up("amount", e.target.value)}
+                    <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={form.amount} onChange={e => up("amount", e.target.value)}
                       placeholder="0" className={cn("pl-9 h-9 text-sm font-bold", errors.amount && "border-red-400")} />
                   </div>
                   {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
@@ -393,7 +393,7 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
               <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Payment</span>
             </div>
             <div className="p-4 space-y-3">
-              {/* Account selector — deducts from Finance account when Paid */}
+              {/* Account selector - deducts from Finance account when Paid */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-600">Pay From Account</Label>
                 {accounts.length > 0 ? (
@@ -490,7 +490,7 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
   )
 }
 
-// ─── Delete Confirm Dialog ────────────────────────────────────────────────────
+// â"€â"€â"€ Delete Confirm Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function DeleteDialog({ open, expense, onConfirm, onCancel }: {
   open: boolean; expense: Expense | null; onConfirm: () => void; onCancel: () => void
@@ -516,7 +516,7 @@ function DeleteDialog({ open, expense, onConfirm, onCancel }: {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function ExpensesPage() {
   const [list, setList] = useState<Expense[]>([])
@@ -556,7 +556,7 @@ export default function ExpensesPage() {
     fetchData()
   }, [])
 
-  // ── Stats ────────────────────────────────────────────────────────────────────
+  // â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   const stats = useMemo(() => {
     const todayList  = list.filter(e => e.date === TODAY)
@@ -572,7 +572,7 @@ export default function ExpensesPage() {
     }
   }, [list])
 
-  // ── Category breakdown (this month) ──────────────────────────────────────────
+  // â"€â"€ Category breakdown (this month) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   const categoryBreakdown = useMemo(() => {
     const monthList = list.filter(e => e.date.startsWith(THIS_MONTH) && e.status === "Paid")
@@ -584,7 +584,7 @@ export default function ExpensesPage() {
       .sort((a, b) => b.amount - a.amount)
   }, [list])
 
-  // ── Filtered + sorted list ────────────────────────────────────────────────────
+  // â"€â"€ Filtered + sorted list â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   const filtered = useMemo(() => {
     let result = list.filter(e => {
@@ -613,7 +613,7 @@ export default function ExpensesPage() {
     return result
   }, [list, tab, search, catFilter, statusFilter, payFilter, dateFrom, dateTo, sortField, sortDir])
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // â"€â"€ Handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   function handleOpenAdd() { setEditing(null); setDrawerOpen(true) }
   function handleOpenEdit(e: Expense) { setEditing(e); setDrawerOpen(true) }
@@ -644,7 +644,7 @@ export default function ExpensesPage() {
         const created = await createExpense(expenseData as Omit<Expense, 'id'>)
         setList(prev => [created, ...prev])
 
-        // ── Finance: debit from selected account when Paid ─────────────────
+        // â"€â"€ Finance: debit from selected account when Paid â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         if (form.status === "Paid" && form.accountId) {
           const tenantId = await getTenantId()
           await supabase.from("finance_transactions").insert({
@@ -654,7 +654,7 @@ export default function ExpensesPage() {
             amount,
             reference_type: "Expense",
             reference_id: created.id,
-            description: `Expense — ${form.title}`,
+            description: `Expense - ${form.title}`,
           })
           const { data: accRow } = await supabase
             .from("finance_accounts").select("current_balance").eq("id", form.accountId).single()
@@ -718,11 +718,11 @@ export default function ExpensesPage() {
   return (
     <div className="space-y-4">
 
-        {/* ── Page Header ── */}
+        {/* â"€â"€ Page Header â"€â"€ */}
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-base font-bold text-slate-900 tracking-tight">Expenses</h1>
-            <p className="text-xs text-slate-500">Track and manage all shop expenses — daily, monthly & yearly</p>
+            <p className="text-xs text-slate-500">Track and manage all shop expenses - daily, monthly & yearly</p>
           </div>
           <Button onClick={handleOpenAdd}
             className="bg-rose-600 hover:bg-rose-700 gap-1.5 h-8 text-xs px-3">
@@ -730,7 +730,7 @@ export default function ExpensesPage() {
           </Button>
         </div>
 
-        {/* ── Stats Row ── */}
+        {/* â"€â"€ Stats Row â"€â"€ */}
         <div className="grid grid-cols-4 gap-2.5">
           <StatCard
             label="Today's Expenses" amount={stats.today.amount} count={stats.today.count}
@@ -756,10 +756,10 @@ export default function ExpensesPage() {
           />
         </div>
 
-        {/* ── Two-column layout: Table (left) + Breakdown (right) ── */}
+        {/* â"€â"€ Two-column layout: Table (left) + Breakdown (right) â"€â"€ */}
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-4 items-start">
 
-          {/* ── Left: Table area ── */}
+          {/* â"€â"€ Left: Table area â"€â"€ */}
           <div className="space-y-3">
 
             {/* Tabs */}
@@ -953,14 +953,14 @@ export default function ExpensesPage() {
             </Card>
           </div>
 
-          {/* ── Right: Category Breakdown ── */}
+          {/* â"€â"€ Right: Category Breakdown â"€â"€ */}
           <div className="space-y-3">
             {/* Monthly breakdown */}
             <Card className="border-slate-200 shadow-sm">
               <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-slate-800">Monthly Breakdown</p>
-                  <p className="text-[10px] text-slate-400">{format(_now, "MMMM yyyy")} — paid only</p>
+                  <p className="text-[10px] text-slate-400">{format(_now, "MMMM yyyy")} - paid only</p>
                 </div>
                 <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
                   <BarChart3 className="h-3.5 w-3.5 text-blue-600" />

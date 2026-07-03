@@ -1,10 +1,12 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useEffect } from "react"
 import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { getPersons, getPersonTransactions, createPersonTransaction, deletePersonTransaction } from "@/lib/api/persons"
 import type { Person, PersonTransaction } from "@/lib/api/persons"
+import { getFinanceAccounts } from "@/lib/api/finance"
+import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -29,6 +31,7 @@ export default function PersonLedgerPage() {
   const [loading, setLoading] = useState(true)
   const [persons, setPersons] = useState<Person[]>([])
   const [transactions, setTransactions] = useState<PersonTransaction[]>([])
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
 
   const [selectedPersonId, setSelectedPersonId] = useState("")
   const [dateFrom, setDateFrom] = useState("")
@@ -43,6 +46,7 @@ export default function PersonLedgerPage() {
     amount: "",
     date: todayPKT(),
     method: "Cash",
+    accountId: "",
     notes: "",
   })
   const [savingTx, setSavingTx] = useState(false)
@@ -51,9 +55,12 @@ export default function PersonLedgerPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [p, t] = await Promise.all([getPersons(), getPersonTransactions()])
+        const [p, t, fa] = await Promise.all([getPersons(), getPersonTransactions(), getFinanceAccounts()])
         setPersons(p)
         setTransactions(t)
+        const defaultAcc = fa.find(a => a.isDefaultCash) ?? fa[0]
+        setFinanceAccounts(fa)
+        setTxForm(f => ({ ...f, accountId: defaultAcc?.id ?? "" }))
       } catch (err) {
         toast.error("Failed to load person ledger")
         console.error(err)
@@ -79,7 +86,7 @@ export default function PersonLedgerPage() {
         id: t.id,
         date: t.date,
         reference: t.id.slice(0, 8).toUpperCase(),
-        description: `${t.type === "gave" ? "Gave Money" : "Took Money"} — ${t.method}${t.notes ? ` (${t.notes})` : ""}`,
+        description: `${t.type === "gave" ? "Gave Money" : "Took Money"} - ${t.method}${t.notes ? ` (${t.notes})` : ""}`,
         debit: t.type === "gave" ? t.amount : 0,
         credit: t.type === "took" ? t.amount : 0,
         type: t.type,
@@ -100,7 +107,7 @@ export default function PersonLedgerPage() {
       result.push({
         id: "opening",
         date: raw[0]?.date ?? todayPKT(),
-        reference: "—",
+        reference: "-",
         description: "Opening Balance",
         debit: openingBalance > 0 ? openingBalance : 0,
         credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
@@ -144,6 +151,7 @@ export default function PersonLedgerPage() {
     if (!selectedPersonId) { toast.error("Select a person first"); return }
     const amount = parseFloat(txForm.amount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
+    if (!txForm.accountId) { toast.error("Select a finance account"); return }
     setSavingTx(true)
     try {
       const created = await createPersonTransaction({
@@ -152,11 +160,17 @@ export default function PersonLedgerPage() {
         type: txForm.type,
         amount,
         method: txForm.method,
-        accountId: null,
+        accountId: txForm.accountId,
         notes: txForm.notes,
       })
       setTransactions(prev => [...prev, created])
-      setTxForm({ type: "gave", amount: "", date: todayPKT(), method: "Cash", notes: "" })
+
+      // Refresh account balances to reflect the change made in the API
+      const freshAccounts = await getFinanceAccounts()
+      setFinanceAccounts(freshAccounts)
+
+      const defaultAcc = freshAccounts.find(a => a.isDefaultCash) ?? freshAccounts[0]
+      setTxForm({ type: "gave", amount: "", date: todayPKT(), method: "Cash", accountId: defaultAcc?.id ?? "", notes: "" })
       setShowAddTx(false)
       toast.success(`${txForm.type === "gave" ? "Gave" : "Took"} ${formatCurrency(amount)} recorded`)
     } catch (err) {
@@ -191,12 +205,12 @@ export default function PersonLedgerPage() {
       shopPhone = tenant.phone || ""
     } catch { /* defaults */ }
     const personLabel = selectedPerson ? selectedPerson.name : "All Persons"
-    const periodLine = dateFrom || dateTo ? `  ·  Period: ${dateFrom || "Start"} → ${dateTo || "Now"}` : ""
+    const periodLine = dateFrom || dateTo ? `  -  Period: ${dateFrom || "Start"} to ${dateTo || "Now"}` : ""
     const { generateReportPDF } = await import("@/lib/pdf/report")
     generateReportPDF({
       shopName, shopAddress, shopPhone,
       title: "Person Ledger",
-      subtitle: personLabel + periodLine + `  ·  ${filtered.length} entries`,
+      subtitle: personLabel + periodLine + `  -  ${filtered.length} entries`,
       columns: [
         { header: "Date",        dataKey: "date",    width: 22 },
         ...(!selectedPersonId ? [{ header: "Person", dataKey: "person", width: 30 }] : []),
@@ -208,11 +222,11 @@ export default function PersonLedgerPage() {
       ],
       rows: filtered.map(e => ({
         date:    e.date,
-        person:  e.personName || "—",
+        person:  e.personName || "-",
         ref:     e.reference,
         desc:    e.description,
-        debit:   e.debit > 0 ? `Rs ${e.debit.toLocaleString("en-PK")}` : "—",
-        credit:  e.credit > 0 ? `Rs ${e.credit.toLocaleString("en-PK")}` : "—",
+        debit:   e.debit > 0 ? `Rs ${e.debit.toLocaleString("en-PK")}` : "-",
+        credit:  e.credit > 0 ? `Rs ${e.credit.toLocaleString("en-PK")}` : "-",
         balance: `Rs ${Math.abs(e.balance).toLocaleString("en-PK")} ${e.balance > 0 ? "Dr" : e.balance < 0 ? "Cr" : ""}`.trim(),
       })),
       summary: [
@@ -232,7 +246,7 @@ export default function PersonLedgerPage() {
     exportToExcel(
       filtered.map(e => ({
         date:    e.date,
-        person:  e.personName || "—",
+        person:  e.personName || "-",
         ref:     e.reference,
         desc:    e.description,
         gave:    e.debit || 0,
@@ -251,8 +265,8 @@ export default function PersonLedgerPage() {
       ],
       {
         sheetName: "Person Ledger",
-        title: `Person Ledger — ${selectedPerson?.name ?? "All Persons"}`,
-        subtitle: `Exported on ${new Date().toLocaleDateString("en-PK")}  ·  ${filtered.length} entries`,
+        title: `Person Ledger - ${selectedPerson?.name ?? "All Persons"}`,
+        subtitle: `Exported on ${new Date().toLocaleDateString("en-PK")}  -  ${filtered.length} entries`,
         summaryRows: [
           { label: "Total Gave", value: totalDebit },
           { label: "Total Took", value: totalCredit },
@@ -283,13 +297,22 @@ export default function PersonLedgerPage() {
         </div>
         <div className="flex gap-1.5">
           {selectedPersonId && (
-            <button
-              onClick={() => setShowAddTx(true)}
-              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Transaction
-            </button>
+            <>
+              <button
+                onClick={() => { const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]; setTxForm(f => ({ ...f, type: "gave", amount: "", notes: "", accountId: def?.id ?? f.accountId })); setShowAddTx(true) }}
+                className="flex items-center gap-1.5 h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-semibold"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                Money Out
+              </button>
+              <button
+                onClick={() => { const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]; setTxForm(f => ({ ...f, type: "took", amount: "", notes: "", accountId: def?.id ?? f.accountId })); setShowAddTx(true) }}
+                className="flex items-center gap-1.5 h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-semibold"
+              >
+                <ArrowDownLeft className="w-3.5 h-3.5" />
+                Money In
+              </button>
+            </>
           )}
           <button
             onClick={handleExportPDF}
@@ -322,7 +345,7 @@ export default function PersonLedgerPage() {
                 <option value="">All Persons ({persons.length})</option>
                 {persons.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.name}{p.phone ? ` — ${p.phone}` : ""}
+                    {p.name}{p.phone ? ` - ${p.phone}` : ""}
                   </option>
                 ))}
               </select>
@@ -406,7 +429,7 @@ export default function PersonLedgerPage() {
           <CardHeader className="px-3 py-2 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold text-slate-800">
-                {selectedPerson ? `${selectedPerson.name} — Account Statement` : "All Persons — Account Statement"}
+                {selectedPerson ? `${selectedPerson.name} - Account Statement` : "All Persons - Account Statement"}
               </CardTitle>
               <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
                 <span className="flex items-center gap-1">
@@ -487,14 +510,14 @@ export default function PersonLedgerPage() {
                     <tr key={entry.id} className={`hover:bg-slate-50/70 transition-colors ${entry.type === "opening" ? "bg-slate-50 italic" : ""}`}>
                       <td className="px-3 py-2 text-slate-500 whitespace-nowrap text-xs">{formatDate(entry.date)}</td>
                       {!selectedPersonId && (
-                        <td className="px-3 py-2 text-xs font-medium text-violet-700 whitespace-nowrap">{entry.personName || "—"}</td>
+                        <td className="px-3 py-2 text-xs font-medium text-violet-700 whitespace-nowrap">{entry.personName || "-"}</td>
                       )}
                       <td className="px-3 py-2 text-xs text-slate-700">{entry.description}</td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-blue-600 whitespace-nowrap">
-                        {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">—</span>}
+                        {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-emerald-600 whitespace-nowrap">
-                        {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">—</span>}
+                        {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-amber-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                         {formatCurrency(Math.abs(entry.balance))}
@@ -531,7 +554,7 @@ export default function PersonLedgerPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400">
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -589,14 +612,14 @@ export default function PersonLedgerPage() {
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    {txForm.type === "gave" ? "We gave money to them → their balance increases (Dr)" : "They gave money to us → their balance decreases (Cr)"}
+                    {txForm.type === "gave" ? "We gave money to them — their balance increases (Dr)" : "They gave money to us — their balance decreases (Cr)"}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Amount (₨) <span className="text-red-400">*</span></label>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Amount (Rs) <span className="text-red-400">*</span></label>
                   <input
-                    type="number"
+                    type="number" onWheel={e => e.currentTarget.blur()}
                     value={txForm.amount}
                     onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))}
                     placeholder="0"
@@ -613,6 +636,24 @@ export default function PersonLedgerPage() {
                     onChange={e => setTxForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                    {txForm.type === "gave" ? "Pay From Account" : "Deposit to Account"}
+                  </label>
+                  <select
+                    value={txForm.accountId}
+                    onChange={e => setTxForm(f => ({ ...f, accountId: e.target.value }))}
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select account</option>
+                    {financeAccounts.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} — {formatCurrency(a.currentBalance)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>

@@ -165,7 +165,7 @@ function AccessoryCard({
             {accessory.name}
           </h3>
           <p className="text-[10px] text-slate-400 font-mono truncate">
-            {accessory.brand} · {accessory.sku}
+            {accessory.brand} - {accessory.sku}
           </p>
         </div>
 
@@ -189,7 +189,7 @@ function AccessoryCard({
           </div>
         ) : (
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-center">
-            <p className="text-[10px] font-medium text-amber-700">No price set — purchase to stock</p>
+            <p className="text-[10px] font-medium text-amber-700">No price set - purchase to stock</p>
           </div>
         )}
 
@@ -385,7 +385,7 @@ function AccessoryFormDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingAccessory?.id])
 
-  // price/stock set via Purchase page — no live margin in catalog form
+  // price/stock set via Purchase page - no live margin in catalog form
 
   function handleClose() {
     reset()
@@ -600,7 +600,7 @@ function AccessoryFormDialog({
                             }}
                           />
                         </div>
-                        <p className="text-[10px] text-slate-400">Saved as an accessory category only — will not appear in mobile phone categories.</p>
+                        <p className="text-[10px] text-slate-400">Saved as an accessory category only - will not appear in mobile phone categories.</p>
                       </div>
                       <DialogFooter className="gap-2">
                         <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNewCategory(false)}>
@@ -686,7 +686,7 @@ function AccessoryFormDialog({
                     <p className="text-sm font-medium text-slate-500 group-hover:text-pink-600 transition-colors">
                       Click to upload image
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5">PNG, JPG, WEBP — up to 5 MB</p>
+                    <p className="text-xs text-slate-400 mt-0.5">PNG, JPG, WEBP - up to 5 MB</p>
                   </div>
                 </button>
               )}
@@ -773,7 +773,7 @@ export default function AccessoriesPage() {
         setCategories(data.map((c: { name: string }) => c.name))
       }
     } catch {
-      // empty — user will add categories via the form
+      // empty - user will add categories via the form
     }
   }
 
@@ -814,7 +814,7 @@ export default function AccessoriesPage() {
         setBrands(data.map((b: { name: string }) => b.name))
       }
     } catch {
-      // fallback — empty
+      // fallback - empty
     }
   }
 
@@ -976,7 +976,7 @@ export default function AccessoriesPage() {
               </div>
               <div className="min-w-0">
                 <p className="font-semibold text-slate-900 text-sm leading-tight">{acc.name}</p>
-                <p className="text-xs text-slate-400 mt-0.5 font-mono">{acc.brand} · {acc.sku}</p>
+                <p className="text-xs text-slate-400 mt-0.5 font-mono">{acc.brand} - {acc.sku}</p>
               </div>
             </div>
           )
@@ -1322,13 +1322,13 @@ export default function AccessoriesPage() {
                   key={accessory.id}
                   className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex"
                 >
-                  {/* Left accent strip — color = stock status */}
+                  {/* Left accent strip - color = stock status */}
                   <div className={cn("w-1 shrink-0", accentColor)} />
 
                   {/* Card body */}
                   <div className="flex-1 p-3 space-y-2.5 min-w-0">
 
-                    {/* Zone 1 — Identity */}
+                    {/* Zone 1 - Identity */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -1358,7 +1358,7 @@ export default function AccessoriesPage() {
                       <StatusBadge status={stockStatus} className="shrink-0 text-[10px] px-1.5 py-0.5" />
                     </div>
 
-                    {/* Zone 2 — Prices */}
+                    {/* Zone 2 - Prices */}
                     <div className="flex items-center gap-2">
                       {/* Buy */}
                       <div className="flex-1 min-w-0">
@@ -1381,7 +1381,7 @@ export default function AccessoriesPage() {
                       </div>
                     </div>
 
-                    {/* Zone 3 — Actions */}
+                    {/* Zone 3 - Actions */}
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                       <button
                         onClick={() => handleEdit(accessory)}

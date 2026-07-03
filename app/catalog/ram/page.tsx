@@ -99,7 +99,7 @@ export default function RamPage() {
     if (!deleteTarget) return
     if (deleteTarget.isSystem) { toast.error("System entries cannot be deleted"); return }
     if (deleteTarget.usageCount > 0) {
-      toast.error(`Cannot delete — used in ${deleteTarget.usageCount} phone record${deleteTarget.usageCount !== 1 ? "s" : ""}`)
+      toast.error(`Cannot delete - used in ${deleteTarget.usageCount} phone record${deleteTarget.usageCount !== 1 ? "s" : ""}`)
       setDeleteTarget(null)
       return
     }
@@ -133,7 +133,7 @@ export default function RamPage() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-slate-900 leading-none">RAM Options</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Manage RAM values (4GB, 6GB, 8GB, 12GB…) for Android phones</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Manage RAM values (4GB, 6GB, 8GB, 12GB...) for Android phones</p>
           </div>
         </div>
         <Button onClick={openAdd} size="sm" className="h-8 text-xs gap-1.5 px-3 bg-indigo-500 hover:bg-indigo-600">
@@ -191,7 +191,7 @@ export default function RamPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-slate-800">{r.name}</p>
                   <p className="text-[10px] text-slate-400">
-                    {r.usageCount > 0 ? `Used in ${r.usageCount} phone${r.usageCount !== 1 ? "s" : ""}` : "Unused · Android only"}
+                    {r.usageCount > 0 ? `Used in ${r.usageCount} phone${r.usageCount !== 1 ? "s" : ""}` : "Unused - Android only"}
                   </p>
                 </div>
                 {r.isSystem && (
@@ -204,7 +204,7 @@ export default function RamPage() {
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   {r.isSystem ? (
-                    <span className="p-1 text-amber-300 cursor-not-allowed" title="System — cannot delete"><Lock className="w-3.5 h-3.5" /></span>
+                    <span className="p-1 text-amber-300 cursor-not-allowed" title="System - cannot delete"><Lock className="w-3.5 h-3.5" /></span>
                   ) : (
                     <button
                       onClick={() => setDeleteTarget(r)}

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 import React, { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import {
@@ -27,7 +27,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { format, subMonths, subDays, startOfWeek, endOfWeek, subWeeks, addDays, parseISO, differenceInDays } from "date-fns"
 
-/* ─── Custom Tooltips ─────────────────────────────────────────────────────── */
+/* â"€â"€â"€ Custom Tooltips â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 const SparkTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null
   return (
@@ -67,7 +67,7 @@ const BAR_COLORS = ["#2563EB", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"]
 
 type Period = "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "year" | "range"
 
-/* ─── Page ─────────────────────────────────────────────────────────────────── */
+/* â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 export default function DashboardPage() {
   const { user } = useAuth()
   const TODAY = todayPKT()
@@ -291,10 +291,12 @@ export default function DashboardPage() {
   }, [sales])
 
   const lowStockItems = useMemo(() => {
-    const lm = mobiles.filter(m => m.stock <= 5).map(m => ({ id: m.id, name: `${m.brand} ${m.model}`, stock: m.stock, type: "Mobile" as const }))
-    const la = accessories.filter(a => a.stock <= 5).map(a => ({ id: a.id, name: a.name, stock: a.stock, type: "Accessory" as const }))
-    return [...lm, ...la].sort((a, b) => a.stock - b.stock).slice(0, 6)
-  }, [mobiles, accessories])
+    return accessories
+      .filter(a => a.stock <= 5)
+      .map(a => ({ id: a.id, name: a.name, stock: a.stock, type: "Accessory" as const }))
+      .sort((a, b) => a.stock - b.stock)
+      .slice(0, 6)
+  }, [accessories])
 
   const recentSales     = useMemo(() => [...sales].reverse().slice(0, 7), [sales])
   const recentPurchases = useMemo(() => [...purchases].reverse().slice(0, 7), [purchases])
@@ -310,13 +312,13 @@ export default function DashboardPage() {
     month: "This Month",
     lastMonth: "Last Month",
     year: "This Year",
-    range: dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : "Custom Range",
+    range: dateFrom && dateTo ? `${dateFrom} -" ${dateTo}` : "Custom Range",
   }[period]
 
   const FILTER_OPTIONS: { value: Period; label: string; icon: React.ElementType; desc: string }[] = [
     { value: "yesterday", label: "Yesterday",    icon: Clock,        desc: "Sales from yesterday" },
-    { value: "thisWeek",  label: "This Week",    icon: CalendarDays, desc: "Mon – today" },
-    { value: "lastWeek",  label: "Last Week",    icon: CalendarDays, desc: "Mon – Sun, prev week" },
+    { value: "thisWeek",  label: "This Week",    icon: CalendarDays, desc: "Mon - today" },
+    { value: "lastWeek",  label: "Last Week",    icon: CalendarDays, desc: "Mon - Sun, prev week" },
     { value: "month",     label: "This Month",   icon: Calendar,     desc: format(todayParsed, "MMMM yyyy") },
     { value: "lastMonth", label: "Last Month",   icon: Calendar,     desc: format(subMonths(todayParsed, 1), "MMMM yyyy") },
     { value: "year",      label: "This Year",    icon: TrendingUp,   desc: currentYearKey },
@@ -339,7 +341,7 @@ export default function DashboardPage() {
   return (
     <PageWrapper>
 
-      {/* ── Welcome Banner ──────────────────────────────────────────────── */}
+      {/* â"€â"€ Welcome Banner â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="relative overflow-hidden rounded-xl bg-linear-to-r from-blue-600 via-blue-700 to-indigo-700 px-5 py-3.5 mb-4 shadow-md shadow-blue-200/50">
         <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/5" />
         <div className="absolute right-16 -bottom-10 w-24 h-24 rounded-full bg-white/5" />
@@ -348,7 +350,7 @@ export default function DashboardPage() {
           <div>
             <p className="text-blue-200 text-xs font-medium">Welcome back,</p>
             <h1 className="text-white text-lg sm:text-xl font-bold tracking-tight leading-tight">{user?.name || "User"}</h1>
-            <p className="text-blue-200 text-xs mt-0.5">{formatDate(TODAY)} — {shopName}</p>
+            <p className="text-blue-200 text-xs mt-0.5">{formatDate(TODAY)} - {shopName}</p>
           </div>
           <div className="hidden md:flex items-center gap-4">
             <div className="text-right">
@@ -368,7 +370,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Quick Actions ────────────────────────────────────────────────── */}
+      {/* â"€â"€ Quick Actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
         {[
           { href: "/sales/new",            icon: Plus,        label: "New Sale",     bg: "from-blue-500 to-blue-600",       shadow: "shadow-blue-200"   },
@@ -389,7 +391,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* ── Financial Overview ───────────────────────────────────────────── */}
+      {/* â"€â"€ Financial Overview â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -507,7 +509,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* ── MOBILE: gradient cards ── */}
+        {/* â"€â"€ MOBILE: gradient cards â"€â"€ */}
         <div className="sm:hidden space-y-2">
           {([
             {
@@ -545,7 +547,7 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* ── DESKTOP: gradient cards with sparklines ── */}
+        {/* â"€â"€ DESKTOP: gradient cards with sparklines â"€â"€ */}
         <div className="hidden sm:grid sm:grid-cols-3 gap-3">
           {/* Sales Card */}
           <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-500 to-blue-700 p-4 shadow-md shadow-blue-200/50">
@@ -647,7 +649,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Stat Counters ───────────────────────────────────────────────── */}
+      {/* â"€â"€ Stat Counters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
         {([
           { label: "Total Products",  value: totalProducts,       icon: Package,      color: "text-blue-600",    bg: "bg-blue-50",    border: "border-blue-100",    href: "/products/mobiles" },
@@ -670,13 +672,13 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* ── Revenue Chart ────────────────────────────────────────────────── */}
+      {/* â"€â"€ Revenue Chart â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Card className="mb-4 border-slate-100 shadow-sm rounded-xl">
         <CardHeader className="pb-0 pt-4 px-5">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold text-slate-800">Revenue & Profit Overview</CardTitle>
-              <p className="text-[11px] text-slate-400 mt-0.5">Monthly revenue vs gross profit — last 7 months</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Monthly revenue vs gross profit - last 7 months</p>
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
@@ -722,7 +724,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* ── Recent Transactions ──────────────────────────────────────────── */}
+      {/* â"€â"€ Recent Transactions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-4">
 
         {/* Recent Sales */}
@@ -870,7 +872,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* ── Bottom row: Top Products + Low Stock ───────────────────────── */}
+      {/* â"€â"€ Bottom row: Top Products + Low Stock â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
 
         {/* Top Selling Products */}
@@ -879,7 +881,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-bold text-slate-800">Top Selling Products</CardTitle>
-                <p className="text-[11px] text-slate-400">By units sold — all time</p>
+                <p className="text-[11px] text-slate-400">By units sold - all time</p>
               </div>
               <Link href="/products/mobiles" className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
@@ -904,7 +906,7 @@ export default function DashboardPage() {
                   axisLine={false}
                   tickLine={false}
                   width={76}
-                  tickFormatter={(v: string) => v.length > 11 ? v.substring(0, 10) + "…" : v}
+                  tickFormatter={(v: string) => v.length > 11 ? v.substring(0, 10) + "..." : v}
                 />
                 <Tooltip content={<BarTooltip />} />
                 <Bar dataKey="units" radius={[0, 5, 5, 0]} maxBarSize={14}>
@@ -954,10 +956,7 @@ export default function DashboardPage() {
               lowStockItems.map(item => (
                 <div key={item.id} className="flex items-center gap-2.5 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 hover:bg-amber-50/40 transition-colors">
                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${item.stock === 0 ? "bg-red-100" : "bg-amber-100"}`}>
-                    {item.type === "Mobile"
-                      ? <Smartphone className={`w-3.5 h-3.5 ${item.stock === 0 ? "text-red-600" : "text-amber-600"}`} />
-                      : <Package className={`w-3.5 h-3.5 ${item.stock === 0 ? "text-red-600" : "text-amber-600"}`} />
-                    }
+                    <Package className={`w-3.5 h-3.5 ${item.stock === 0 ? "text-red-600" : "text-amber-600"}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>

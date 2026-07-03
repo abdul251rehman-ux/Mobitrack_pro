@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useMemo, useEffect } from "react"
 import {
@@ -20,6 +20,7 @@ import { getTenantId } from "@/lib/api/helpers"
 import { DataTable } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,7 +33,7 @@ import {
 } from "@/components/ui/dialog"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
-// ── Zod schema ────────────────────────────────────────────────────────────────
+// â"€â"€ Zod schema â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const customerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   phone: z.string().min(7, "Enter a valid phone number"),
@@ -46,7 +47,7 @@ const customerSchema = z.object({
 })
 type CustomerForm = z.infer<typeof customerSchema>
 
-// ── Tier badge ────────────────────────────────────────────────────────────────
+// â"€â"€ Tier badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const tierColors: Record<string, string> = {
   Bronze:   "bg-orange-50 text-orange-700 border-orange-200",
   Silver:   "bg-slate-100 text-slate-600 border-slate-300",
@@ -54,12 +55,12 @@ const tierColors: Record<string, string> = {
   Platinum: "bg-slate-800 text-white border-slate-700",
 }
 
-// ── Tier card config ──────────────────────────────────────────────────────────
+// â"€â"€ Tier card config â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const tierCardConfig: Record<string, { dot: string; label: string; accent: string; ring: string; icon: string }> = {
-  Platinum: { dot: "bg-slate-700",  label: "text-slate-600",  accent: "border-l-slate-700",  ring: "ring-slate-400",  icon: "★" },
-  Gold:     { dot: "bg-amber-400",  label: "text-amber-600",  accent: "border-l-amber-400",  ring: "ring-amber-400",  icon: "★" },
-  Silver:   { dot: "bg-slate-400",  label: "text-slate-500",  accent: "border-l-slate-400",  ring: "ring-slate-300",  icon: "★" },
-  Bronze:   { dot: "bg-orange-400", label: "text-orange-600", accent: "border-l-orange-400", ring: "ring-orange-300", icon: "★" },
+  Platinum: { dot: "bg-slate-700",  label: "text-slate-600",  accent: "border-l-slate-700",  ring: "ring-slate-400",  icon: "â˜..." },
+  Gold:     { dot: "bg-amber-400",  label: "text-amber-600",  accent: "border-l-amber-400",  ring: "ring-amber-400",  icon: "â˜..." },
+  Silver:   { dot: "bg-slate-400",  label: "text-slate-500",  accent: "border-l-slate-400",  ring: "ring-slate-300",  icon: "â˜..." },
+  Bronze:   { dot: "bg-orange-400", label: "text-orange-600", accent: "border-l-orange-400", ring: "ring-orange-300", icon: "â˜..." },
 }
 
 function TierBadge({ tier }: { tier: string }) {
@@ -70,7 +71,7 @@ function TierBadge({ tier }: { tier: string }) {
   )
 }
 
-// ── Avatar ────────────────────────────────────────────────────────────────────
+// â"€â"€ Avatar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const avatarColors = [
   "bg-blue-600", "bg-violet-600", "bg-emerald-600", "bg-amber-600",
   "bg-rose-600",  "bg-cyan-600",   "bg-indigo-600",  "bg-teal-600",
@@ -87,7 +88,7 @@ function CustomerAvatar({ name, id }: { name: string; id: string }) {
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,7 +118,7 @@ export default function CustomersPage() {
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     useForm<CustomerForm>({ resolver: zodResolver(customerSchema) })
 
-  // ── Filtered + sorted ──────────────────────────────────────────────────────
+  // â"€â"€ Filtered + sorted â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const filtered = useMemo(() => {
     let list = [...customers]
     if (search.trim()) {
@@ -190,7 +191,7 @@ export default function CustomersPage() {
     setDeleteTarget(null)
   }
 
-  // ── Ledger ──────────────────────────────────────────────────────────────────
+  // â"€â"€ Ledger â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   interface LedgerSale {
     id: string
     invoiceNumber: string
@@ -231,7 +232,7 @@ export default function CustomersPage() {
     }
   }
 
-  // ── Columns ─────────────────────────────────────────────────────────────────
+  // â"€â"€ Columns â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const columns: ColumnDef<Customer>[] = [
     {
       id: "avatar",
@@ -265,7 +266,7 @@ export default function CustomersPage() {
             <Mail className="w-3 h-3 text-slate-400 shrink-0" />
             <span className="truncate">{email}</span>
           </div>
-        ) : <span className="text-xs text-slate-400">—</span>
+        ) : <span className="text-xs text-slate-400">-</span>
       },
     },
     {
@@ -281,7 +282,7 @@ export default function CustomersPage() {
     {
       accessorKey: "lastPurchaseDate",
       header: "Last Purchase",
-      cell: ({ row }) => <div className="text-xs text-slate-600 whitespace-nowrap">{row.original.lastPurchaseDate ? formatDate(row.original.lastPurchaseDate) : "—"}</div>,
+      cell: ({ row }) => <div className="text-xs text-slate-600 whitespace-nowrap">{row.original.lastPurchaseDate ? formatDate(row.original.lastPurchaseDate) : "-"}</div>,
     },
     {
       accessorKey: "loyaltyTier",
@@ -314,7 +315,7 @@ export default function CustomersPage() {
     },
   ]
 
-  // ── Tier counts ─────────────────────────────────────────────────────────────
+  // â"€â"€ Tier counts â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const tierCounts = useMemo(() => ({
     Platinum: customers.filter((c) => c.loyaltyTier === "Platinum").length,
     Gold:     customers.filter((c) => c.loyaltyTier === "Gold").length,
@@ -330,7 +331,7 @@ export default function CustomersPage() {
     )
   }
 
-  // ── Filter toolbar (injected into DataTable) ─────────────────────────────
+  // â"€â"€ Filter toolbar (injected into DataTable) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const filterToolbar = (
     <>
       <div className="relative">
@@ -361,7 +362,7 @@ export default function CustomersPage() {
         <SelectContent>
           <SelectItem value="totalSpent">Total Spent</SelectItem>
           <SelectItem value="lastPurchase">Last Purchase</SelectItem>
-          <SelectItem value="name">Name (A–Z)</SelectItem>
+          <SelectItem value="name">Name (A-"Z)</SelectItem>
         </SelectContent>
       </Select>
       {(search || tierFilter !== "All") && (
@@ -380,7 +381,7 @@ export default function CustomersPage() {
 
   return (
     <div className="p-4 space-y-3">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
@@ -397,7 +398,14 @@ export default function CustomersPage() {
         </Button>
       </div>
 
-      {/* ── Tier Strip ──────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Summary Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <StatCard title="Total Revenue" value={formatCurrency(customers.reduce((s, c) => s + c.totalSpent, 0))} icon={TrendingUp} iconBg="bg-emerald-100" subtext={`${customers.length} customers`} />
+        <StatCard title="Total Orders" value={String(customers.reduce((s, c) => s + c.totalPurchases, 0))} icon={ShoppingBag} iconBg="bg-blue-100" subtext="Across all customers" />
+        <StatCard title="Credit Limits Set" value={String(customers.filter(c => (c.creditLimit ?? 0) > 0).length)} icon={CreditCard} iconBg="bg-violet-100" subtext="Customers with udhaar limit" />
+      </div>
+
+      {/* â"€â"€ Tier Strip â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-4 gap-2">
         {(["Platinum", "Gold", "Silver", "Bronze"] as const).map((tier) => {
           const cfg      = tierCardConfig[tier]
@@ -426,7 +434,7 @@ export default function CustomersPage() {
         })}
       </div>
 
-      {/* ── Mobile Cards ────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Mobile Cards â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="md:hidden space-y-2">
         {filtered.length === 0 && (
           <div className="text-center py-10 text-slate-400 text-xs">No customers found</div>
@@ -477,7 +485,7 @@ export default function CustomersPage() {
                 </div>
                 <div className="flex items-center gap-1 text-[10px] text-slate-400 mb-2">
                   <Calendar className="w-2.5 h-2.5" />
-                  Last: {customer.lastPurchaseDate ? formatDate(customer.lastPurchaseDate) : "—"}
+                  Last: {customer.lastPurchaseDate ? formatDate(customer.lastPurchaseDate) : "-"}
                 </div>
                 <div className="flex gap-1.5">
                   <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 px-2" asChild>
@@ -499,7 +507,7 @@ export default function CustomersPage() {
         })}
       </div>
 
-      {/* ── Desktop Table ────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Desktop Table â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="hidden md:block">
         <DataTable
           columns={columns}
@@ -508,7 +516,7 @@ export default function CustomersPage() {
         />
       </div>
 
-      {/* ── Add / Edit Dialog ────────────────────────────────────────────────── */}
+      {/* â"€â"€ Add / Edit Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -566,15 +574,15 @@ export default function CustomersPage() {
                 <Label htmlFor="city" className="text-xs">City <span className="text-slate-400 text-[10px]">(optional)</span></Label>
                 <div className="relative">
                   <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <Input id="city" placeholder="Karachi, Lahore…" className="pl-8 h-8 text-xs" {...register("city")} />
+                  <Input id="city" placeholder="Karachi, Lahore..." className="pl-8 h-8 text-xs" {...register("city")} />
                 </div>
               </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="creditLimit" className="text-xs">Credit Limit <span className="text-slate-400 text-[10px]">(max udhaar — optional)</span></Label>
+              <Label htmlFor="creditLimit" className="text-xs">Credit Limit <span className="text-slate-400 text-[10px]">(max udhaar - optional)</span></Label>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Rs</span>
-                <Input id="creditLimit" type="number" min={0} placeholder="e.g. 50000" className="pl-8 h-8 text-xs" {...register("creditLimit")} />
+                <Input id="creditLimit" type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="e.g. 50000" className="pl-8 h-8 text-xs" {...register("creditLimit")} />
               </div>
             </div>
             <div className="space-y-1">
@@ -594,7 +602,7 @@ export default function CustomersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Confirm ────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Delete Confirm â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -605,13 +613,13 @@ export default function CustomersPage() {
         onConfirm={confirmDelete}
       />
 
-      {/* ── Ledger Modal ─────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Ledger Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Dialog open={!!ledgerCustomer} onOpenChange={(open) => !open && setLedgerCustomer(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-violet-600" />
-              Udhaar Ledger — {ledgerCustomer?.name}
+              Udhaar Ledger - {ledgerCustomer?.name}
             </DialogTitle>
             <DialogDescription>
               All sales and outstanding balance for this customer.
@@ -658,7 +666,7 @@ export default function CustomersPage() {
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     Credit limit: {formatCurrency(ledgerCustomer.creditLimit)}.
                     {totalOutstanding >= ledgerCustomer.creditLimit
-                      ? " Limit reached — no more credit allowed."
+                      ? " Limit reached - no more credit allowed."
                       : ` ${formatCurrency(ledgerCustomer.creditLimit - totalOutstanding)} remaining.`}
                   </div>
                 )}
@@ -693,7 +701,7 @@ export default function CustomersPage() {
                               <td className="py-2 px-3 text-right font-semibold text-slate-900">{formatCurrency(sale.total)}</td>
                               <td className="py-2 px-3 text-right text-emerald-700">{formatCurrency(sale.amountReceived)}</td>
                               <td className={`py-2 px-3 text-right font-semibold ${isPending ? "text-red-600" : "text-slate-400"}`}>
-                                {isPending ? formatCurrency(balance) : "—"}
+                                {isPending ? formatCurrency(balance) : "-"}
                               </td>
                               <td className="py-2 px-3 text-center">
                                 <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${

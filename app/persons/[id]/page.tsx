@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
@@ -236,7 +236,7 @@ export default function PersonDetailPage() {
           <p className={`text-base font-bold leading-tight ${isTheyOwe ? "text-amber-600" : "text-emerald-600"}`}>
             {formatCurrency(balance)}
           </p>
-          <p className="text-[10px] text-slate-400">{isTheyOwe ? "Dr — outstanding" : "Cr — you owe"}</p>
+          <p className="text-[10px] text-slate-400">{isTheyOwe ? "Dr - outstanding" : "Cr - you owe"}</p>
         </div>
       </div>
 
@@ -301,14 +301,14 @@ export default function PersonDetailPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-slate-800">
-                        {isGave ? "Gave" : "Received"} · {txn.method}
+                        {isGave ? "Gave" : "Received"} - {txn.method}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-0.5 text-[10px] text-slate-400">
                           <CalendarDays className="w-2.5 h-2.5" />{formatDate(txn.date)}
                         </span>
                         {txn.notes && (
-                          <span className="text-[10px] text-slate-400 truncate max-w-[180px]">· {txn.notes}</span>
+                          <span className="text-[10px] text-slate-400 truncate max-w-[180px]">- {txn.notes}</span>
                         )}
                       </div>
                     </div>
@@ -372,7 +372,7 @@ export default function PersonDetailPage() {
                     Amount (Rs) *
                   </label>
                   <input
-                    type="number"
+                    type="number" onWheel={e => e.currentTarget.blur()}
                     min={1}
                     value={amount}
                     onChange={e => setAmount(e.target.value)}
@@ -396,7 +396,7 @@ export default function PersonDetailPage() {
                       className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} — {formatCurrency(a.currentBalance ?? 0)}</option>
+                        <option key={a.id} value={a.id}>{a.name} - {formatCurrency(a.currentBalance ?? 0)}</option>
                       ))}
                     </select>
                   )}
@@ -433,7 +433,7 @@ export default function PersonDetailPage() {
                     type="text"
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
-                    placeholder="Reason, reference…"
+                    placeholder="Reason, reference..."
                     className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -460,7 +460,7 @@ export default function PersonDetailPage() {
                   {saving
                     ? <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                     : <Check className="w-3.5 h-3.5" />}
-                  {saving ? "Saving…" : dialogType === "gave" ? "Record Give" : "Record Receive"}
+                  {saving ? "Saving..." : dialogType === "gave" ? "Record Give" : "Record Receive"}
                 </button>
               </div>
             </div>
@@ -489,7 +489,7 @@ export default function PersonDetailPage() {
                 </button>
                 <button onClick={handleDelete} disabled={deleting}
                   className="flex-1 h-8 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-lg transition-colors font-medium">
-                  {deleting ? "Deleting…" : "Delete"}
+                  {deleting ? "Deleting..." : "Delete"}
                 </button>
               </div>
             </div>

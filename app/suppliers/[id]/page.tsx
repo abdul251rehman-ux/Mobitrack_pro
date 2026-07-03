@@ -122,7 +122,7 @@ const purchaseColumns: ColumnDef<Purchase>[] = [
           {formatCurrency(balance)}
         </span>
       ) : (
-        <span className="text-xs text-slate-400">—</span>
+        <span className="text-xs text-slate-400">-</span>
       )
     },
   },
@@ -419,7 +419,7 @@ export default function SupplierDetailPage() {
                         Balance Due
                       </span>
                       <span className={`text-xs font-bold ${balanceDue > 0 ? "text-red-600" : "text-slate-500"}`}>
-                        {balanceDue > 0 ? formatCurrency(balanceDue) : "—"}
+                        {balanceDue > 0 ? formatCurrency(balanceDue) : "-"}
                       </span>
                     </>
                   )}

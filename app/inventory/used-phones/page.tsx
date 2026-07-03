@@ -1,4 +1,4 @@
-"use client"
+﻿﻿"use client"
 import React, { useState, useMemo, useRef, useEffect } from "react"
 import {
   Search, SlidersHorizontal, LayoutGrid, List, Plus, Calculator, Eye, Edit2,
@@ -32,7 +32,7 @@ import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
 import { toast } from "sonner"
 
-// â”€â”€â”€ Grade / Status Meta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Grade / Status Meta Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 const GRADE_META: Record<ConditionGrade, { bg: string; text: string; border: string; ring: string; label: string }> = {
   "A+": { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", ring: "ring-emerald-400", label: "A+" },
@@ -84,7 +84,7 @@ const SOURCE_LABEL: Record<SourceType, string> = {
 
 const PAGE_SIZE = 12
 
-// â”€â”€â”€ Badge Components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Badge Components Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 function GradeBadge({ grade, size = "sm" }: { grade: ConditionGrade; size?: "sm" | "lg" }) {
   const m = GRADE_META[grade]
@@ -122,7 +122,7 @@ function BatteryBar({ value }: { value?: number }) {
   )
 }
 
-// â”€â”€â”€ Phone Card (Grid View) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Phone Card (Grid View) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 function PhoneCard({
   phone,
@@ -169,7 +169,7 @@ function PhoneCard({
         <div>
           <p className="text-xs text-slate-400 font-medium">{phone.brand}</p>
           <h3 className="text-sm font-semibold text-slate-900 leading-tight">{phone.model}</h3>
-          <p className="text-xs text-slate-400">{phone.storage} Â· {phone.color}</p>
+          <p className="text-xs text-slate-400">{phone.storage} Ã‚- {phone.color}</p>
         </div>
 
         {/* Battery */}
@@ -217,7 +217,7 @@ function PhoneCard({
   )
 }
 
-// â”€â”€â”€ Phone Row (List View) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Phone Row (List View) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 function PhoneRow({ phone, onView, onEdit, onSell }: {
   phone: UsedPhone
@@ -235,7 +235,7 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
           <GradeBadge grade={phone.condition_grade} />
           <div>
             <p className="text-sm font-semibold text-slate-900">{phone.model}</p>
-            <p className="text-xs text-slate-400">{phone.brand} Â· {phone.storage} Â· {phone.color}</p>
+            <p className="text-xs text-slate-400">{phone.brand} Ã‚- {phone.storage} Ã‚- {phone.color}</p>
           </div>
         </div>
       </td>
@@ -282,7 +282,7 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
   )
 }
 
-// â”€â”€â”€ Details Slide-Over â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Details Slide-Over Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
   phone: UsedPhone
@@ -304,7 +304,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
             <GradeBadge grade={phone.condition_grade} size="lg" />
             <div>
               <h2 className="text-lg font-bold text-slate-900">{phone.model}</h2>
-              <p className="text-sm text-slate-500">{phone.brand} Â· {phone.storage} Â· {phone.color}</p>
+              <p className="text-sm text-slate-500">{phone.brand} Ã‚- {phone.storage} Ã‚- {phone.color}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
@@ -507,7 +507,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
   )
 }
 
-// â”€â”€â”€ Mark as Sold Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Mark as Sold Dialog Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 function MarkAsSoldDialog({ phone, onClose, onSold }: {
   phone: UsedPhone
@@ -531,7 +531,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
           <div className="p-6 border-b border-slate-100">
             <h2 className="text-lg font-bold text-slate-900">Mark as Sold</h2>
-            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model} Â· Grade {phone.condition_grade}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model} Ã‚- Grade {phone.condition_grade}</p>
           </div>
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
@@ -545,9 +545,9 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (â‚¨)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (Ã¢-šÂ¨)</label>
               <input
-                type="number"
+                type="number" onWheel={e => e.currentTarget.blur()}
                 value={finalPrice}
                 onChange={e => setFinalPrice(e.target.value)}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -571,7 +571,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
   )
 }
 
-// â”€â”€â”€ Trade-In Calculator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Trade-In Calculator Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; brands: string[] }) {
   const [brand, setBrand] = useState("")
@@ -655,7 +655,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Battery Health (%)</label>
                 <input
-                  type="number"
+                  type="number" onWheel={e => e.currentTarget.blur()}
                   value={battery}
                   onChange={e => setBattery(e.target.value)}
                   min={0} max={100}
@@ -664,9 +664,9 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Market Price (New / Avg Used) â€” â‚¨</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Market Price (New / Avg Used) Ã¢â‚¬" Ã¢-šÂ¨</label>
               <input
-                type="number"
+                type="number" onWheel={e => e.currentTarget.blur()}
                 value={marketPrice}
                 onChange={e => setMarketPrice(e.target.value)}
                 placeholder="e.g. 80000"
@@ -694,7 +694,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2">
-                  Formula: Market Ã— {GRADE_MULTIPLIER[grade]} (grade) Ã— battery factor. Prices rounded to nearest â‚¨500.
+                  Formula: Market Ãƒ- {GRADE_MULTIPLIER[grade]} (grade) Ãƒ- battery factor. Prices rounded to nearest Ã¢-šÂ¨500.
                 </p>
               </div>
             )}
@@ -714,7 +714,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
   )
 }
 
-// â”€â”€â”€ Bulk Add Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Bulk Add Dialog Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 type BulkRow = {
   id: string
@@ -746,9 +746,9 @@ function makeBulkRow(expanded = true): BulkRow {
   return { ...BULK_EMPTY_ROW, id: Math.random().toString(36).slice(2, 9), expanded }
 }
 
-// ─── CatalogCombo: searchable dropdown with always-visible "+ Add New" footer ──
+// â"€â"€â"€ CatalogCombo: searchable dropdown with always-visible "+ Add New" footer â"€â"€
 // Lock icon lives INSIDE the trigger (left side).
-// Footer always shows "+ Add New [label]" — clicking opens inline input row.
+// Footer always shows "+ Add New [label]" - clicking opens inline input row.
 
 function CatalogCombo({
   value, onChange, options, onAdd, onEdit, onDelete,
@@ -814,10 +814,10 @@ function CatalogCombo({
         : locked ? "border-blue-400 bg-blue-50"
         : "border-slate-300 hover:border-slate-400"
       )}>
-        {/* Lock icon — left side, only when lockable */}
+        {/* Lock icon - left side, only when lockable */}
         {onToggleLock !== undefined && (
           <button type="button" onClick={e => { e.stopPropagation(); onToggleLock() }}
-            title={locked ? "Locked — next card inherits this value" : "Click to lock for next card"}
+            title={locked ? "Locked - next card inherits this value" : "Click to lock for next card"}
             className={cn(
               "flex items-center justify-center w-7 h-full rounded-l-lg border-r shrink-0 transition-colors",
               locked ? "border-blue-300 bg-blue-100 text-blue-600 hover:bg-blue-200"
@@ -844,7 +844,7 @@ function CatalogCombo({
                 }
                 if (e.key === "Escape") close()
               }}
-              placeholder={value || placeholder || "Type to search…"}
+              placeholder={value || placeholder || "Type to search..."}
               className="flex-1 text-sm bg-transparent outline-none min-w-0 placeholder:text-slate-400" />
           )}
           <button type="button" onClick={() => { setOpen(v => !v); if (!open) setTimeout(() => inputRef.current?.focus(), 40) }}
@@ -860,7 +860,7 @@ function CatalogCombo({
           <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ minWidth: 260, width: "max-content", maxWidth: 360, left: 0 }}>
             {!managing ? (
               <>
-                {/* Option list — onWheel stops propagation so page doesn't scroll while hovering list */}
+                {/* Option list - onWheel stops propagation so page doesn't scroll while hovering list */}
                 <div className="max-h-44 overflow-y-auto" onWheel={e => e.stopPropagation()}>
                   {filtered.length === 0 ? (
                     <div className="px-3 py-3 text-xs text-slate-400 text-center">
@@ -881,7 +881,7 @@ function CatalogCombo({
                   ))}
                 </div>
 
-                {/* ── Always-visible "Add New" footer ── */}
+                {/* â"€â"€ Always-visible "Add New" footer â"€â"€ */}
                 {onAdd && (
                   <div className="border-t border-slate-100">
                     {!addingNew ? (
@@ -908,12 +908,12 @@ function CatalogCombo({
                             if (e.key === "Enter") { e.preventDefault(); handleSaveNew() }
                             if (e.key === "Escape") { setAddingNew(false); setNewName("") }
                           }}
-                          placeholder={`e.g. ${label === "Brand" ? "OnePlus" : label === "Color" ? "Midnight Blue" : label === "Storage" ? "256GB" : label === "RAM" ? "6GB" : "Name…"}`}
+                          placeholder={`e.g. ${label === "Brand" ? "OnePlus" : label === "Color" ? "Midnight Blue" : label === "Storage" ? "256GB" : label === "RAM" ? "6GB" : "Name..."}`}
                           className="w-full h-8 text-sm border border-blue-300 rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                         />
                         <button type="button" onClick={handleSaveNew} disabled={!newName.trim() || saving}
                           className="w-full h-8 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">
-                          {saving ? "Adding…" : `Add ${newName.trim() ? `"${newName.trim()}"` : label ?? "item"}`}
+                          {saving ? "Adding..." : `Add ${newName.trim() ? `"${newName.trim()}"` : label ?? "item"}`}
                         </button>
                       </div>
                     )}
@@ -942,7 +942,7 @@ function CatalogCombo({
                           <button type="button" onClick={() => handleEdit(item)} disabled={saving}
                             className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 px-1 shrink-0">Save</button>
                           <button type="button" onClick={() => { setEditingVal(null); setEditInput("") }}
-                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">✕</button>
+                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">âœ•</button>
                         </>
                       ) : deletingVal === item ? (
                         <>
@@ -1239,7 +1239,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
           account_id: accountId, amount: paid,
           reference_type: "Purchase", reference_number: poNumber,
-          description: `Used phones purchase ${poNumber} â€” ${supplierName}`,
+          description: `Used phones purchase ${poNumber} Ã¢â‚¬" ${supplierName}`,
         })
         const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", accountId).single()
         if (accRow) {
@@ -1288,10 +1288,10 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         created_at: row.created_at ?? new Date().toISOString(),
       } as UsedPhone))
 
-      toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added â€” ${poNumber}`)
+      toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added Ã¢â‚¬" ${poNumber}`)
       onSaved(saved)
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to save â€” no phones were added")
+      toast.error(e instanceof Error ? e.message : "Failed to save - no phones were added")
     } finally {
       setSaving(false)
       setSaveProgress(null)
@@ -1309,7 +1309,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   return (
     <div className="-m-3 sm:-m-4 md:-m-6 bg-slate-100 flex flex-col" style={{ minHeight: "calc(100vh - 64px)" }}>
 
-      {/* ── Fixed top bar ── */}
+      {/* â"€â"€ Fixed top bar â"€â"€ */}
       <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3 flex-shrink-0 sticky top-0 z-30">
         <button onClick={handleClose}
           className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 transition-colors text-sm font-medium shrink-0">
@@ -1320,8 +1320,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           <h1 className="text-sm font-bold text-slate-900">Bulk Add Used Phones</h1>
           <p className="text-xs text-slate-400">
             {rows.length} phone{rows.length !== 1 ? "s" : ""}
-            {completedCount > 0 && <span className="text-emerald-600"> · {completedCount} ready</span>}
-            {saveProgress && <span className="text-blue-600 font-medium"> · Saving {saveProgress.done}/{saveProgress.total}…</span>}
+            {completedCount > 0 && <span className="text-emerald-600"> - {completedCount} ready</span>}
+            {saveProgress && <span className="text-blue-600 font-medium"> - Saving {saveProgress.done}/{saveProgress.total}...</span>}
           </p>
         </div>
         <button onClick={toggleExpandAll}
@@ -1337,11 +1337,11 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         </button>
       </div>
 
-      {/* ── Scrollable page body ── */}
+      {/* â"€â"€ Scrollable page body â"€â"€ */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
 
-          {/* ── Purchase Order Header card ── */}
+          {/* â"€â"€ Purchase Order Header card â"€â"€ */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
               <div>
@@ -1362,7 +1362,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     value={suppliers.find(s => s.id === supplierId)?.companyName ?? ""}
                     onChange={v => { const s = suppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
                     options={suppliers.map(s => s.companyName)}
-                    placeholder="Select or search supplier…"
+                    placeholder="Select or search supplier..."
                     error={supplierErr}
                   />
                   {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
@@ -1389,7 +1389,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
             </div>
           </div>
 
-          {/* ── Phone cards ── */}
+          {/* â"€â"€ Phone cards â"€â"€ */}
           <div className="space-y-3">
 
           {rows.map((row, idx) => {
@@ -1420,7 +1420,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         {row.storage && <span className="text-slate-400 font-normal"> &middot; {row.storage}</span>}
                       </span>
                     ) : (
-                      <span className="text-sm text-slate-400 italic">Phone {idx + 1} — click to fill details</span>
+                      <span className="text-sm text-slate-400 italic">Phone {idx + 1} - click to fill details</span>
                     )}
                     {row.imei_number && (
                       <span className={cn("text-[10px] font-mono", row.imei_number.length === 15 ? "text-emerald-600" : "text-amber-500")}>
@@ -1456,12 +1456,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                   return (
                   <div className="border-t border-slate-100">
 
-                    {/* ── Row 1: Brand · Model · Color · Storage / RAM ── */}
+                    {/* â"€â"€ Row 1: Brand - Model - Color - Storage / RAM â"€â"€ */}
                     <div className="px-4 pt-4 pb-3">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Device Info</p>
                       <div className="grid grid-cols-12 gap-3">
 
-                        {/* Brand — col 2 */}
+                        {/* Brand - col 2 */}
                         <div className="col-span-2">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                             Brand <span className="text-red-500">*</span>
@@ -1479,7 +1479,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           />
                         </div>
 
-                        {/* Model — col 4 */}
+                        {/* Model - col 4 */}
                         <div className="col-span-4">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                             Model <span className="text-red-500">*</span>
@@ -1498,7 +1498,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           />
                         </div>
 
-                        {/* Color — col 2 */}
+                        {/* Color - col 2 */}
                         <div className="col-span-2">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">Color</label>
                           <CatalogCombo
@@ -1513,7 +1513,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           />
                         </div>
 
-                        {/* Storage — col 2 */}
+                        {/* Storage - col 2 */}
                         <div className="col-span-2">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">Storage</label>
                           <CatalogCombo
@@ -1528,13 +1528,13 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           />
                         </div>
 
-                        {/* RAM (android) or Battery % (apple) — col 2 */}
+                        {/* RAM (android) or Battery % (apple) - col 2 */}
                         <div className="col-span-2">
                           {isApple ? (
                             <>
                               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Battery %</label>
                               <div className="relative">
-                                <input type="number" value={row.battery_health}
+                                <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
                                   onChange={e => updateRow(row.id, "battery_health", e.target.value)}
                                   placeholder="91" min="1" max="100"
                                   className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
@@ -1560,15 +1560,15 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       </div>
                     </div>
 
-                    {/* ── Divider ── */}
+                    {/* â"€â"€ Divider â"€â"€ */}
                     <div className="border-t border-dashed border-slate-100" />
 
-                    {/* ── Row 2: IMEI · Battery% (android only) · Grade · Screen · Body ── */}
+                    {/* â"€â"€ Row 2: IMEI - Battery% (android only) - Grade - Screen - Body â"€â"€ */}
                     <div className="px-4 pt-3 pb-3">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Condition</p>
                       <div className="grid grid-cols-12 gap-3 items-start">
 
-                        {/* IMEI — col 3 */}
+                        {/* IMEI - col 3 */}
                         <div className="col-span-3">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">IMEI <span className="text-red-500">*</span></label>
                           <div className="relative">
@@ -1588,12 +1588,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </div>
                         </div>
 
-                        {/* Battery % — col 1 (android only) */}
+                        {/* Battery % - col 1 (android only) */}
                         {!isApple && (
                           <div className="col-span-1">
                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Bat %</label>
                             <div className="relative">
-                              <input type="number" value={row.battery_health}
+                              <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
                                 onChange={e => updateRow(row.id, "battery_health", e.target.value)}
                                 placeholder="85" min="1" max="100"
                                 className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
@@ -1602,7 +1602,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </div>
                         )}
 
-                        {/* Grade pills — col 3 */}
+                        {/* Grade pills - col 3 */}
                         <div className={cn(isApple ? "col-span-4" : "col-span-3")}>
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <button type="button" onClick={() => toggleLock("condition_grade")}
@@ -1631,7 +1631,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </div>
                         </div>
 
-                        {/* Screen — col 2 */}
+                        {/* Screen - col 2 */}
                         <div className="col-span-2">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <button type="button" onClick={() => toggleLock("screen_condition")}
@@ -1652,7 +1652,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </select>
                         </div>
 
-                        {/* Body — col 2 */}
+                        {/* Body - col 2 */}
                         <div className={cn(isApple ? "col-span-2" : "col-span-2")}>
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <button type="button" onClick={() => toggleLock("body_condition")}
@@ -1675,15 +1675,15 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       </div>
                     </div>
 
-                    {/* ── Divider ── */}
+                    {/* â"€â"€ Divider â"€â"€ */}
                     <div className="border-t border-dashed border-slate-100" />
 
-                    {/* ── Row 3: Pricing — BUY · SELL · Warranty · PTA · Notes ── */}
+                    {/* â"€â"€ Row 3: Pricing - BUY - SELL - Warranty - PTA - Notes â"€â"€ */}
                     <div className="px-4 pt-3 pb-4">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Pricing</p>
                       <div className="grid grid-cols-12 gap-3 items-start">
 
-                        {/* Buy Price — col 2 */}
+                        {/* Buy Price - col 2 */}
                         <div className="col-span-2">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <button type="button" onClick={() => toggleLock("purchase_price")}
@@ -1694,7 +1694,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             </button>
                             <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-red-500">*</span></label>
                           </div>
-                          <input type="number" value={row.purchase_price}
+                          <input type="number" onWheel={e => e.currentTarget.blur()} value={row.purchase_price}
                             onChange={e => updateRow(row.id, "purchase_price", e.target.value)}
                             placeholder="0" min="0"
                             className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
@@ -1703,7 +1703,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                                 : locks.purchase_price ? "border-blue-400 bg-blue-50 focus:ring-blue-500" : "border-slate-300 focus:ring-blue-500")} />
                         </div>
 
-                        {/* Sell Price — col 2 */}
+                        {/* Sell Price - col 2 */}
                         <div className="col-span-2">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <button type="button" onClick={() => toggleLock("selling_price")}
@@ -1714,7 +1714,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             </button>
                             <label className="text-xs font-semibold text-slate-600">Sell Price <span className="text-red-500">*</span></label>
                           </div>
-                          <input type="number" value={row.selling_price}
+                          <input type="number" onWheel={e => e.currentTarget.blur()} value={row.selling_price}
                             onChange={e => updateRow(row.id, "selling_price", e.target.value)}
                             placeholder="0" min="0"
                             className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
@@ -1723,7 +1723,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                                 : locks.selling_price ? "border-blue-400 bg-blue-50 focus:ring-blue-500" : "border-slate-300 focus:ring-blue-500")} />
                         </div>
 
-                        {/* Profit display — col 2 */}
+                        {/* Profit display - col 2 */}
                         {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 ? (
                           <div className="col-span-2 flex flex-col justify-end">
                             <label className="block text-xs font-semibold text-slate-400 mb-1.5">Margin</label>
@@ -1738,7 +1738,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </div>
                         ) : <div className="col-span-2" />}
 
-                        {/* Warranty — col 2 */}
+                        {/* Warranty - col 2 */}
                         <div className="col-span-2">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <button type="button" onClick={() => toggleLock("warranty_days")}
@@ -1761,7 +1761,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </select>
                         </div>
 
-                        {/* PTA — col 1 */}
+                        {/* PTA - col 1 */}
                         <div className="col-span-1">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <button type="button" onClick={() => toggleLock("pta_status")}
@@ -1775,17 +1775,17 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           <select value={row.pta_status} onChange={e => updateRow(row.id, "pta_status", e.target.value as UsedPTAStatus)}
                             className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
                               locks.pta_status ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
-                            <option value="approved">✓ OK</option>
+                            <option value="approved">âœ" OK</option>
                             <option value="pending">? Pending</option>
-                            <option value="blocked">✗ Blocked</option>
+                            <option value="blocked">âœ- Blocked</option>
                           </select>
                         </div>
 
-                        {/* Notes — fills remaining cols */}
+                        {/* Notes - fills remaining cols */}
                         <div className="col-span-3">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">Notes</label>
                           <input value={row.condition_notes} onChange={e => updateRow(row.id, "condition_notes", e.target.value)}
-                            placeholder="Accessories, issues, remarks…"
+                            placeholder="Accessories, issues, remarks..."
                             className="w-full h-9 border border-slate-300 rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
                         </div>
                       </div>
@@ -1805,12 +1805,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           </button>
           </div>{/* end phone cards */}
 
-          {/* ── Order Summary card — bottom of page ── */}
+          {/* â"€â"€ Order Summary card - bottom of page â"€â"€ */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Order Summary</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Total cost · payment · ledger entry</p>
+                <p className="text-xs text-slate-400 mt-0.5">Total cost - payment - ledger entry</p>
               </div>
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 3</span>
             </div>
@@ -1827,14 +1827,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">{i + 1}</span>
                       <span className="flex-1 text-slate-700 truncate">
                         {r.brand || r.model ? `${r.brand} ${r.model}`.trim() : <span className="text-slate-300 italic">Unnamed phone</span>}
-                        {r.color && <span className="text-slate-400"> · {r.color}</span>}
-                        {r.storage && <span className="text-slate-400"> · {r.storage}</span>}
+                        {r.color && <span className="text-slate-400"> - {r.color}</span>}
+                        {r.storage && <span className="text-slate-400"> - {r.storage}</span>}
                       </span>
                       <span className="text-xs text-slate-400 font-mono shrink-0">
-                        {r.imei_number.length === 15 ? r.imei_number : '—'}
+                        {r.imei_number.length === 15 ? r.imei_number : '-'}
                       </span>
                       <span className="text-sm font-semibold text-slate-800 shrink-0 w-24 text-right">
-                        {Number(r.purchase_price) > 0 ? formatCurrency(Number(r.purchase_price)) : <span className="text-slate-300">—</span>}
+                        {Number(r.purchase_price) > 0 ? formatCurrency(Number(r.purchase_price)) : <span className="text-slate-300">-</span>}
                       </span>
                     </div>
                   ))}
@@ -1849,7 +1849,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     <div className="space-y-2.5">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1.5">Amount Paid (Rs)</label>
-                        <input type="number" min={0} placeholder="0" value={amountPaid}
+                        <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={amountPaid}
                           onChange={e => setAmountPaid(e.target.value)}
                           className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
                       </div>
@@ -1873,7 +1873,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     {parseFloat(amountPaid) > 0 && (
                       <div className="flex justify-between text-slate-500">
                         <span>Amount paid</span>
-                        <span className="text-emerald-600 font-semibold">− {formatCurrency(parseFloat(amountPaid))}</span>
+                        <span className="text-emerald-600 font-semibold">âˆ' {formatCurrency(parseFloat(amountPaid))}</span>
                       </div>
                     )}
                     <div className={cn(
@@ -1927,7 +1927,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 }
 
 
-// â”€â”€â”€ Add / Edit Dialog (5-step) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Add / Edit Dialog (5-step) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 type FormData = {
   brand: string; model: string; color: string; storage: string; ram: string
@@ -2165,7 +2165,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       i < step  ? "bg-emerald-500 text-white" :
                       "bg-slate-200"
                     )}>
-                      {i < step ? "âœ“" : i + 1}
+                      {i < step ? <span>&#10003;</span> : i + 1}
                     </span>
                     <span className="hidden sm:inline">{s}</span>
                     <span className="sm:hidden">{s.split(" ")[0]}</span>
@@ -2337,14 +2337,14 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <input type="text" value={form.imei_number} onChange={e => set("imei_number", e.target.value.replace(/\D/g,"").slice(0,15))} placeholder="15-digit IMEI" maxLength={15} className={inputCls} />
                   <p className="text-xs text-slate-400 mt-1">{form.imei_number.length}/15 digits</p>
                 </Field>
-                {/* â”€â”€ Source â”€â”€ */}
+                {/* Ã¢"â‚¬Ã¢"â‚¬ Source Ã¢"â‚¬Ã¢"â‚¬ */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Where did this phone come from?<span className="text-red-500 ml-0.5">*</span></label>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {([
-                      { type: "walk_in"           as SourceType, label: "Walk-in Seller", icon: "ðŸš¶", desc: "Person off the street" },
-                      { type: "customer_trade_in" as SourceType, label: "Our Customer",   icon: "ðŸ‘¤", desc: "Existing customer" },
-                      { type: "purchased"         as SourceType, label: "Supplier",       icon: "ðŸª", desc: "Wholesaler / dealer" },
+                      { type: "walk_in"           as SourceType, label: "Walk-in Seller", icon: "Ã°Å¸Å¡Â¶", desc: "Person off the street" },
+                      { type: "customer_trade_in" as SourceType, label: "Our Customer",   icon: "Ã°Å¸-˜Â¤", desc: "Existing customer" },
+                      { type: "purchased"         as SourceType, label: "Supplier",       icon: "Ã°Å¸ÂÂª", desc: "Wholesaler / dealer" },
                     ]).map(opt => (
                       <button
                         key={opt.type}
@@ -2404,7 +2404,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       >
                         <option value="">-- Select customer --</option>
                         {customers.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}{c.phone ? ` Â· ${c.phone}` : ""}</option>
+                          <option key={c.id} value={c.id}>{c.name}{c.phone ? ` Ã‚- ${c.phone}` : ""}</option>
                         ))}
                       </select>
                       {form.source_customer_id && (() => {
@@ -2412,7 +2412,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                         return c ? (
                           <div className="flex items-center gap-2 mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                             <span className="font-semibold">{c.name}</span>
-                            {c.phone && <span className="text-slate-500">Â· {c.phone}</span>}
+                            {c.phone && <span className="text-slate-500">Ã‚- {c.phone}</span>}
                           </div>
                         ) : null
                       })()}
@@ -2444,8 +2444,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <Field label="Date Acquired">
                     <input type="date" value={form.purchased_date} onChange={e => set("purchased_date", e.target.value)} className={inputCls} />
                   </Field>
-                  <Field label="Purchase Price (â‚¨)" required>
-                    <input type="number" value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
+                  <Field label="Purchase Price (Ã¢-šÂ¨)" required>
+                    <input type="number" onWheel={e => e.currentTarget.blur()} value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
               </div>
@@ -2473,12 +2473,12 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     ))}
                   </div>
                   <p className="text-xs text-slate-400 mt-1.5">
-                    {form.condition_grade === "A+" ? "Like new â€” no visible wear" :
-                     form.condition_grade === "A"  ? "Excellent â€” very minor wear" :
-                     form.condition_grade === "B+" ? "Good â€” light scratches, minor issues" :
+                    {form.condition_grade === "A+" ? "Like new - no visible wear" :
+                     form.condition_grade === "A"  ? "Excellent - very minor wear" :
+                     form.condition_grade === "B+" ? "Good - light scratches, minor issues" :
                      form.condition_grade === "B"  ? "Moderate wear, functional" :
                      form.condition_grade === "C"  ? "Heavy wear, multiple issues" :
-                     "Poor â€” significant damage"}
+                     "Poor - significant damage"}
                   </p>
                 </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2495,7 +2495,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                 </div>
                 {form.brand.toLowerCase() === "apple" && (
                   <Field label="Battery Health (%)">
-                    <input type="number" value={form.battery_health} onChange={e => set("battery_health", e.target.value)} placeholder="e.g. 85" min={0} max={100} className={inputCls} />
+                    <input type="number" onWheel={e => e.currentTarget.blur()} value={form.battery_health} onChange={e => set("battery_health", e.target.value)} placeholder="e.g. 85" min={0} max={100} className={inputCls} />
                     {form.battery_health && <BatteryBar value={Number(form.battery_health)} />}
                   </Field>
                 )}
@@ -2553,11 +2553,11 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
             {step === 2 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Refurbishment Cost (â‚¨)">
-                    <input type="number" value={form.refurbishment_cost} onChange={e => set("refurbishment_cost", e.target.value)} placeholder="0" min={0} className={inputCls} />
+                  <Field label="Refurbishment Cost (Ã¢-šÂ¨)">
+                    <input type="number" onWheel={e => e.currentTarget.blur()} value={form.refurbishment_cost} onChange={e => set("refurbishment_cost", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
-                  <Field label="Selling Price (â‚¨)" required>
-                    <input type="number" value={form.selling_price} onChange={e => set("selling_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
+                  <Field label="Selling Price (Ã¢-šÂ¨)" required>
+                    <input type="number" onWheel={e => e.currentTarget.blur()} value={form.selling_price} onChange={e => set("selling_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
                 {/* Profit preview */}
@@ -2598,14 +2598,14 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     </select>
                   </Field>
                 </div>
-                {/* Payment — only for new phones */}
+                {/* Payment - only for new phones */}
                 {!editPhone && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Payment</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Field label="Amount Paid (₨)">
+                      <Field label="Amount Paid (â‚¨)">
                         <input
-                          type="number"
+                          type="number" onWheel={e => e.currentTarget.blur()}
                           value={form.payment_amount}
                           onChange={e => set("payment_amount", e.target.value)}
                           placeholder={`0 of ${form.purchase_price || "?"}`}
@@ -2618,7 +2618,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           <option value="">-- Select account --</option>
                           {accounts.map(a => (
                             <option key={a.id} value={a.id}>
-                              {a.name} ({a.type === "cash" ? "Cash" : a.type === "bank" ? "Bank" : "Mobile Wallet"}) · ₨{a.currentBalance.toLocaleString()}
+                              {a.name} ({a.type === "cash" ? "Cash" : a.type === "bank" ? "Bank" : "Mobile Wallet"}) - â‚¨{a.currentBalance.toLocaleString()}
                             </option>
                           ))}
                         </select>
@@ -2632,7 +2632,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     {form.payment_amount && Number(form.payment_amount) > 0 && form.payment_account_id && (
                       <p className="text-xs text-emerald-600 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        ₨{Number(form.payment_amount).toLocaleString()} will be deducted from your account on save
+                        â‚¨{Number(form.payment_amount).toLocaleString()} will be deducted from your account on save
                       </p>
                     )}
                   </div>
@@ -2682,7 +2682,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Device</p>
                     {[
                       { l: "Brand/Model", v: `${form.brand} ${form.model}` },
-                      { l: "Color/Storage", v: `${form.color} Â· ${form.storage}` },
+                      { l: "Color/Storage", v: `${form.color} Ã‚- ${form.storage}` },
                       ...(form.brand.toLowerCase() !== "apple" ? [{ l: "RAM", v: form.ram }] : []),
                       { l: "IMEI", v: form.imei_number },
                       { l: "Source", v: SOURCE_LABEL[form.source_type] },
@@ -2779,7 +2779,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
   )
 }
 
-// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Main Page Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 export default function UsedPhonesPage() {
   const [phones, setPhones] = useState<UsedPhone[]>([])
@@ -2804,7 +2804,7 @@ export default function UsedPhonesPage() {
   const [showCalculator, setShowCalculator] = useState(false)
   const [sellPhone, setSellPhone]         = useState<UsedPhone | null>(null)
 
-  // â”€â”€ Dynamic dropdown data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢"â‚¬Ã¢"â‚¬ Dynamic dropdown data Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
   const [brands, setBrands] = useState<string[]>([])
   const [models, setModels] = useState<{ name: string; brandName: string; deviceType: "iphone" | "android"; dbId: string; table: "iphone_models" | "android_models" }[]>([])
   const [colors, setColors] = useState<string[]>([])
@@ -2956,7 +2956,7 @@ export default function UsedPhonesPage() {
     toast.success(`"${val}" deleted`)
   }
 
-  // â”€â”€ Fetch data from Supabase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢"â‚¬Ã¢"â‚¬ Fetch data from Supabase Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
   async function fetchPhones() {
     try {
       const data = await getUsedPhones()
@@ -2980,7 +2980,7 @@ export default function UsedPhonesPage() {
     getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
   }, [])
 
-  // â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢"â‚¬Ã¢"â‚¬ Stats Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
   const stats = useMemo(() => {
     const totalInvested = phones.reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
     const revenueSold   = phones.filter(p => p.status === "sold").reduce((s, p) => s + p.selling_price, 0)
@@ -2992,7 +2992,7 @@ export default function UsedPhonesPage() {
     return { total: phones.length, totalInvested, revenueSold, gradeCount, profitSold }
   }, [phones])
 
-  // â”€â”€ Filtered â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢"â‚¬Ã¢"â‚¬ Filtered Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
   const filtered = useMemo(() => {
     let res = [...phones]
     if (search)     res = res.filter(p => `${p.brand} ${p.model} ${p.color} ${p.imei_number}`.toLowerCase().includes(search.toLowerCase()))
@@ -3011,7 +3011,7 @@ export default function UsedPhonesPage() {
 
   const resetPage = () => setPage(1)
 
-  // â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢"â‚¬Ã¢"â‚¬ Handlers Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
   const handleView = (p: UsedPhone) => { setSelectedPhone(p); setShowDetails(true) }
   const handleEdit = (p: UsedPhone) => { setEditPhone(p); setShowAddDialog(true); setShowDetails(false) }
   const handleSell = (p: UsedPhone) => { setSellPhone(p); setShowDetails(false) }
@@ -3123,7 +3123,7 @@ export default function UsedPhonesPage() {
     )
   }
 
-  // Full-page bulk add â€” renders instead of the list page
+  // Full-page bulk add Ã¢â‚¬" renders instead of the list page
   if (showBulkDialog) {
     return (
       <BulkAddDialog
@@ -3161,7 +3161,7 @@ export default function UsedPhonesPage() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Used / Refurbished Phones</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{phones.length} phones Â· {phones.filter(p => p.status === "in_stock").length} available</p>
+          <p className="text-slate-500 text-sm mt-0.5">{phones.length} phones Ã‚- {phones.filter(p => p.status === "in_stock").length} available</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
@@ -3179,7 +3179,7 @@ export default function UsedPhonesPage() {
         </div>
       </div>
 
-      {/* Stats â€” Row 1: Inventory summary + 6 grades */}
+      {/* Stats Ã¢â‚¬" Row 1: Inventory summary + 6 grades */}
       <div className="space-y-2">
         <div className="grid grid-cols-8 gap-2">
           {/* Inventory Summary */}
@@ -3210,7 +3210,7 @@ export default function UsedPhonesPage() {
             </div>
           </div>
 
-          {/* Grade breakdown â€” 6 cards */}
+          {/* Grade breakdown Ã¢â‚¬" 6 cards */}
           {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
             const m = GRADE_META[g]
             const count = stats.gradeCount[g]
@@ -3236,7 +3236,7 @@ export default function UsedPhonesPage() {
           })}
         </div>
 
-        {/* Row 2: Financial summary â€” 3 cards */}
+        {/* Row 2: Financial summary Ã¢â‚¬" 3 cards */}
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
             <div className="flex items-center justify-between mb-1.5">
@@ -3366,16 +3366,16 @@ export default function UsedPhonesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (â‚¨)</label>
-              <input type="number" value={minPrice} onChange={e => { setMinPrice(e.target.value); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (Ã¢-šÂ¨)</label>
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={minPrice} onChange={e => { setMinPrice(e.target.value); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (â‚¨)</label>
-              <input type="number" value={maxPrice} onChange={e => { setMaxPrice(e.target.value); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (Ã¢-šÂ¨)</label>
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={maxPrice} onChange={e => { setMaxPrice(e.target.value); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Min Battery %</label>
-              <input type="number" value={minBattery} onChange={e => { setMinBattery(e.target.value); resetPage() }} placeholder="0" min={0} max={100} className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={minBattery} onChange={e => { setMinBattery(e.target.value); resetPage() }} placeholder="0" min={0} max={100} className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             {hasFilters && (
               <div className="flex items-end">
@@ -3444,7 +3444,7 @@ export default function UsedPhonesPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-500">
-            Page {page} of {totalPages} Â· {filtered.length} phones
+            Page {page} of {totalPages} Ã‚- {filtered.length} phones
           </p>
           <div className="flex items-center gap-1">
             <button

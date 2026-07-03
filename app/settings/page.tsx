@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useRef, useEffect } from "react"
 import { useForm } from "react-hook-form"
@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { getTenant, updateTenant, getTenantSettings, updateTenantSettings, getProfiles, createProfile, updateProfileFull } from "@/lib/api/settings"
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 type UserRole   = "Admin" | "Manager" | "Cashier"
 type UserStatus = "Active" | "Inactive"
 
@@ -31,7 +31,7 @@ interface AppUser {
 }
 
 
-// ── Zod schemas ────────────────────────────────────────────────────────────────
+// â"€â"€ Zod schemas â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const shopSchema = z.object({
   shopName: z.string().min(2, "Shop name is required"),
   address:  z.string().min(3, "Address is required"),
@@ -64,7 +64,7 @@ type TaxForm     = z.infer<typeof taxSchema>
 type InvoiceForm = z.infer<typeof invoiceSchema>
 type UserForm    = z.infer<typeof userSchema>
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const avatarPalette = ["bg-blue-600", "bg-blue-500", "bg-blue-700", "bg-slate-600", "bg-blue-800", "bg-slate-700"]
 
 function UserAvatar({ name, id }: { name: string; id: string }) {
@@ -97,14 +97,14 @@ function SectionCard({ title, description, children, className }: {
   )
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────────
+// â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const shopForm = useForm<ShopForm>({
     resolver: zodResolver(shopSchema),
-    defaultValues: { shopName: "MobiTrack Pro", address: "123 Main Market, Liberty", city: "Lahore", phone: "+92 42 35761234", email: "info@mobitrackpro.com", ntn: "1234567-8", currency: "₨" },
+    defaultValues: { shopName: "MobiTrack Pro", address: "123 Main Market, Liberty", city: "Lahore", phone: "+92 42 35761234", email: "info@mobitrackpro.com", ntn: "1234567-8", currency: "â‚¨" },
   })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -115,7 +115,7 @@ export default function SettingsPage() {
 
   function handleLogoFile(file: File) {
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { toast.error("File too large — max 2 MB"); return }
+    if (file.size > 2 * 1024 * 1024) { toast.error("File too large - max 2 MB"); return }
     const reader = new FileReader()
     reader.onload = (e) => setLogoPreview(e.target?.result as string)
     reader.readAsDataURL(file)
@@ -147,7 +147,7 @@ export default function SettingsPage() {
     async function load() {
       try {
         const [tenant, settings, profiles] = await Promise.all([getTenant(), getTenantSettings(), getProfiles()])
-        shopForm.reset({ shopName: tenant.name || "MobiTrack Pro", address: tenant.address || "", city: tenant.city || "Lahore", phone: tenant.phone || "", email: tenant.email || "", ntn: "1234567-8", currency: tenant.currency || "₨" })
+        shopForm.reset({ shopName: tenant.name || "MobiTrack Pro", address: tenant.address || "", city: tenant.city || "Lahore", phone: tenant.phone || "", email: tenant.email || "", ntn: "1234567-8", currency: tenant.currency || "â‚¨" })
         if (tenant.logo) setLogoPreview(tenant.logo)
         taxForm.reset({ taxName: "GST", taxRate: settings.taxRate ?? 17 })
         setTaxEnabled(settings.taxEnabled ?? true)
@@ -183,7 +183,7 @@ export default function SettingsPage() {
     setSaving(true)
     try {
       await updateTenantSettings({ taxEnabled, taxRate: data.taxRate })
-      toast.success(`Tax settings saved — ${data.taxName} at ${data.taxRate}%`)
+      toast.success(`Tax settings saved - ${data.taxName} at ${data.taxRate}%`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save tax settings")
     } finally { setSaving(false) }
@@ -216,7 +216,7 @@ export default function SettingsPage() {
     try {
       if (editUser) {
         if (!data.password && !editUser) {
-          // editing — password optional
+          // editing - password optional
         }
         await updateProfileFull(editUser.id, {
           name: data.name, email: data.email, role: data.role,
@@ -230,7 +230,7 @@ export default function SettingsPage() {
         if (!data.password) { toast.error("Password is required for new users"); return }
         const created = await createProfile({ name: data.name, email: data.email, role: data.role, password: data.password, status })
         setUsers(prev => [{ id: created.id, name: data.name, email: data.email, role: data.role as UserRole, status, lastLogin: "Never" }, ...prev])
-        toast.success(`${data.name} added — they can now log in`)
+        toast.success(`${data.name} added - they can now log in`)
       }
       setUserDialogOpen(false)
     } catch (err) {
@@ -264,7 +264,7 @@ export default function SettingsPage() {
   return (
     <div className="p-4 space-y-3">
 
-      {/* ── Compact header ────────────────────────────────────────────────── */}
+      {/* â"€â"€ Compact header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
           <Settings className="w-4 h-4 text-white" />
@@ -275,7 +275,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Tabs ──────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Tabs defaultValue="shop" className="space-y-3">
         <TabsList className="h-8 p-0.5 rounded-xl bg-slate-100">
           <TabsTrigger value="shop"    className="h-7 text-xs gap-1.5 px-3"><Building2 className="w-3 h-3" />Shop Profile</TabsTrigger>
@@ -285,7 +285,7 @@ export default function SettingsPage() {
           <TabsTrigger value="data"    className="h-7 text-xs gap-1.5 px-3"><Database className="w-3 h-3" />Data</TabsTrigger>
         </TabsList>
 
-        {/* ════ TAB 1 — SHOP PROFILE ════ */}
+        {/* â•â•â•â• TAB 1 - SHOP PROFILE â•â•â•â• */}
         <TabsContent value="shop" className="mt-3">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {/* Shop Details */}
@@ -349,13 +349,13 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Currency Symbol</Label>
-                      <Input placeholder="₨" maxLength={5} {...shopForm.register("currency")} className="h-8 text-xs" />
+                      <Input placeholder="â‚¨" maxLength={5} {...shopForm.register("currency")} className="h-8 text-xs" />
                       {shopForm.formState.errors.currency && <p className="text-[10px] text-red-500">{shopForm.formState.errors.currency.message}</p>}
                     </div>
                   </div>
 
                   <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs mt-1 min-w-[110px]">
-                    {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving…</> : "Save Changes"}
+                    {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving...</> : "Save Changes"}
                   </Button>
                 </form>
               </SectionCard>
@@ -393,7 +393,7 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* ════ TAB 2 — TAX CONFIG ════ */}
+        {/* â•â•â•â• TAB 2 - TAX CONFIG â•â•â•â• */}
         <TabsContent value="tax" className="mt-3">
           <SectionCard
             title={<span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-600" />Tax Configuration</span>}
@@ -409,7 +409,7 @@ export default function SettingsPage() {
               <div className="space-y-1">
                 <Label className="text-xs">Tax Rate (%)</Label>
                 <div className="relative">
-                  <Input type="number" step="0.01" min="0" max="100" placeholder="17" className="h-8 text-xs pr-8" {...taxForm.register("taxRate", { valueAsNumber: true })} />
+                  <Input type="number" onWheel={e => e.currentTarget.blur()} step="0.01" min="0" max="100" placeholder="17" className="h-8 text-xs pr-8" {...taxForm.register("taxRate", { valueAsNumber: true })} />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium">%</span>
                 </div>
               </div>
@@ -421,13 +421,13 @@ export default function SettingsPage() {
                 <Switch checked={taxEnabled} onCheckedChange={setTaxEnabled} className="data-[state=checked]:bg-blue-600" />
               </div>
               <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs min-w-[120px]">
-                {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving…</> : "Save Tax Settings"}
+                {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving...</> : "Save Tax Settings"}
               </Button>
             </form>
           </SectionCard>
         </TabsContent>
 
-        {/* ════ TAB 3 — INVOICE ════ */}
+        {/* â•â•â•â• TAB 3 - INVOICE â•â•â•â• */}
         <TabsContent value="invoice" className="mt-3">
           <SectionCard
             title={<span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-blue-600" />Invoice Settings</span>}
@@ -462,13 +462,13 @@ export default function SettingsPage() {
                 <Switch checked={showLogoOnInvoice} onCheckedChange={setShowLogoOnInvoice} className="data-[state=checked]:bg-blue-600" />
               </div>
               <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs min-w-[140px]">
-                {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving…</> : "Save Invoice Settings"}
+                {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving...</> : "Save Invoice Settings"}
               </Button>
             </form>
           </SectionCard>
         </TabsContent>
 
-        {/* ════ TAB 4 — USERS ════ */}
+        {/* â•â•â•â• TAB 4 - USERS â•â•â•â• */}
         <TabsContent value="users" className="mt-3 space-y-2.5">
           <div className="flex items-center justify-between">
             <div>
@@ -571,7 +571,7 @@ export default function SettingsPage() {
                     <div className="relative">
                       <Input
                         type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
+                        placeholder="-¢-¢-¢-¢-¢-¢-¢-¢"
                         {...userForm.register("password")}
                         className="h-8 text-xs pr-8"
                       />
@@ -611,7 +611,7 @@ export default function SettingsPage() {
           />
         </TabsContent>
 
-        {/* ════ TAB 5 — DATA ════ */}
+        {/* â•â•â•â• TAB 5 - DATA â•â•â•â• */}
         <TabsContent value="data" className="mt-3 space-y-2.5">
           {/* Info chips */}
           <div className="flex gap-2">

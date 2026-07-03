@@ -895,11 +895,12 @@ export function toDbSaleItem(item: SaleItem, saleId: string, tenantId: string): 
     sale_id: saleId,
     product_id: item.productId || undefined,
     product_name: item.productName,
-    product_type: item.productType,
+    product_type: item.productType === "UsedPhone" ? "Mobile" : item.productType,
     quantity: item.quantity,
     unit_price: item.unitPrice,
     discount: item.discount,
     line_total: item.lineTotal,
+    imei: item.imei ?? null,
   }
 }
 

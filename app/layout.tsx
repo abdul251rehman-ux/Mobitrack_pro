@@ -21,13 +21,13 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: "MobiTrack Pro — Mobile Shop Management",
+  title: "MobiTrack Pro - Mobile Shop Management",
   description: "Professional mobile shop management system.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${plusJakarta.variable} ${dmSans.variable} antialiased`}>
         <AuthProvider>
           <AppProvider>

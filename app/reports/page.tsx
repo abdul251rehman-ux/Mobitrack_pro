@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useMemo, useEffect } from "react"
 import {
@@ -30,7 +30,7 @@ const PIE_COLORS = ["#2563EB","#3b82f6","#60a5fa","#1e40af","#93c5fd"]
 function Stars({ rating }: { rating: number }) {
   return (
     <span className="text-amber-400 text-xs">
-      {"★".repeat(Math.floor(rating))}{"☆".repeat(5 - Math.floor(rating))}
+      {"â˜...".repeat(Math.floor(rating))}{"â˜†".repeat(5 - Math.floor(rating))}
       <span className="text-slate-400 text-[10px] ml-1">({rating})</span>
     </span>
   )
@@ -50,7 +50,7 @@ function ChartTooltip({ active, payload, label }: any) {
   )
 }
 
-// ── Reusable section card ─────────────────────────────────────────────────────
+// â"€â"€ Reusable section card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function SectionCard({ title, badge, children, className }: {
   title: string; badge?: React.ReactNode; children: React.ReactNode; className?: string
 }) {
@@ -65,7 +65,7 @@ function SectionCard({ title, badge, children, className }: {
   )
 }
 
-// ── Date range + export bar ───────────────────────────────────────────────────
+// â"€â"€ Date range + export bar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function DateBar({ from, to, onFrom, onTo }: {
   from: string; to: string; onFrom: (v: string) => void; onTo: (v: string) => void
 }) {
@@ -91,7 +91,7 @@ function DateBar({ from, to, onFrom, onTo }: {
   )
 }
 
-// ── Compact table head/cell helpers ───────────────────────────────────────────
+// â"€â"€ Compact table head/cell helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const TH = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
   <th className={`text-[10px] font-semibold text-slate-500 uppercase tracking-wide px-3 py-2 whitespace-nowrap ${right ? "text-right" : "text-left"}`}>{children}</th>
 )
@@ -125,7 +125,7 @@ export default function ReportsPage() {
   const [purchasesFrom, setPurchasesFrom] = useState(_180PKT)
   const [purchasesTo,   setPurchasesTo]   = useState(todayPKT())
 
-  // ── Sales data ────────────────────────────────────────────────────────────
+  // â"€â"€ Sales data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const salesData = useMemo(() => {
     const filtered = sales.filter((s) => s.date >= salesFrom && s.date <= salesTo && s.status !== "Refunded")
     const totalSales = filtered.reduce((a, s) => a + s.total, 0)
@@ -150,7 +150,7 @@ export default function ReportsPage() {
     }
   }, [salesFrom, salesTo, sales])
 
-  // ── Purchases data ────────────────────────────────────────────────────────
+  // â"€â"€ Purchases data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const purchasesData = useMemo(() => {
     const filtered = purchases.filter((p) => p.date >= purchasesFrom && p.date <= purchasesTo)
     const totalSpend = filtered.reduce((a, p) => a + p.total, 0)
@@ -176,7 +176,7 @@ export default function ReportsPage() {
     }
   }, [purchasesFrom, purchasesTo, purchases])
 
-  // ── P&L data ──────────────────────────────────────────────────────────────
+  // â"€â"€ P&L data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const plData = useMemo(() => {
     const now = new Date()
     const costMap: Record<string, number> = {}
@@ -205,7 +205,7 @@ export default function ReportsPage() {
     }
   }, [sales, mobiles, accessories])
 
-  // ── Inventory data ────────────────────────────────────────────────────────
+  // â"€â"€ Inventory data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const inventoryData = useMemo(() => {
     const mSV = mobiles.reduce((a, m) => a + m.purchasePrice * m.stock, 0)
     const aSV  = accessories.reduce((a, acc) => a + acc.purchasePrice * acc.stock, 0)
@@ -227,7 +227,7 @@ export default function ReportsPage() {
     }
   }, [mobiles, accessories])
 
-  // ── Supplier perf data ────────────────────────────────────────────────────
+  // â"€â"€ Supplier perf data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const supplierPerf = useMemo(() => {
     const supplierRows = suppliers.filter((s) => s.status === "Active").sort((a, b) => b.totalPurchases - a.totalPurchases).map((s, i) => ({ rank: i + 1, ...s }))
     const top5 = supplierRows.slice(0, 5).map((s) => ({ name: s.companyName.split(" ").slice(0, 2).join(" "), Volume: s.totalPurchases }))
@@ -246,7 +246,7 @@ export default function ReportsPage() {
 
   return (
     <div className="p-4 space-y-3">
-      {/* ── Header ────────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
@@ -264,7 +264,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Tabs defaultValue="sales" className="space-y-3">
         <TabsList className="bg-white border border-slate-200 p-0.5 rounded-xl shadow-sm h-8 overflow-x-auto">
           {[["sales","Sales Report"],["purchases","Purchase Report"],["pl","Profit & Loss"],["inventory","Inventory Report"],["suppliers","Supplier Performance"]].map(([v, l]) => (
@@ -272,7 +272,7 @@ export default function ReportsPage() {
           ))}
         </TabsList>
 
-        {/* ══ SALES REPORT ══════════════════════════════════════════════════════ */}
+        {/* â•â• SALES REPORT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="sales" className="space-y-3 mt-0">
           <DateBar from={salesFrom} to={salesTo} onFrom={setSalesFrom} onTo={setSalesTo} />
 
@@ -289,7 +289,7 @@ export default function ReportsPage() {
                 <LineChart data={salesData.dailyChartData} margin={{ top: 4, right: 16, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₨${(v/1000).toFixed(0)}K`} width={44} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={44} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                   <Line type="monotone" dataKey="Sales" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
@@ -341,7 +341,7 @@ export default function ReportsPage() {
           </div>
         </TabsContent>
 
-        {/* ══ PURCHASE REPORT ═══════════════════════════════════════════════════ */}
+        {/* â•â• PURCHASE REPORT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="purchases" className="space-y-3 mt-0">
           <DateBar from={purchasesFrom} to={purchasesTo} onFrom={setPurchasesFrom} onTo={setPurchasesTo} />
 
@@ -364,7 +364,7 @@ export default function ReportsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₨${(v/1000).toFixed(0)}K`} width={44} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={44} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                   <Area type="monotone" dataKey="Spend" stroke="#ef4444" fill="url(#spendGrad)" strokeWidth={2} />
@@ -404,7 +404,7 @@ export default function ReportsPage() {
                   <BarChart data={purchasesData.categoryBarData} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="category" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₨${(v/1000).toFixed(0)}K`} width={40} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={40} />
                     <Tooltip content={<ChartTooltip />} />
                     <Bar dataKey="Spend" radius={[4,4,0,0]}>
                       {purchasesData.categoryBarData.map((_, i) => <Cell key={i} fill={i===0?"#2563EB":"#60a5fa"} />)}
@@ -416,22 +416,22 @@ export default function ReportsPage() {
           </div>
         </TabsContent>
 
-        {/* ══ PROFIT & LOSS ═════════════════════════════════════════════════════ */}
+        {/* â•â• PROFIT & LOSS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="pl" className="space-y-3 mt-0">
           <div className="grid grid-cols-4 gap-2.5">
             <StatCard title="Gross Revenue"  value={formatCurrency(plData.grossRevenue)}                     subtext="Last 6 months"      icon={DollarSign}  iconBg="bg-blue-100" />
-            <StatCard title="Total Cost"     value={formatCurrency(plData.totalCost)}                        subtext="COGS – last 6 months" icon={TrendingDown} iconBg="bg-red-100" />
+            <StatCard title="Total Cost"     value={formatCurrency(plData.totalCost)}                        subtext="COGS - last 6 months" icon={TrendingDown} iconBg="bg-red-100" />
             <StatCard title="Gross Profit"   value={formatCurrency(plData.grossProfit)}                      subtext="Revenue minus cost"  icon={TrendingUp}  iconBg="bg-blue-100" trend={parseFloat(plData.profitMargin.toFixed(1))} />
             <StatCard title="Profit Margin"  value={`${plData.profitMargin.toFixed(1)}%`}                   subtext="Gross margin"        icon={BarChart2}   iconBg="bg-blue-100" />
           </div>
 
-          <SectionCard title="Monthly Revenue vs Cost — Last 6 Months">
+          <SectionCard title="Monthly Revenue vs Cost - Last 6 Months">
             <div className="p-3">
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={plData.monthlyRows} margin={{ top: 4, right: 16, left: 4, bottom: 0 }} barGap={4}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₨${(v/1000).toFixed(0)}K`} width={44} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={44} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                   <Bar dataKey="Revenue" fill="#2563EB" radius={[4,4,0,0]} />
@@ -458,7 +458,7 @@ export default function ReportsPage() {
                         <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border text-blue-600 border-blue-200 bg-blue-50">{row.margin.toFixed(1)}%</span>
                       </TD>
                       <TD right>
-                        {row.momChange === null ? <span className="text-slate-400">—</span> : (
+                        {row.momChange === null ? <span className="text-slate-400">-</span> : (
                           <span className={`flex items-center justify-end gap-0.5 text-[10px] font-semibold ${row.momChange>=0?"text-emerald-600":"text-red-500"}`}>
                             {row.momChange>=0?<TrendingUp className="w-3 h-3"/>:<TrendingDown className="w-3 h-3"/>}
                             {Math.abs(row.momChange).toFixed(1)}%
@@ -473,7 +473,7 @@ export default function ReportsPage() {
           </SectionCard>
         </TabsContent>
 
-        {/* ══ INVENTORY REPORT ══════════════════════════════════════════════════ */}
+        {/* â•â• INVENTORY REPORT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="inventory" className="space-y-3 mt-0">
           <div className="grid grid-cols-3 gap-2.5">
             <StatCard title="Total Products"   value={inventoryData.totalProducts.toString()}             subtext={`${mobiles.length} mobiles, ${accessories.length} accessories`} icon={Package}  iconBg="bg-blue-100" />
@@ -534,7 +534,7 @@ export default function ReportsPage() {
           </SectionCard>
         </TabsContent>
 
-        {/* ══ SUPPLIER PERFORMANCE ═══════════════════════════════════════════════ */}
+        {/* â•â• SUPPLIER PERFORMANCE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="suppliers" className="space-y-3 mt-0">
           <SectionCard title="Supplier Rankings">
             <div className="overflow-x-auto">
@@ -572,10 +572,10 @@ export default function ReportsPage() {
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={supplierPerf.top5} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `₨${(v/1_000_000).toFixed(1)}M`} />
+                    <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `â‚¨${(v/1_000_000).toFixed(1)}M`} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={90} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="Volume" name="Volume (₨)" fill="#2563EB" radius={[0,4,4,0]}>
+                    <Bar dataKey="Volume" name="Volume (â‚¨)" fill="#2563EB" radius={[0,4,4,0]}>
                       {supplierPerf.top5.map((_, i) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
                     </Bar>
                   </BarChart>

@@ -277,7 +277,7 @@ export default function BrandsPage() {
               <Pencil className="w-3.5 h-3.5" />
             </button>
             {b.isSystem ? (
-              <span className="p-1 text-amber-300 cursor-not-allowed" title="System brand — cannot be deleted">
+              <span className="p-1 text-amber-300 cursor-not-allowed" title="System brand - cannot be deleted">
                 <Lock className="w-3.5 h-3.5" />
               </span>
             ) : (

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
@@ -298,7 +298,7 @@ export default function CustomerDetailPage() {
     {
       accessorKey: "notes",
       header: "Notes",
-      cell: ({ row }) => <span className="text-xs text-slate-400 truncate max-w-[180px] block">{row.original.notes || "—"}</span>,
+      cell: ({ row }) => <span className="text-xs text-slate-400 truncate max-w-[180px] block">{row.original.notes || "-"}</span>,
     },
     {
       accessorKey: "status",
@@ -418,9 +418,9 @@ export default function CustomerDetailPage() {
                 <p className="text-base font-bold text-slate-900">{customer.loyaltyTier}</p>
               </div>
               <p className="text-[10px] text-slate-400 mt-0.5">
-                {customer.loyaltyTier === "Platinum" ? "Top tier — Rs 500k+" :
-                 customer.loyaltyTier === "Gold"     ? "Rs 200k–500k spent" :
-                 customer.loyaltyTier === "Silver"   ? "Rs 50k–200k spent" :
+                {customer.loyaltyTier === "Platinum" ? "Top tier - Rs 500k+" :
+                 customer.loyaltyTier === "Gold"     ? "Rs 200k-500k spent" :
+                 customer.loyaltyTier === "Silver"   ? "Rs 50k-200k spent" :
                                                        "Under Rs 50k spent"}
               </p>
             </div>
@@ -567,7 +567,7 @@ export default function CustomerDetailPage() {
                       const due = s.total - Math.max(paidForThis, s.amountReceived)
                       return (
                         <SelectItem key={s.invoiceNumber} value={s.invoiceNumber}>
-                          {s.invoiceNumber} — Due: {formatCurrency(Math.max(0, due))}
+                          {s.invoiceNumber} - Due: {formatCurrency(Math.max(0, due))}
                         </SelectItem>
                       )
                     })}
@@ -577,7 +577,7 @@ export default function CustomerDetailPage() {
             )}
             <div className="space-y-1">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
-              <Input type="number" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)}
+              <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)}
                 placeholder="0" className="h-8 text-xs" autoFocus />
             </div>
             <div className="space-y-1">

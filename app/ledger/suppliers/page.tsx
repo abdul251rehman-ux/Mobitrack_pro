@@ -1,4 +1,4 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useEffect } from "react"
 import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet, Plus, Banknote } from "lucide-react"
@@ -56,7 +56,7 @@ export default function SupplierLedgerPage() {
 
   useEffect(() => { loadAll() }, [])
 
-  // ── Pay Supplier dialog state ─────────────────────────────────────────────
+  // â"€â"€ Pay Supplier dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payAmount, setPayAmount] = useState("")
   const [payMethod, setPayMethod] = useState("Cash")
@@ -146,9 +146,16 @@ export default function SupplierLedgerPage() {
 
     filteredPurchases.forEach((p) => {
       const supName = suppliers.find((s) => s.id === p.supplierId)?.companyName || p.supplierName
+      const names   = p.items.map(i => i.productName.trim()).filter(Boolean)
+      const preview = names.length <= 2
+        ? names.join(", ")
+        : `${names[0]}, ${names[1]} +${names.length - 2} more`
+      const payStatus = p.paymentStatus === "Paid" ? "Fully Paid"
+        : p.paymentStatus === "Partial" ? `Partial — Rs ${p.amountPaid.toLocaleString("en-PK")} paid`
+        : "Unpaid"
       raw.push({
         id: p.id, date: p.date, reference: p.poNumber,
-        description: "Purchase — " + p.items.length + " item(s) via " + p.paymentMethod,
+        description: `${preview || `${p.items.length} item(s)`}  ·  ${payStatus}`,
         debit: 0, credit: p.total, type: "purchase", supplierName: supName,
       })
     })
@@ -157,35 +164,34 @@ export default function SupplierLedgerPage() {
       ? supplierPayments.filter((sp) => sp.entityId === selectedSupplierId)
       : supplierPayments
 
-    filteredPayments.forEach((sp) =>
+    filteredPayments.forEach((sp) => {
+      const notes = (sp.notes ?? "")
+        .replace(/^(Payment for|Outstanding for)\s+PO-[\w-]+\s*/i, "")
+        .replace(/^\(|\)$/g, "")
+        .trim()
       raw.push({
         id: sp.id, date: sp.date,
         reference: sp.referenceNumber || sp.id.slice(0, 8),
-        description: "Payment Made — " + sp.method + (sp.notes ? " (" + sp.notes + ")" : ""),
+        description: `Payment to Supplier${notes ? `  ·  ${notes}` : ""}  ·  ${sp.method}`,
         debit: sp.amount, credit: 0, type: "payment", supplierName: sp.entityName,
       })
-    )
-
-    const paymentRefNumbers = new Set(filteredPayments.map((sp) => sp.referenceNumber))
-    filteredPurchases.forEach((p) => {
-      if (p.amountPaid > 0 && !paymentRefNumbers.has(p.poNumber)) {
-        const supName = suppliers.find((s) => s.id === p.supplierId)?.companyName || p.supplierName
-        raw.push({
-          id: "reconcile-" + p.id, date: p.date, reference: p.poNumber,
-          description: "Payment Made — " + p.paymentMethod + " (Payment for " + p.poNumber + ")",
-          debit: p.amountPaid, credit: 0, type: "payment", supplierName: supName,
-        })
-      }
     })
 
-    raw.sort((a, b) => a.date.localeCompare(b.date))
+    // Same-date: purchases (credits) before payments (debits) so balance reads correctly
+    raw.sort((a, b) => {
+      const d = a.date.localeCompare(b.date)
+      if (d !== 0) return d
+      if (a.type === "purchase" && b.type !== "purchase") return -1
+      if (a.type !== "purchase" && b.type === "purchase") return  1
+      return 0
+    })
 
     const result: LedgerEntry[] = []
     let balance = openingBalance
 
     if (openingBalance !== 0) {
       result.push({
-        id: "opening", date: raw[0]?.date ?? "", reference: "—",
+        id: "opening", date: raw[0]?.date ?? "", reference: "-",
         description: "Opening Balance",
         debit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
         credit: openingBalance > 0 ? openingBalance : 0,
@@ -215,8 +221,9 @@ export default function SupplierLedgerPage() {
   const totalCredit = txEntries.reduce((s, e) => s + e.credit, 0)
   const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const displayEntries = [...filtered].reverse()
+  const totalPages = Math.ceil(displayEntries.length / PAGE_SIZE)
+  const paginated = displayEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const accentColor = (type: LedgerEntry["type"]) => {
     if (type === "opening") return "bg-slate-400"
@@ -247,11 +254,11 @@ export default function SupplierLedgerPage() {
 
     const rows = filtered.map((e) => ({
       date:         e.date,
-      supplierName: e.supplierName || "—",
+      supplierName: e.supplierName || "-",
       reference:    e.reference,
       description:  e.description,
-      debitFmt:     e.debit > 0 ? "Rs " + e.debit.toLocaleString() : "—",
-      creditFmt:    e.credit > 0 ? "Rs " + e.credit.toLocaleString() : "—",
+      debitFmt:     e.debit > 0 ? "Rs " + e.debit.toLocaleString() : "-",
+      creditFmt:    e.credit > 0 ? "Rs " + e.credit.toLocaleString() : "-",
       balanceFmt:   "Rs " + Math.abs(e.balance).toLocaleString() + (e.balance > 0 ? " Cr" : e.balance < 0 ? " Dr" : ""),
     }))
 
@@ -293,7 +300,7 @@ export default function SupplierLedgerPage() {
 
     const rows = filtered.map((e) => ({
       date:         e.date,
-      supplierName: e.supplierName || "—",
+      supplierName: e.supplierName || "-",
       reference:    e.reference,
       description:  e.description,
       debit:        e.debit || "",
@@ -312,7 +319,7 @@ export default function SupplierLedgerPage() {
         { label: "Outstanding",     value: "Rs " + Math.abs(closingBalance).toLocaleString() + balLabel },
       ],
     })
-    toast.success("Excel exported — " + filtered.length + " entries")
+    toast.success("Excel exported - " + filtered.length + " entries")
   }
 
   if (loading) {
@@ -360,7 +367,7 @@ export default function SupplierLedgerPage() {
               >
                 <option value="">All Suppliers ({activeSuppliers.length})</option>
                 {activeSuppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.companyName} — {s.city}</option>
+                  <option key={s.id} value={s.id}>{s.companyName} - {s.city}</option>
                 ))}
               </select>
             </div>
@@ -377,10 +384,10 @@ export default function SupplierLedgerPage() {
           </div>
           {selectedSupplierId && (
             <div className="mt-2 flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Opening Balance (₨)</label>
-              <input type="number" value={openingBalance} onChange={(e) => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Opening Balance (Rs)</label>
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={openingBalance} onChange={(e) => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
                 className="w-32 h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" />
-              <span className="text-[10px] text-slate-400">Positive = we owe supplier · Negative = advance paid</span>
+              <span className="text-[10px] text-slate-400">Positive = we owe supplier - Negative = advance paid</span>
             </div>
           )}
         </CardContent>
@@ -418,7 +425,7 @@ export default function SupplierLedgerPage() {
               {formatCurrency(Math.abs(closingBalance))}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
-              {closingBalance > 0 ? "Payable — we owe supplier" : closingBalance < 0 ? "Advance paid to supplier" : "Account settled"}
+              {closingBalance > 0 ? "Payable - we owe supplier" : closingBalance < 0 ? "Advance paid to supplier" : "Account settled"}
             </p>
           </CardContent>
         </Card>
@@ -436,7 +443,7 @@ export default function SupplierLedgerPage() {
           <CardHeader className="px-3 py-2 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold text-slate-800">
-                {selectedSupplier ? selectedSupplier.companyName + " — Account Statement" : "All Suppliers — Account Statement"}
+                {selectedSupplier ? selectedSupplier.companyName + " - Account Statement" : "All Suppliers - Account Statement"}
               </CardTitle>
               <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
                 <span className="flex items-center gap-1">
@@ -503,14 +510,14 @@ export default function SupplierLedgerPage() {
                   {paginated.map((entry) => (
                     <tr key={entry.id} className={`hover:bg-slate-50/70 transition-colors ${entry.type === "opening" ? "bg-slate-50 italic" : ""}`}>
                       <td className="px-3 py-2 text-slate-500 whitespace-nowrap text-xs">{formatDate(entry.date)}</td>
-                      {!selectedSupplierId && <td className="px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap">{entry.supplierName || "—"}</td>}
+                      {!selectedSupplierId && <td className="px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap">{entry.supplierName || "-"}</td>}
                       <td className="px-3 py-2 font-mono text-xs text-slate-400 whitespace-nowrap">{entry.reference}</td>
                       <td className="px-3 py-2 text-xs text-slate-700">{entry.description}</td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-emerald-600 whitespace-nowrap">
-                        {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">—</span>}
+                        {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-orange-600 whitespace-nowrap">
-                        {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">—</span>}
+                        {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-red-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                         {formatCurrency(Math.abs(entry.balance))}
@@ -543,7 +550,7 @@ export default function SupplierLedgerPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400">
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  {(page - 1) * PAGE_SIZE + 1}-"{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
@@ -583,9 +590,9 @@ export default function SupplierLedgerPage() {
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-xs">Amount (₨) <span className="text-red-500">*</span></Label>
+              <Label className="text-xs">Amount (â‚¨) <span className="text-red-500">*</span></Label>
               <Input
-                type="number" min={1} placeholder="0"
+                type="number" onWheel={e => e.currentTarget.blur()} min={1} placeholder="0"
                 value={payAmount}
                 onChange={e => setPayAmount(e.target.value)}
                 className="h-8 text-sm font-semibold"
@@ -619,23 +626,23 @@ export default function SupplierLedgerPage() {
                 onChange={e => setPayAccountId(e.target.value)}
                 className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
               >
-                <option value="">Select account…</option>
+                <option value="">Select account...</option>
                 {accounts.map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.name} — {formatCurrency(a.currentBalance)}
+                    {a.name} - {formatCurrency(a.currentBalance)}
                   </option>
                 ))}
               </select>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Notes (optional)</Label>
-              <Input placeholder="e.g. Cheque #1234, partial payment…" value={payNotes} onChange={e => setPayNotes(e.target.value)} className="h-8 text-xs" />
+              <Input placeholder="e.g. Cheque #1234, partial payment..." value={payNotes} onChange={e => setPayNotes(e.target.value)} className="h-8 text-xs" />
             </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
             <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={handlePaySupplier} disabled={paying}>
-              {paying ? "Recording…" : "Record Payment"}
+              {paying ? "Recording..." : "Record Payment"}
             </Button>
           </DialogFooter>
         </DialogContent>

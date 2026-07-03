@@ -99,7 +99,7 @@ export default function ColorsPage() {
     if (!deleteTarget) return
     if (deleteTarget.isSystem) { toast.error("System colors cannot be deleted"); return }
     if (deleteTarget.usageCount > 0) {
-      toast.error(`Cannot delete — used in ${deleteTarget.usageCount} phone record${deleteTarget.usageCount !== 1 ? "s" : ""}`)
+      toast.error(`Cannot delete - used in ${deleteTarget.usageCount} phone record${deleteTarget.usageCount !== 1 ? "s" : ""}`)
       setDeleteTarget(null)
       return
     }
@@ -198,7 +198,7 @@ export default function ColorsPage() {
                   <Pencil className="w-3 h-3" />
                 </button>
                 {c.isSystem ? (
-                  <span className="p-0.5 text-amber-300 cursor-not-allowed" title="System — cannot delete"><Lock className="w-3 h-3" /></span>
+                  <span className="p-0.5 text-amber-300 cursor-not-allowed" title="System - cannot delete"><Lock className="w-3 h-3" /></span>
                 ) : (
                   <button
                     onClick={() => setDeleteTarget(c)}

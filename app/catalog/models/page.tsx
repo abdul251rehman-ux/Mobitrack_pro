@@ -143,7 +143,7 @@ export default function ModelsPage() {
           const { error } = await supabase.from(oldTable).update({ name: formName.trim(), brand_name: formBrand.trim() }).eq("id", realId)
           if (error) throw error
         } else {
-          // Brand type changed (e.g., from Android brand → Apple) — delete old, insert new
+          // Brand type changed (e.g., from Android brand → Apple) - delete old, insert new
           await supabase.from(oldTable).delete().eq("id", realId)
           const { error } = await supabase.from(newTable).insert({ tenant_id: tenantId, name: formName.trim(), brand_name: formBrand.trim(), is_system: false })
           if (error) throw error
@@ -196,7 +196,7 @@ export default function ModelsPage() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-slate-900 leading-none">Phone Models</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Manage models per brand — used in purchases &amp; inventory</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Manage models per brand - used in purchases &amp; inventory</p>
           </div>
         </div>
         <Button onClick={() => openAdd()} size="sm" className="h-8 text-xs gap-1.5 px-3 bg-violet-600 hover:bg-violet-700">
@@ -313,7 +313,7 @@ export default function ModelsPage() {
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       {m.isSystem ? (
-                        <span className="p-1 text-amber-300 cursor-not-allowed" title="System model — cannot be deleted">
+                        <span className="p-1 text-amber-300 cursor-not-allowed" title="System model - cannot be deleted">
                           <Lock className="w-3.5 h-3.5" />
                         </span>
                       ) : (
@@ -354,7 +354,7 @@ export default function ModelsPage() {
                     formErrors.brand ? "border-red-400" : "border-slate-200"
                   )}
                 >
-                  <option value="">Select brand…</option>
+                  <option value="">Select brand...</option>
                   {brands.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
@@ -373,7 +373,7 @@ export default function ModelsPage() {
               {formErrors.name && <p className="text-[10px] text-red-500">{formErrors.name}</p>}
             </div>
             <p className="text-[10px] text-slate-400 bg-slate-50 rounded-md px-2 py-1.5">
-              Tip: Editing a model name will NOT update historical purchase records — only future purchases will use the new name.
+              Tip: Editing a model name will NOT update historical purchase records - only future purchases will use the new name.
             </p>
           </div>
           <DialogFooter className="gap-2">

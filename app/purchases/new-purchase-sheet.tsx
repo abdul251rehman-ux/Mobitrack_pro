@@ -1,4 +1,4 @@
-"use client"
+﻿﻿"use client"
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import {
@@ -26,7 +26,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 interface CatalogAccessory {
   id: string; name: string; brand: string; category: string; sku: string; imageUrl: string | null
@@ -38,6 +38,7 @@ interface MobileUnit {
   color: string
   imeiError?: string   // "duplicate_db" | "duplicate_local" | undefined
   imeiChecking?: boolean
+  soldLocked?: boolean  // true = this unit already sold, cannot edit
 }
 
 interface MobileRow {
@@ -99,7 +100,7 @@ function makeMobileRow(): MobileRow {
   }
 }
 
-// ─── Lock state (shared across phone cards — locks a field so next card inherits it) ───
+// â"€â"€â"€ Lock state (shared across phone cards - locks a field so next card inherits it) â"€â"€â"€
 
 type PhoneLockState = {
   brand: boolean; storage: boolean; ram: boolean
@@ -113,7 +114,7 @@ function PurchaseLockBtn({
     <button
       type="button"
       onClick={onToggle}
-      title={locked ? `${label} locked — next card copies this value. Click to unlock.` : `Click to lock ${label} — next card will inherit it`}
+      title={locked ? `${label} locked - next card copies this value. Click to unlock.` : `Click to lock ${label} - next card will inherit it`}
       className={cn(
         "inline-flex items-center justify-center w-3.5 h-3.5 rounded border transition-all shrink-0",
         locked
@@ -126,7 +127,7 @@ function PurchaseLockBtn({
   )
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+// â"€â"€â"€ Step indicator â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function StepDot({ n, active, done, label }: { n: number; active: boolean; done: boolean; label: string }) {
   return (
@@ -144,7 +145,7 @@ function StepDot({ n, active, done, label }: { n: number; active: boolean; done:
   )
 }
 
-// ─── Field wrapper ────────────────────────────────────────────────────────────
+// â"€â"€â"€ Field wrapper â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function Field({ label, required, children, className }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
   return (
@@ -157,7 +158,7 @@ function Field({ label, required, children, className }: { label: string; requir
   )
 }
 
-// ─── Select wrapper ───────────────────────────────────────────────────────────
+// â"€â"€â"€ Select wrapper â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function Sel({ value, onChange, children, className, error }: { value: string; onChange: (v: string) => void; children: React.ReactNode; className?: string; error?: boolean }) {
   return (
@@ -175,7 +176,7 @@ function Sel({ value, onChange, children, className, error }: { value: string; o
   )
 }
 
-// ─── CreatableCombobox ────────────────────────────────────────────────────────
+// â"€â"€â"€ CreatableCombobox â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // Type to search, Enter / "+ Add" to create inline and persist to DB
 
 function CreatableCombobox({
@@ -246,7 +247,7 @@ function CreatableCombobox({
             if (e.key === "Enter") { e.preventDefault(); if (filtered[0]) handleSelect(filtered[0]); else if (canCreate) handleAdd() }
             if (e.key === "Escape") { setOpen(false); setQuery("") }
           }}
-          placeholder={open ? (value || placeholder || "Type or select…") : (placeholder || "Type or select…")}
+          placeholder={open ? (value || placeholder || "Type or select...") : (placeholder || "Type or select...")}
           className="flex-1 text-xs bg-transparent outline-none min-w-0 text-slate-800 font-medium placeholder:text-slate-400"
           spellCheck={false}
           autoComplete="off"
@@ -297,7 +298,7 @@ function CreatableCombobox({
               className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-violet-600 font-semibold bg-violet-50 hover:bg-violet-100 border-t border-violet-100 transition-colors"
             >
               <Plus className="w-3 h-3" />
-              {adding ? "Adding…" : `Add "${query.trim()}"`}
+              {adding ? "Adding..." : `Add "${query.trim()}"`}
             </button>
           )}
         </div>
@@ -306,7 +307,7 @@ function CreatableCombobox({
   )
 }
 
-// ─── QuickCat Popover ─────────────────────────────────────────────────────────
+// â"€â"€â"€ QuickCat Popover â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // Inline add/edit/delete for catalog items (brands, colors, storage, RAM)
 
 function QuickCatPopover({
@@ -392,12 +393,12 @@ function QuickCatPopover({
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleAdd() }}
-            placeholder={`Add ${label.toLowerCase()}…`}
+            placeholder={`Add ${label.toLowerCase()}...`}
             className="flex-1 h-6 text-[11px] rounded border border-slate-200 px-2 focus:outline-none focus:ring-1 focus:ring-violet-400"
           />
           <button type="button" onClick={handleAdd} disabled={!input.trim() || saving}
             className="h-6 px-2 text-[10px] font-bold bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-40 transition-colors">
-            {saving ? "…" : "Add"}
+            {saving ? "..." : "Add"}
           </button>
         </div>
 
@@ -420,7 +421,7 @@ function QuickCatPopover({
                   <button type="button" onClick={() => handleEdit(item)} disabled={saving}
                     className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 px-1">Save</button>
                   <button type="button" onClick={() => { setEditingVal(null); setEditInput("") }}
-                    className="text-[9px] text-slate-400 hover:text-slate-600 px-0.5">✕</button>
+                    className="text-[9px] text-slate-400 hover:text-slate-600 px-0.5">âœ•</button>
                 </>
               ) : deletingVal === item ? (
                 <>
@@ -453,7 +454,7 @@ function QuickCatPopover({
   )
 }
 
-// ─── Mobile phone card ────────────────────────────────────────────────────────
+// â"€â"€â"€ Mobile phone card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function PhoneCard({
   row, idx, brands, models, colors, storageOptions, ramOptions,
@@ -569,7 +570,7 @@ function PhoneCard({
                 }
               }}
               options={brands} onAdd={onAddBrand}
-              placeholder="Samsung, Apple…" error={!!row.rowError && !row.brand}
+              placeholder="Samsung, Apple..." error={!!row.rowError && !row.brand}
             />
           </div>
           <div className="space-y-0.5">
@@ -597,7 +598,7 @@ function PhoneCard({
               onChange={v => onChange("model", v)}
               options={brandModels}
               onAdd={row.brand ? onAddModel : undefined}
-              placeholder={row.brand ? "Select or add model…" : "Choose brand first"}
+              placeholder={row.brand ? "Select or add model..." : "Choose brand first"}
               error={!!row.rowError && !row.model.trim()}
             />
           </div>
@@ -627,7 +628,7 @@ function PhoneCard({
                 catalogHref="/catalog/storage"
               />
             </div>
-            <CreatableCombobox value={row.storage} onChange={v => onChange("storage", v)} options={storageOptions} onAdd={onAddStorage} placeholder="128GB…" />
+            <CreatableCombobox value={row.storage} onChange={v => onChange("storage", v)} options={storageOptions} onAdd={onAddStorage} placeholder="128GB..." />
           </div>
           {row.deviceType === "android" && (
             <div className="space-y-0.5">
@@ -640,7 +641,7 @@ function PhoneCard({
                   catalogHref="/catalog/ram"
                 />
               </div>
-              <CreatableCombobox value={row.ram} onChange={v => onChange("ram", v)} options={ramOptions} onAdd={onAddRam} placeholder="8GB…" />
+              <CreatableCombobox value={row.ram} onChange={v => onChange("ram", v)} options={ramOptions} onAdd={onAddRam} placeholder="8GB..." />
             </div>
           )}
           <div className="space-y-0.5">
@@ -670,10 +671,10 @@ function PhoneCard({
           <div className="space-y-0.5">
             <div className="flex items-center gap-1">
               <PurchaseLockBtn locked={locks.buyPrice} onToggle={() => onToggleLock("buyPrice")} label="Buy price" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Buy ₨<span className="text-red-500 ml-0.5">*</span></Label>
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Buy Rs<span className="text-red-500 ml-0.5">*</span></Label>
             </div>
             <input
-              type="number" min={0} placeholder="0"
+              type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0"
               value={row.buyPrice}
               onChange={e => onChange("buyPrice", e.target.value)}
               className={cn(
@@ -685,10 +686,10 @@ function PhoneCard({
           <div className="space-y-0.5">
             <div className="flex items-center gap-1">
               <PurchaseLockBtn locked={locks.sellPrice} onToggle={() => onToggleLock("sellPrice")} label="Sell price" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sell ₨</Label>
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sell Rs</Label>
             </div>
             <input
-              type="number" min={0} placeholder="0"
+              type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0"
               value={row.sellPrice}
               onChange={e => onChange("sellPrice", e.target.value)}
               className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
@@ -697,7 +698,7 @@ function PhoneCard({
           <Field label="Qty">
             <div className="relative">
               <input
-                type="number" min={1} value={row.qty}
+                type="number" onWheel={e => e.currentTarget.blur()} min={1} value={row.qty}
                 onChange={e => onChange("qty", e.target.value)}
                 className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400 pr-14"
               />
@@ -750,7 +751,7 @@ function PhoneCard({
           >
             <Fingerprint className="w-3 h-3 text-violet-400 shrink-0" />
             <span className="text-[11px] font-semibold text-slate-600 flex-1">
-              IMEI · Color{row.deviceType === "iphone" ? " · Battery" : ""}
+              IMEI - Color{row.deviceType === "iphone" ? " - Battery" : ""}
             </span>
             <span className={cn(
               "text-[9px] font-bold px-1.5 py-0.5 rounded-full",
@@ -767,14 +768,22 @@ function PhoneCard({
                 const isDuplicate = !!unit.imeiError
                 const isChecking = !!unit.imeiChecking
                 const isOk = unit.imei.length === 15 && !isDuplicate && !isChecking
+                const isSoldLocked = !!unit.soldLocked
                 return (
-                  <div key={ui} className="px-2.5 py-1.5 space-y-1">
+                  <div key={ui} className={cn("px-2.5 py-1.5 space-y-1", isSoldLocked && "opacity-60")}>
+                    {isSoldLocked && (
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <Lock className="w-2.5 h-2.5 text-red-500" />
+                        <span className="text-[9px] font-bold text-red-500 uppercase tracking-wide">Sold - cannot edit</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1.5">
                       <span className="text-[9px] font-bold text-slate-400 w-4 shrink-0">#{ui + 1}</span>
                       <div className="relative flex-1">
                         <input
                           value={unit.imei}
-                          onChange={e => {
+                          readOnly={isSoldLocked}
+                          onChange={isSoldLocked ? undefined : e => {
                             const val = e.target.value.replace(/\D/g, "").slice(0, 15)
                             onUnit(ui, "imei", val)
                             if (val.length === 15) onCheckImei(ui, val)
@@ -783,7 +792,8 @@ function PhoneCard({
                           maxLength={15}
                           className={cn(
                             "w-full h-7 rounded-md border px-2 pr-10 text-xs font-mono bg-white focus:outline-none focus:ring-1",
-                            isDuplicate ? "border-red-400 bg-red-50 focus:ring-red-400"
+                            isSoldLocked ? "border-slate-200 bg-slate-50 cursor-not-allowed text-slate-500"
+                            : isDuplicate ? "border-red-400 bg-red-50 focus:ring-red-400"
                             : isOk ? "border-emerald-400 bg-emerald-50 focus:ring-emerald-400"
                             : unit.imei.length > 0 ? "border-amber-300 bg-amber-50/40 focus:ring-amber-300"
                             : "border-slate-200 focus:ring-violet-400"
@@ -806,23 +816,21 @@ function PhoneCard({
                       </div>
                       {/* Color per unit */}
                       <div className="w-28 shrink-0">
-                        <CreatableCombobox
-                          value={unit.color}
-                          onChange={v => onUnit(ui, "color", v)}
-                          options={colors}
-                          onAdd={onAddColor}
-                          placeholder="Color…"
-                        />
+                        {isSoldLocked
+                          ? <span className="flex h-7 items-center px-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md">{unit.color || "-"}</span>
+                          : <CreatableCombobox value={unit.color} onChange={v => onUnit(ui, "color", v)} options={colors} onAdd={onAddColor} placeholder="Color..." />
+                        }
                       </div>
                       {row.deviceType === "iphone" && (
                         <div className="flex items-center gap-1 w-20 shrink-0">
                           <Battery className="w-3 h-3 text-slate-400 shrink-0" />
                           <input
-                            type="number" min="1" max="100"
+                            type="number" onWheel={e => e.currentTarget.blur()} min="1" max="100"
                             value={unit.batteryHealth}
-                            onChange={e => onUnit(ui, "batteryHealth", e.target.value)}
+                            readOnly={isSoldLocked}
+                            onChange={isSoldLocked ? undefined : e => onUnit(ui, "batteryHealth", e.target.value)}
                             placeholder="%"
-                            className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                            className={cn("w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400", isSoldLocked && "bg-slate-50 cursor-not-allowed")}
                           />
                         </div>
                       )}
@@ -831,7 +839,7 @@ function PhoneCard({
                       <p className="text-[10px] text-red-600 font-semibold pl-5">
                         {unit.imeiError === "duplicate_local"
                           ? "Already entered in this purchase"
-                          : "This IMEI is already in stock — sold or returned it first"}
+                          : "This IMEI is already in stock - sold or returned it first"}
                       </p>
                     )}
                   </div>
@@ -845,7 +853,7 @@ function PhoneCard({
   )
 }
 
-// ─── Finance account icon ─────────────────────────────────────────────────────
+// â"€â"€â"€ Finance account icon â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function AccountIcon({ type }: { type: string }) {
   if (type === "bank") return <Landmark className="w-4 h-4" />
@@ -853,7 +861,7 @@ function AccountIcon({ type }: { type: string }) {
   return <Banknote className="w-4 h-4" />
 }
 
-// ─── Review Order Modal ───────────────────────────────────────────────────────
+// â"€â"€â"€ Review Order Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm, submitting, accounts, supplier }: {
   open: boolean; onClose: () => void
@@ -864,7 +872,6 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
   const [shipping, setShipping] = useState("0")
   const [tax, setTax] = useState("0")
   const [splits, setSplits] = useState<SplitEntry[]>([])
-  const [dueDate, setDueDate] = useState("")
   const [notes, setNotes] = useState("")
   const confirmingRef = useRef(false)
   useEffect(() => { if (!submitting) confirmingRef.current = false }, [submitting])
@@ -912,24 +919,13 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
             <div>
               <h2 className="text-base font-bold text-white">Review Purchase Order</h2>
               <p className="text-xs text-white/70 mt-0.5">
-                {supplier?.companyName ?? "No supplier"} · {mobileRows.length + accessoryItems.length} item(s)
+                {supplier?.companyName ?? "No supplier"} — {mobileRows.length + accessoryItems.length} item(s)
               </p>
             </div>
           </div>
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Grand total summary at top */}
-          <div className="rounded-xl bg-gradient-to-br from-slate-50 to-blue-50 border border-blue-100 px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Order Total</p>
-              <p className="text-2xl font-extrabold text-blue-700 tabular-nums">{formatCurrency(grandTotal)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] text-slate-400">Items: {mobileRows.length + accessoryItems.length}</p>
-              <p className="text-xs text-slate-600 font-semibold">{supplier?.companyName ?? "—"}</p>
-            </div>
-          </div>
 
           {/* Items summary */}
           <div className="rounded-xl border border-slate-200 overflow-hidden">
@@ -937,7 +933,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
               <Package className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Items</span>
             </div>
-            <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+            <div className="divide-y divide-slate-100 max-h-40 overflow-y-auto">
               {mobileRows.map(r => (
                 <div key={r.uid} className="px-3 py-2.5 flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
@@ -945,9 +941,9 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{r.brand} {r.model}</p>
-                    <p className="text-[10px] text-slate-400">{[r.storage, r.category].filter(Boolean).join(" · ")} · qty {parseInt(r.qty) || 1}</p>
+                    <p className="text-[10px] text-slate-400">{[r.storage, r.category].filter(Boolean).join(" - ")} — qty {parseInt(r.qty) || 1}</p>
                     {r.units.filter(u => u.imei.length === 15).map((u, i) => (
-                      <p key={i} className="text-[10px] text-slate-400 font-mono">IMEI: {u.imei}{u.color ? ` · ${u.color}` : ""}</p>
+                      <p key={i} className="text-[10px] text-slate-400 font-mono">IMEI: {u.imei}{u.color ? ` - ${u.color}` : ""}</p>
                     ))}
                   </div>
                   <span className="text-sm font-bold text-slate-700 shrink-0">
@@ -962,7 +958,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{a.name}</p>
-                    <p className="text-[10px] text-slate-400">{a.brand} · qty {parseInt(a.qty) || 1}</p>
+                    <p className="text-[10px] text-slate-400">{a.brand} — qty {parseInt(a.qty) || 1}</p>
                   </div>
                   <span className="text-sm font-bold text-slate-700 shrink-0">
                     {formatCurrency((parseFloat(a.buyPrice) || 0) * (parseInt(a.qty) || 1))}
@@ -975,14 +971,14 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
           {/* Shipping + Tax */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Shipping (Rs)">
-              <Input type="number" min={0} value={shipping} onChange={e => setShipping(e.target.value)} className="h-9 text-sm" placeholder="0" />
+              <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={shipping} onChange={e => setShipping(e.target.value)} className="h-9 text-sm" placeholder="0" />
             </Field>
             <Field label="Tax / Other (Rs)">
-              <Input type="number" min={0} value={tax} onChange={e => setTax(e.target.value)} className="h-9 text-sm" placeholder="0" />
+              <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={tax} onChange={e => setTax(e.target.value)} className="h-9 text-sm" placeholder="0" />
             </Field>
           </div>
 
-          {/* Totals breakdown */}
+          {/* Cost breakdown */}
           <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden text-sm">
             <div className="flex justify-between px-3 py-2 bg-slate-50">
               <span className="text-slate-500 text-xs">Subtotal</span>
@@ -991,13 +987,13 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
             {shippingNum > 0 && (
               <div className="flex justify-between px-3 py-2">
                 <span className="text-slate-500 text-xs">Shipping</span>
-                <span className="text-slate-600">+{formatCurrency(shippingNum)}</span>
+                <span className="text-slate-600">+ {formatCurrency(shippingNum)}</span>
               </div>
             )}
             {taxNum > 0 && (
               <div className="flex justify-between px-3 py-2">
                 <span className="text-slate-500 text-xs">Tax / Other</span>
-                <span className="text-slate-600">+{formatCurrency(taxNum)}</span>
+                <span className="text-slate-600">+ {formatCurrency(taxNum)}</span>
               </div>
             )}
             <div className="flex justify-between px-3 py-3 bg-blue-50">
@@ -1006,20 +1002,25 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
             </div>
           </div>
 
-          {/* Payment accounts */}
+          {/* ── PAYMENT SECTION ── */}
           <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-3 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Banknote className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Pay From</span>
+                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Amount Paid</span>
               </div>
-              <span className="text-[10px] text-slate-400">Select one or more accounts</span>
+              <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                payStatus === "Paid"    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : payStatus === "Partial" ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-slate-100 text-slate-500 border-slate-200"
+              )}>{payStatus}</span>
             </div>
+
             <div className="p-3 space-y-2">
               {accounts.length === 0 ? (
                 <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
                   <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <p className="text-xs text-amber-700">No accounts found. Set up finance accounts first.</p>
+                  <p className="text-xs text-amber-700">No finance accounts found. Set up accounts first.</p>
                 </div>
               ) : accounts.map(acc => {
                 const entry = splits.find(e => e.accountId === acc.id)
@@ -1036,7 +1037,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{acc.name}</p>
-                        <p className="text-sm font-extrabold text-slate-900 tabular-nums">{formatCurrency(acc.currentBalance)}</p>
+                        <p className="text-[11px] text-slate-500">Balance: <span className="font-semibold text-slate-700 tabular-nums">{formatCurrency(acc.currentBalance)}</span></p>
                       </div>
                       <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors", sel ? "bg-blue-600 border-blue-600" : "border-slate-300")}>
                         {sel && <Check className="w-3 h-3 text-white" />}
@@ -1046,18 +1047,18 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                       <div className="px-3 pb-3">
                         <div className="flex gap-2">
                           <div className="flex-1">
-                            <Input type="number" min={0} max={acc.currentBalance}
-                              placeholder="Amount (Rs)"
+                            <Input type="number" onWheel={e => e.currentTarget.blur()} min={0}
+                              placeholder="Amount paid (Rs)"
                               value={entry?.amount ?? ""}
                               onChange={e => setAmount(acc.id, e.target.value)}
                               className={cn("h-9 text-sm", bad && "border-red-400")}
                               autoFocus
                             />
-                            {bad && <p className="text-[10px] text-red-500 mt-0.5">Exceeds balance of {formatCurrency(acc.currentBalance)}</p>}
+                            {bad && <p className="text-[10px] text-red-500 mt-0.5">Exceeds account balance of {formatCurrency(acc.currentBalance)}</p>}
                           </div>
                           <button type="button"
                             onClick={() => setAmount(acc.id, String(Math.min(acc.currentBalance, Math.max(0, grandTotal - (totalPaid - (parseFloat(entry?.amount ?? "0") || 0))))))}
-                            className="self-start mt-0 text-[10px] text-blue-600 font-semibold border border-blue-200 rounded-lg px-2 py-2.5 hover:bg-blue-50 whitespace-nowrap">
+                            className="self-start text-[10px] text-blue-600 font-semibold border border-blue-200 rounded-lg px-2.5 py-2.5 hover:bg-blue-50 whitespace-nowrap">
                             Fill
                           </button>
                         </div>
@@ -1067,58 +1068,42 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                 )
               })}
 
-              {/* Balance summary */}
-              {splits.some(e => parseFloat(e.amount) > 0) && (
-                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden mt-2">
+              {/* Running payment summary */}
+              {totalPaid > 0 && (
+                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden mt-1">
                   <div className="flex justify-between px-3 py-2 text-xs">
-                    <span className="text-slate-500">Total Paid Now</span>
-                    <span className="font-bold text-slate-800">{formatCurrency(totalPaid)}</span>
+                    <span className="text-slate-500">Amount Paid</span>
+                    <span className="font-bold text-slate-800 tabular-nums">{formatCurrency(totalPaid)}</span>
                   </div>
-                  <div className={cn("flex justify-between px-3 py-2 text-xs",
-                    balanceDue > 0 ? "bg-red-50" : overpaid > 0 ? "bg-blue-50" : "bg-emerald-50"
-                  )}>
-                    <span className={cn("font-bold",
-                      balanceDue > 0 ? "text-red-700" : overpaid > 0 ? "text-blue-700" : "text-emerald-700"
-                    )}>
-                      {balanceDue > 0 ? "Balance Due (Supplier)" : overpaid > 0 ? "Advance to Supplier" : "Fully Paid"}
-                    </span>
-                    {balanceDue > 0 && <span className="font-extrabold text-red-700">{formatCurrency(balanceDue)}</span>}
-                    {overpaid > 0 && <span className="font-extrabold text-blue-700">+{formatCurrency(overpaid)}</span>}
-                  </div>
+                  {overpaid > 0 ? (
+                    <div className="flex justify-between px-3 py-2 text-xs bg-blue-50">
+                      <span className="font-bold text-blue-700">Advance / Overpaid</span>
+                      <span className="font-extrabold text-blue-700 tabular-nums">+ {formatCurrency(overpaid)}</span>
+                    </div>
+                  ) : balanceDue > 0 ? (
+                    <div className="flex justify-between px-3 py-2 text-xs bg-amber-50">
+                      <span className="font-bold text-amber-700">Remaining Payable</span>
+                      <span className="font-extrabold text-amber-700 tabular-nums">{formatCurrency(balanceDue)}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between px-3 py-2 text-xs bg-emerald-50">
+                      <span className="font-bold text-emerald-700">Fully Paid</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* Zero paid hint */}
+              {totalPaid === 0 && (
+                <p className="text-[11px] text-slate-400 text-center py-1">
+                  Leave all unselected to record as unpaid (credit purchase)
+                </p>
               )}
             </div>
           </div>
 
-          {/* Status pill */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">Payment Status:</span>
-            <span className={cn("text-xs font-bold px-2.5 py-0.5 rounded-full border",
-              payStatus === "Paid"    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-              : payStatus === "Partial" ? "bg-amber-50 text-amber-700 border-amber-200"
-              : "bg-red-50 text-red-700 border-red-200"
-            )}>{payStatus}</span>
-          </div>
-
-          {overpaid > 0 && (
-            <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700 flex items-start gap-2">
-              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              {formatCurrency(overpaid)} extra paid — recorded as advance credit against this supplier.
-            </div>
-          )}
-
-          {balanceDue > 0 && (
-            <>
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700 flex items-start gap-2">
-                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                {formatCurrency(balanceDue)} will be recorded as payable to supplier in ledger.
-              </div>
-              <Field label="Payment Due Date">
-                <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-9 text-sm max-w-xs" />
-              </Field>
-            </>
-          )}
-
+          {/* Notes */}
           <Field label="Notes (optional)">
             <Input value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="e.g. Delivery Friday, partial batch..." className="h-9 text-sm" />
@@ -1131,11 +1116,11 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
             onClick={() => {
               if (confirmingRef.current) return
               confirmingRef.current = true
-              onConfirm({ shipping: shippingNum, tax: taxNum, splits, dueDate, notes })
+              onConfirm({ shipping: shippingNum, tax: taxNum, splits, dueDate: "", notes })
             }}
             className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm gap-2 shadow-md">
             <ShoppingCart className="w-4 h-4" />
-            {submitting ? "Recording..." : `Confirm Purchase — ${formatCurrency(grandTotal)}`}
+            {submitting ? "Recording..." : `Confirm Purchase - ${formatCurrency(grandTotal)}`}
           </Button>
         </div>
       </DialogContent>
@@ -1143,10 +1128,10 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
   )
 }
 
-// ─── Main Sheet ───────────────────────────────────────────────────────────────
+// â"€â"€â"€ Main Sheet â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-export function NewPurchaseSheet({ open, onClose, onCreated }: {
-  open: boolean; onClose: () => void; onCreated?: () => void
+export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
+  open: boolean; onClose: () => void; onCreated?: () => void; editPurchaseId?: string | null
 }) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
@@ -1203,7 +1188,97 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
     load()
   }, [])
 
-  // ── Catalog: Add handlers ─────────────────────────────────────────────────
+  // â"€â"€ Edit mode: pre-fill from existing purchase â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  const [editMode, setEditMode] = useState(false)
+  const [editPoNumber, setEditPoNumber] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!editPurchaseId || dataLoading) return
+    async function prefill() {
+      try {
+        const tenantId = await getTenantId()
+        // Load purchase header + items
+        const { data: pur } = await supabase.from("purchases").select("*").eq("id", editPurchaseId).single()
+        if (!pur) return
+        const { data: purItems } = await supabase.from("purchase_items").select("*").eq("purchase_id", editPurchaseId)
+        if (!purItems) return
+
+        setEditMode(true)
+        setEditPoNumber((pur as any).po_number)
+        setSelectedSupplierId((pur as any).supplier_id ?? "")
+        const sup = suppliers.find(s => s.id === (pur as any).supplier_id)
+        if (sup) setSupplierSearch(sup.companyName)
+
+        const newMobileRows: MobileRow[] = []
+        const newAccessoryItems: AccessoryItem[] = []
+
+        for (const item of (purItems as any[])) {
+          if (item.product_type === "Mobile") {
+            // Load imei_records for this product
+            const { data: imeiRows } = await supabase
+              .from("imei_records")
+              .select("imei_number, color, battery_health, device_status")
+              .eq("product_id", item.product_id)
+              .eq("tenant_id", tenantId)
+
+            // Load mobile catalog info
+            const { data: mob } = await supabase
+              .from("mobiles")
+              .select("brand, model, storage, ram, category, device_type, condition, color")
+              .eq("id", item.product_id)
+              .single()
+
+            const units: MobileUnit[] = (imeiRows ?? []).map((ir: any) => ({
+              imei: ir.imei_number ?? "",
+              batteryHealth: ir.battery_health ? String(ir.battery_health) : "",
+              color: ir.color ?? (mob as any)?.color ?? "",
+              soldLocked: ir.device_status === "sold",
+            }))
+            if (units.length === 0) units.push(makeUnit((mob as any)?.color ?? ""))
+
+            newMobileRows.push({
+              uid: mkUid(),
+              brand: (mob as any)?.brand ?? "",
+              model: (mob as any)?.model ?? "",
+              storage: (mob as any)?.storage ?? "",
+              ram: (mob as any)?.ram ?? "",
+              category: (mob as any)?.category ?? "PTA Approved",
+              deviceType: ((mob as any)?.device_type ?? "android") as "android" | "iphone",
+              condition: (mob as any)?.condition ?? "New",
+              buyPrice: String(item.unit_cost ?? ""),
+              sellPrice: String((mob as any)?.selling_price ?? ""),
+              qty: String(units.length),
+              units,
+              expanded: true,
+              imageFile: null,
+              imagePreview: null,
+            })
+          } else if (item.product_type === "Accessory") {
+            newAccessoryItems.push({
+              uid: mkUid(),
+              catalogId: item.product_id,
+              name: item.product_name,
+              brand: "",
+              category: "",
+              sku: "",
+              buyPrice: String(item.unit_cost ?? ""),
+              sellPrice: "",
+              qty: String(item.quantity ?? 1),
+            })
+          }
+        }
+
+        setMobileRows(newMobileRows)
+        setAccessoryItems(newAccessoryItems)
+      } catch {
+        toast.error("Failed to load purchase for editing")
+      }
+    }
+    prefill()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editPurchaseId, dataLoading])
+
+  // â"€â"€ Catalog: Add handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const handleAddBrand = async (v: string) => {
     const tenantId = await getTenantId()
     const { error } = await supabase.from("brands").insert({ tenant_id: tenantId, name: v, logo_initials: v.slice(0, 2).toUpperCase(), status: "Active", is_system: false })
@@ -1311,7 +1386,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
     toast.success(`"${v}" deleted`)
   }
 
-  // ── Supplier ──────────────────────────────────────────────────────────────
+  // â"€â"€ Supplier â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [supplierSearch, setSupplierSearch] = useState("")
   const [selectedSupplierId, setSelectedSupplierId] = useState("")
   const [dropOpen, setDropOpen] = useState(false)
@@ -1365,7 +1440,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
 
   const selectedSupplier = useMemo(() => suppliers.find(s => s.id === selectedSupplierId), [selectedSupplierId, suppliers])
 
-  // ── Mobile rows ───────────────────────────────────────────────────────────
+  // â"€â"€ Mobile rows â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [mobileRows, setMobileRows] = useState<MobileRow[]>([])
   const [phoneLocks, setPhoneLocks] = useState<PhoneLockState>({
     brand: false, storage: false, ram: false,
@@ -1410,7 +1485,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
       return
     }
 
-    // Check against DB — imei_records table
+    // Check against DB - imei_records table
     try {
       const tenantId = await getTenantId()
       const { data } = await supabase
@@ -1427,7 +1502,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
         )}
       ))
     } catch {
-      // On DB error, don't block — just clear checking state
+      // On DB error, don't block - just clear checking state
       setMobileRows(prev => prev.map(r =>
         r.uid !== uid ? r : { ...r, units: r.units.map((u, i) => i === unitIdx ? { ...u, imeiChecking: false } : u) }
       ))
@@ -1485,7 +1560,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
     setMobileRows(prev => prev.filter(r => r.uid !== uid))
   }
 
-  // ── Accessories ───────────────────────────────────────────────────────────
+  // â"€â"€ Accessories â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([])
   const [accessorySearch, setAccessorySearch] = useState("")
   const [showCatalog, setShowCatalog] = useState(false)
@@ -1508,7 +1583,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
     }
   }
 
-  // ── Validation ────────────────────────────────────────────────────────────
+  // â"€â"€ Validation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   function validateRows(): boolean {
     const seen = new Set<string>()
     // Drop rows that are completely blank (user added a row but didn't fill anything)
@@ -1523,7 +1598,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
         if (!/^\d{15}$/.test(unit.imei)) return { ...r, expanded: true, rowError: `Phone ${n} unit ${ui + 1}: IMEI must be 15 digits` }
         if (unit.imeiChecking) return { ...r, expanded: true, rowError: `Phone ${n} unit ${ui + 1}: IMEI check in progress, wait a moment` }
         if (unit.imeiError === "duplicate_local") return { ...r, expanded: true, rowError: `Phone ${n} unit ${ui + 1}: duplicate IMEI in this purchase` }
-        if (unit.imeiError === "duplicate_db") return { ...r, expanded: true, rowError: `Phone ${n} unit ${ui + 1}: IMEI already in stock — sell or return it first` }
+        if (unit.imeiError === "duplicate_db") return { ...r, expanded: true, rowError: `Phone ${n} unit ${ui + 1}: IMEI already in stock - sell or return it first` }
         if (seen.has(unit.imei)) return { ...r, expanded: true, rowError: `Phone ${n} unit ${ui + 1}: duplicate IMEI` }
         seen.add(unit.imei)
       }
@@ -1539,7 +1614,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
     return true
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // â"€â"€ Submit â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [reviewOpen, setReviewOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -1601,7 +1676,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
           if (!upErr) { const { data: u } = supabase.storage.from("product-images").getPublicUrl(path); imageUrl = u.publicUrl }
         }
 
-        // Group units by color — each color becomes a separate inventory record
+        // Group units by color - each color becomes a separate inventory record
         const colorGroups = new Map<string, MobileUnit[]>()
         for (const unit of row.units) {
           const c = unit.color.trim() || "Unknown"
@@ -1618,7 +1693,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
           let catalogId: string
           if (existing) {
             catalogId = existing.id; origMobileStocks[catalogId] = existing.stock
-            // Do NOT update stock here — DB trigger (purchase_item_stock_increment) will add qty when purchase_items row is inserted
+            // Do NOT update stock here - DB trigger (purchase_item_stock_increment) will add qty when purchase_items row is inserted
             const payload: any = { purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType }
             if (imageUrl) payload.image_url = imageUrl
             if (firstImei) payload.imei = firstImei
@@ -1626,7 +1701,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
             if (error) throw new Error(`Failed to update ${row.brand} ${row.model} (${color}): ${error.message}`)
             updatedMobileIds.push(catalogId)
           } else {
-            // Create with stock: 0 — trigger will increment to qty after purchase_items insert
+            // Create with stock: 0 - trigger will increment to qty after purchase_items insert
             const { data: created, error } = await supabase.from("mobiles").insert({ tenant_id: tenantId, brand: row.brand, model: row.model.trim(), color, storage: row.storage, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, imei: firstImei, purchase_price: buy, selling_price: sell, stock: 0, supplier_id: selectedSupplierId, image_url: imageUrl, date_added: today }).select("id").single()
             if (error) throw new Error(`Failed to create ${row.brand} ${row.model} (${color}): ${error.message}`)
             catalogId = (created as any).id; createdMobileIds.push(catalogId)
@@ -1634,6 +1709,26 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
           const rowImeis: string[] = []
           for (let ui = 0; ui < units.length; ui++) {
             const unit = units[ui]
+            // In edit mode: skip units that are already in DB (sold-locked or existing in_stock)
+            if (editMode && unit.soldLocked) {
+              if (unit.imei) rowImeis.push(unit.imei)
+              continue
+            }
+            if (editMode && unit.imei.length === 15) {
+              // Check if this IMEI already exists in imei_records - skip if so
+              const { data: existing } = await supabase
+                .from("imei_records").select("id").eq("imei_number", unit.imei).eq("tenant_id", tenantId).maybeSingle()
+              if (existing) {
+                // Update price/supplier info on existing record instead of inserting
+                await supabase.from("imei_records").update({
+                  purchase_price: buy, selling_price: sell,
+                  supplier_id: selectedSupplierId, supplier_name: selectedSupplier?.companyName ?? "",
+                  battery_health: unit.batteryHealth ? parseInt(unit.batteryHealth) : null,
+                }).eq("id", (existing as any).id)
+                rowImeis.push(unit.imei)
+                continue
+              }
+            }
             const hasRealImei = unit.imei.length === 15
             const imeiValue = hasRealImei
               ? unit.imei
@@ -1671,7 +1766,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
         const { data: cur } = await supabase.from("accessories").select("stock").eq("id", item.catalogId).single()
         const curStock = cur?.stock ?? 0
         origAccessoryStocks[item.catalogId] = curStock
-        // Do NOT update stock here — DB trigger (purchase_item_stock_increment) will add qty when purchase_items row is inserted
+        // Do NOT update stock here - DB trigger (purchase_item_stock_increment) will add qty when purchase_items row is inserted
         const { error } = await supabase.from("accessories").update({ purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId }).eq("id", item.catalogId)
         if (error) throw new Error(`Failed to update ${item.name}: ${error.message}`)
         updatedAccessoryIds.push(item.catalogId)
@@ -1679,8 +1774,136 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
       }
 
       const purchaseNotes = [notes || null, overpaidAmt > 0 ? `Advance credit: PKR ${overpaidAmt.toLocaleString()}` : null].filter(Boolean).join(" | ") || null
-      const created = await createPurchase({ poNumber, date: today, supplierId: selectedSupplierId, supplierName: selectedSupplier?.companyName ?? "", subtotal, shippingCost: shipping, tax, total: grandTotal, amountPaid, balanceDue, paymentMethod, paymentStatus, deliveryStatus: "Received", dueDate: dueDate || null, notes: purchaseNotes, items: [] } as any, purchaseItems)
-      purchaseId = (created as any).id
+
+      if (editMode && editPurchaseId) {
+        // â"€â"€ Edit mode: UPDATE existing purchase â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // The DB trigger (purchase_item_stock_increment) fires on every INSERT into
+        // purchase_items. Stock was already incremented when the purchase was first created.
+        // To avoid double-incrementing:
+        //   1. Load the old purchase_items to know their quantities.
+        //   2. Pre-decrement stock by (new qty) for each product so when the
+        //      trigger fires on re-insert it adds back exactly that amount - net zero change
+        //      from the current correct stock level.
+        //   3. Apply the real delta (new qty âˆ' old qty) manually so final stock = correct.
+        //
+        // Simplified: pre-set stock to (current âˆ' newQty + oldQty) before the DELETE/INSERT.
+        // After trigger fires on INSERT: stock = (current âˆ' newQty + oldQty) + newQty = current + oldQty.
+        // Wait, that still double-counts. Correct approach:
+        //   Before DELETE/INSERT: stock = stock âˆ' newQty   (pre-decrement)
+        //   Trigger on INSERT adds newQty â†' stock = (stock âˆ' newQty) + newQty = stock  âœ"
+        //   Then also apply delta (newQty âˆ' oldQty) separately â†' stock = stock + (newQty âˆ' oldQty)  âœ"
+        // But we already have the old qty from origItems. The cleanest single step:
+        //   Set stock to (currentStock âˆ' newQty) before INSERT, trigger restores it, then
+        //   apply delta (newQty âˆ' oldQty) after insert.
+        // That equals: currentStock âˆ' newQty + newQty + (newQty âˆ' oldQty) = currentStock + newQty âˆ' oldQty
+        // Which is WRONG. We want currentStock + (newQty âˆ' oldQty).
+        //
+        // Correct all-in-one: before INSERT set stock to (currentStock + oldQty âˆ' newQty âˆ' newQty)
+        // = currentStock + oldQty âˆ' 2*newQty. Trigger adds newQty â†' currentStock + oldQty âˆ' newQty. Wrong again.
+        //
+        // Simplest correct approach: apply delta AFTER the insert trigger fires.
+        //   Before DELETE: record currentStock and oldQty per product.
+        //   DELETE purchase_items (trigger doesn't fire on delete).
+        //   INSERT new purchase_items - trigger fires, increments by newQty.
+        //   After insert: set stock = currentStock + (newQty âˆ' oldQty).
+        //   = currentStock + newQty âˆ' oldQty (from trigger) â†' need to subtract newQty then add delta
+        //   After trigger: stock = currentStock + newQty (wrong, added newQty again).
+        //   Patch: stock = currentStock + newQty âˆ' newQty + (newQty âˆ' oldQty) = currentStock + newQty âˆ' oldQty âœ"
+        //   So after trigger: UPDATE stock = stock âˆ' newQty + (newQty âˆ' oldQty) = stock âˆ' oldQty
+        //   Which = (currentStock + newQty) âˆ' oldQty = currentStock + (newQty âˆ' oldQty) âœ"
+
+        await supabase.from("purchases").update({
+          supplier_id: selectedSupplierId,
+          supplier_name: selectedSupplier?.companyName ?? "",
+          subtotal, total: grandTotal, amount_paid: amountPaid,
+          balance_due: balanceDue, payment_status: paymentStatus,
+          notes: purchaseNotes,
+        }).eq("id", editPurchaseId)
+
+        // Snapshot old purchase_items before deleting
+        const { data: origItems } = await supabase
+          .from("purchase_items").select("product_id, product_type, quantity")
+          .eq("purchase_id", editPurchaseId)
+        const oldQtyMap: Record<string, number> = {}
+        for (const o of (origItems ?? [])) {
+          oldQtyMap[(o as any).product_id] = (o as any).quantity
+        }
+
+        // Snapshot current stock before trigger fires
+        const stockBefore: Record<string, number> = {}
+        for (const pi of purchaseItems) {
+          if (pi.productType === "Mobile") {
+            const { data } = await supabase.from("mobiles").select("stock").eq("id", pi.productId).single()
+            stockBefore[pi.productId] = (data as any)?.stock ?? 0
+          } else if (pi.productType === "Accessory") {
+            const { data } = await supabase.from("accessories").select("stock").eq("id", pi.productId).single()
+            stockBefore[pi.productId] = (data as any)?.stock ?? 0
+          }
+        }
+        // Also snapshot products that were removed entirely
+        for (const o of (origItems ?? [])) {
+          const pid = (o as any).product_id
+          if (!purchaseItems.find(pi => pi.productId === pid) && !stockBefore[pid]) {
+            const ptype = (o as any).product_type
+            if (ptype === "Mobile") {
+              const { data } = await supabase.from("mobiles").select("stock").eq("id", pid).single()
+              stockBefore[pid] = (data as any)?.stock ?? 0
+            } else if (ptype === "Accessory") {
+              const { data } = await supabase.from("accessories").select("stock").eq("id", pid).single()
+              stockBefore[pid] = (data as any)?.stock ?? 0
+            }
+          }
+        }
+
+        // Delete old items + re-insert (trigger will add newQty to stock for each)
+        await supabase.from("purchase_items").delete().eq("purchase_id", editPurchaseId)
+        await supabase.from("purchase_items").insert(
+          purchaseItems.map((pi: any) => ({
+            tenant_id: tenantId,
+            purchase_id: editPurchaseId,
+            product_id: pi.productId,
+            product_name: pi.productName,
+            product_type: pi.productType,
+            quantity: pi.quantity,
+            returned_qty: 0,
+            unit_cost: pi.unitCost,
+            total: pi.total,
+            imeis: pi.imeis?.length ? pi.imeis : null,
+          }))
+        )
+
+        // After trigger: stock[pid] = stockBefore[pid] + newQty
+        // We want:        stock[pid] = stockBefore[pid] + (newQty âˆ' oldQty)
+        // Correction:     stock[pid] âˆ' oldQty  (subtract old qty to undo the old stock it represented)
+        for (const pi of purchaseItems) {
+          const oldQty = oldQtyMap[pi.productId] ?? 0
+          const corrected = (stockBefore[pi.productId] ?? 0) + pi.quantity - oldQty
+          if (pi.productType === "Mobile") {
+            await supabase.from("mobiles").update({ stock: Math.max(0, corrected) }).eq("id", pi.productId)
+          } else if (pi.productType === "Accessory") {
+            await supabase.from("accessories").update({ stock: Math.max(0, corrected) }).eq("id", pi.productId)
+          }
+        }
+        // For products removed from the purchase entirely, subtract their old qty
+        for (const o of (origItems ?? [])) {
+          const pid = (o as any).product_id
+          if (purchaseItems.find(pi => pi.productId === pid)) continue
+          const oldQty = (o as any).quantity
+          const ptype = (o as any).product_type
+          const corrected = Math.max(0, (stockBefore[pid] ?? 0) - oldQty)
+          if (ptype === "Mobile") {
+            await supabase.from("mobiles").update({ stock: corrected }).eq("id", pid)
+          } else if (ptype === "Accessory") {
+            await supabase.from("accessories").update({ stock: corrected }).eq("id", pid)
+          }
+        }
+
+        purchaseId = editPurchaseId
+      } else {
+        // â"€â"€ Create mode: INSERT new purchase â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        const created = await createPurchase({ poNumber, date: today, supplierId: selectedSupplierId, supplierName: selectedSupplier?.companyName ?? "", subtotal, shippingCost: shipping, tax, total: grandTotal, amountPaid, balanceDue, paymentMethod, paymentStatus, deliveryStatus: "Received", dueDate: dueDate || null, notes: purchaseNotes, items: [] } as any, purchaseItems)
+        purchaseId = (created as any).id
+      }
 
       if (amountPaid > 0) {
         const payNotes = overpaidAmt > 0
@@ -1692,7 +1915,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
       const activeSplits = splits.filter(e => parseFloat(e.amount) > 0)
       for (const se of activeSplits) {
         const amt = parseFloat(se.amount)
-        await supabase.from("finance_transactions").insert({ tenant_id: tenantId, date: today, type: "purchase_payment", account_id: se.accountId, amount: amt, reference_type: "Purchase", reference_number: poNumber, description: `Purchase paid — ${poNumber}` })
+        await supabase.from("finance_transactions").insert({ tenant_id: tenantId, date: today, type: "purchase_payment", account_id: se.accountId, amount: amt, reference_type: "Purchase", reference_number: poNumber, description: `Purchase paid - ${poNumber}` })
         const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", se.accountId).single()
         if (accRow) {
           const prevBal = (accRow as any).current_balance
@@ -1703,11 +1926,14 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
         await supabase.from("purchases").update({ account_id: activeSplits[0].accountId }).eq("po_number", poNumber).eq("tenant_id", tenantId)
       }
 
-      toast.success(`${poNumber} recorded!`, { description: `${purchaseItems.length} item(s) · ${formatCurrency(grandTotal)} · ${paymentStatus}`, duration: 5000 })
+      const displayPo = editMode ? (editPoNumber ?? "Purchase") : poNumber
+      toast.success(editMode ? `${displayPo} updated!` : `${displayPo} recorded!`, { description: `${purchaseItems.length} item(s) - ${formatCurrency(grandTotal)} - ${paymentStatus}`, duration: 5000 })
       setMobileRows([])
       setAccessoryItems([])
       setSelectedSupplierId("")
       setSupplierSearch("")
+      setEditMode(false)
+      setEditPoNumber(null)
       setReviewOpen(false)
       onCreated?.()
       onClose()
@@ -1717,12 +1943,12 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
       for (const id of updatedMobileIds) await supabase.from("mobiles").update({ stock: origMobileStocks[id] ?? 0 }).eq("id", id)
       for (const id of updatedAccessoryIds) await supabase.from("accessories").update({ stock: origAccessoryStocks[id] ?? 0 }).eq("id", id)
       if (insertedImeis.length) await supabase.from("imei_records").delete().in("imei_number", insertedImeis)
-      toast.error(err instanceof Error ? err.message : "Purchase failed — rolled back")
+      toast.error(err instanceof Error ? err.message : "Purchase failed - rolled back")
       setSubmitting(false)
     }
   }
 
-  // ── Progress ──────────────────────────────────────────────────────────────
+  // â"€â"€ Progress â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const supplierDone = !!selectedSupplierId
   const phonesDone = mobileRows.length === 0 || mobileRows.every(r => r.brand && r.model && parseFloat(r.buyPrice) > 0)
   const totalItems = mobileRows.length + accessoryItems.length
@@ -1733,13 +1959,13 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
     <Sheet open={open} onOpenChange={v => { if (!v) onClose() }}>
       <SheetContent side="right" className="w-full max-w-none md:max-w-[680px] p-0 flex flex-col">
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
+        {/* â"€â"€ Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
         <div className="bg-gradient-to-r from-violet-600 to-indigo-700 px-4 pt-3 pb-3 shrink-0">
           <div className="flex items-center gap-2.5 pr-8">
             <ShoppingBag className="w-4 h-4 text-white/80 shrink-0" />
             <div className="flex-1 min-w-0">
-              <SheetTitle className="text-sm">New Purchase Order</SheetTitle>
-              <SheetDescription className="text-[11px]">Add phones & accessories from your supplier</SheetDescription>
+              <SheetTitle className="text-sm">{editMode ? `Edit Purchase${editPoNumber ? ` - ${editPoNumber}` : ""}` : "New Purchase Order"}</SheetTitle>
+              <SheetDescription className="text-[11px]">{editMode ? "Update purchase details - sold items are locked" : "Add phones & accessories from your supplier"}</SheetDescription>
             </div>
             {/* Live total in header */}
             {subtotalLive > 0 && (
@@ -1759,23 +1985,23 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
           </div>
         </div>
 
-        {/* ── Scrollable body ─────────────────────────────────────────────── */}
+        {/* â"€â"€ Scrollable body â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
         <div className="flex-1 overflow-y-auto">
           {dataLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-2">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600" />
-              <p className="text-xs text-slate-400">Loading…</p>
+              <p className="text-xs text-slate-400">Loading...</p>
             </div>
           ) : (
             <div className="p-3 space-y-2.5">
 
-              {/* ══ Step 1: Supplier ══════════════════════════════════════ */}
+              {/* â•â• Step 1: Supplier â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               <section>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Supplier <span className="text-red-400">*</span></p>
                 <div className="relative">
                   <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none z-10" />
                   <input
-                    placeholder="Search supplier…"
+                    placeholder="Search supplier..."
                     value={supplierSearch}
                     onChange={e => { setSupplierSearch(e.target.value); setDropOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
                     onFocus={() => setDropOpen(true)}
@@ -1853,7 +2079,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                         <div className="relative">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-semibold">Rs</span>
                           <input
-                            type="number"
+                            type="number" onWheel={e => e.currentTarget.blur()}
                             min="0"
                             value={quickSupplierBalance}
                             onChange={e => setQuickSupplierBalance(e.target.value)}
@@ -1866,7 +2092,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                     <div className="flex gap-1.5">
                       <button onClick={handleQuickAddSupplier} disabled={!quickSupplierName.trim() || savingSupplier}
                         className="flex-1 h-7 rounded-md bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors">
-                        {savingSupplier ? "Saving…" : "Save Supplier"}
+                        {savingSupplier ? "Saving..." : "Save Supplier"}
                       </button>
                       <button onClick={() => { setShowQuickSupplier(false); setQuickSupplierName(""); setQuickSupplierPhone(""); setQuickSupplierCity(""); setQuickSupplierBalance("") }}
                         className="h-7 px-3 rounded-md border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 transition-colors">
@@ -1877,7 +2103,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                 )}
               </section>
 
-              {/* ══ Step 2: Mobile Phones ══════════════════════════════════ */}
+              {/* â•â• Step 2: Mobile Phones â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               <section>
                 <div className="flex items-center gap-2 mb-1.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -1928,7 +2154,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                           }
                           setNewCategoryInput(""); setShowAddCategory(false)
                         }} className="px-1.5 py-0.5 bg-violet-600 text-white text-[10px] rounded hover:bg-violet-700">+</button>
-                        <button onClick={() => { setShowAddCategory(false); setNewCategoryInput("") }} className="text-slate-400 text-xs">✕</button>
+                        <button onClick={() => { setShowAddCategory(false); setNewCategoryInput("") }} className="text-slate-400 text-xs">âœ•</button>
                       </div>
                     )}
                   </div>
@@ -1940,13 +2166,13 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                     {extraIphoneCategories.map(c => (
                       <span key={`ip-${c}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-[9px] rounded-full">
                         iPhone: {c}
-                        <button onClick={() => setExtraIphoneCategories(p => p.filter(x => x !== c))} className="text-blue-300 hover:text-red-500">✕</button>
+                        <button onClick={() => setExtraIphoneCategories(p => p.filter(x => x !== c))} className="text-blue-300 hover:text-red-500">âœ•</button>
                       </span>
                     ))}
                     {extraAndroidCategories.map(c => (
                       <span key={`an-${c}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] rounded-full">
                         Android: {c}
-                        <button onClick={() => setExtraAndroidCategories(p => p.filter(x => x !== c))} className="text-emerald-300 hover:text-red-500">✕</button>
+                        <button onClick={() => setExtraAndroidCategories(p => p.filter(x => x !== c))} className="text-emerald-300 hover:text-red-500">âœ•</button>
                       </span>
                     ))}
                   </div>
@@ -1957,7 +2183,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                     className="w-full flex flex-col items-center justify-center gap-1.5 py-5 border border-dashed border-slate-200 text-slate-400 text-xs rounded-lg hover:border-violet-300 hover:text-violet-500 hover:bg-violet-50/30 transition-all">
                     <Smartphone className="w-5 h-5 opacity-40" />
                     <span className="font-medium">Add phones to this order</span>
-                    <span className="text-[10px] text-slate-300">Optional — skip if purchasing accessories only</span>
+                    <span className="text-[10px] text-slate-300">Optional - skip if purchasing accessories only</span>
                   </button>
                 ) : (
                   <>
@@ -2013,7 +2239,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                 )}
               </section>
 
-              {/* ══ Step 3: Accessories ════════════════════════════════════ */}
+              {/* â•â• Step 3: Accessories â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               <section className="border-t border-slate-100 pt-2.5">
                 <div className="flex items-center gap-2 mb-1.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -2032,7 +2258,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                   <div className="mb-2">
                     <div className="relative mb-1.5">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-                      <input placeholder="Search accessories…" value={accessorySearch} onChange={e => setAccessorySearch(e.target.value)}
+                      <input placeholder="Search accessories..." value={accessorySearch} onChange={e => setAccessorySearch(e.target.value)}
                         className="w-full h-7 rounded-md border border-slate-200 pl-7 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400" />
                     </div>
                     <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
@@ -2068,18 +2294,18 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
                           </button>
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
-                          <Field label="Buy ₨ *">
-                            <input type="number" min={0} placeholder="0" value={item.buyPrice}
+                          <Field label="Buy Rs *">
+                            <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={item.buyPrice}
                               onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, buyPrice: e.target.value } : a))}
                               className={cn("w-full h-7 rounded-md border px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400", !item.buyPrice ? "border-amber-300" : "border-slate-200")} />
                           </Field>
-                          <Field label="Sell ₨">
-                            <input type="number" min={0} placeholder="0" value={item.sellPrice}
+                          <Field label="Sell Rs">
+                            <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={item.sellPrice}
                               onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, sellPrice: e.target.value } : a))}
                               className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400" />
                           </Field>
                           <Field label="Qty">
-                            <input type="number" min={1} value={item.qty}
+                            <input type="number" onWheel={e => e.currentTarget.blur()} min={1} value={item.qty}
                               onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, qty: e.target.value } : a))}
                               className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400" />
                           </Field>
@@ -2108,7 +2334,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated }: {
           >
             <ShoppingCart className="w-4 h-4" />
             Review & Confirm
-            {totalItems > 0 && <span className="ml-1 text-xs opacity-80">· {totalItems} item{totalItems !== 1 ? "s" : ""} · {formatCurrency(subtotalLive)}</span>}
+            {totalItems > 0 && <span className="ml-1 text-xs opacity-80">- {totalItems} item{totalItems !== 1 ? "s" : ""} - {formatCurrency(subtotalLive)}</span>}
           </Button>
         </div>
 

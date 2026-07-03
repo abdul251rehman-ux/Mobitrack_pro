@@ -6,11 +6,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import Link from "next/link"
 
-import { getPurchases, updatePurchaseStatus } from "@/lib/api/purchases"
-import { getMobiles, getAccessories } from "@/lib/api/products"
-import { supabase } from "@/lib/supabase"
-import { getTenantId } from "@/lib/api/helpers"
-import type { Mobile, Accessory } from "@/data/types"
+import { getPurchases } from "@/lib/api/purchases"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { Purchase, PurchaseItem, Supplier } from "@/data/types"
 import { NewPurchaseSheet } from "@/app/purchases/new-purchase-sheet"
@@ -21,7 +17,6 @@ import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -79,7 +74,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
         const totalQty = items.reduce((sum, i) => sum + i.quantity, 0)
         return (
           <span className="text-xs text-slate-500">
-            {items.length}L · <span className="text-slate-400">{totalQty}u</span>
+            {items.length}L - <span className="text-slate-400">{totalQty}u</span>
           </span>
         )
       },
@@ -106,7 +101,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
         return balance > 0 ? (
           <span className="text-xs font-semibold text-red-600 whitespace-nowrap">{formatCurrency(balance)}</span>
         ) : (
-          <span className="text-xs text-slate-300">—</span>
+          <span className="text-xs text-slate-300">-</span>
         )
       },
     },
@@ -355,30 +350,17 @@ export default function PurchasesPage() {
   // ── Data state ──────────────────────────────────────────────────────────
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [mobiles, setMobiles] = useState<Mobile[]>([])
-  const [accessories, setAccessories] = useState<Accessory[]>([])
   const [loading, setLoading] = useState(true)
-
-  // Product names for dropdown
-  const productNames = useMemo(() => {
-    const mNames = mobiles.map(m => `${m.brand} ${m.model}`)
-    const aNames = accessories.map(a => `${a.name} — ${a.brand}`)
-    return [...new Set([...mNames, ...aNames])].sort()
-  }, [mobiles, accessories])
 
   const loadPurchases = useCallback(async () => {
     try {
       setLoading(true)
-      const [purchasesData, suppliersData, mobilesData, accessoriesData] = await Promise.all([
+      const [purchasesData, suppliersData] = await Promise.all([
         getPurchases(),
         getSuppliers(),
-        getMobiles(),
-        getAccessories(),
       ])
       setPurchases(purchasesData)
       setSuppliers(suppliersData)
-      setMobiles(mobilesData)
-      setAccessories(accessoriesData)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load purchases")
     } finally {
@@ -400,6 +382,8 @@ export default function PurchasesPage() {
   const [viewPurchase, setViewPurchase] = useState<Purchase | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
   const [newPurchaseOpen, setNewPurchaseOpen] = useState(false)
+  const [editSheetPurchaseId, setEditSheetPurchaseId] = useState<string | null>(null)
+  const [editSheetOpen, setEditSheetOpen] = useState(false)
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const todayStats = useMemo(() => {
@@ -476,162 +460,9 @@ export default function PurchasesPage() {
     setViewOpen(true)
   }
 
-  // ── Edit state ──────────────────────────────────────────────────────────
-  const [editPurchase, setEditPurchase] = useState<Purchase | null>(null)
-  const [editOpen, setEditOpen] = useState(false)
-  const [editPaymentStatus, setEditPaymentStatus] = useState("")
-  const [editDeliveryStatus, setEditDeliveryStatus] = useState("")
-  const [editAmountPaid, setEditAmountPaid] = useState("")
-  const [editNotes, setEditNotes] = useState("")
-  const [editItems, setEditItems] = useState<PurchaseItem[]>([])
-  const [editSaving, setEditSaving] = useState(false)
-
   function handleEdit(purchase: Purchase) {
-    setEditPurchase(purchase)
-    setEditPaymentStatus(purchase.paymentStatus)
-    setEditDeliveryStatus(purchase.deliveryStatus)
-    setEditAmountPaid(String(purchase.amountPaid))
-    setEditNotes(purchase.notes || "")
-    setEditItems(purchase.items.map(i => ({ ...i })))
-    setEditOpen(true)
-  }
-
-  function updateEditItem(idx: number, field: string, value: string | number) {
-    setEditItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item
-      const updated = { ...item, [field]: value }
-      if (field === "unitCost" || field === "quantity") {
-        updated.total = (Number(updated.unitCost) || 0) * (Number(updated.quantity) || 0)
-      }
-      return updated
-    }))
-  }
-
-  const editSubtotal = editItems.reduce((s, i) => s + (i.total || 0), 0)
-
-  async function handleEditSave() {
-    if (!editPurchase || editSaving) return
-    setEditSaving(true)
-    try {
-      const paid = parseFloat(editAmountPaid) || 0
-      const previousPaid = editPurchase.amountPaid || 0
-      const newTotal = editSubtotal + (editPurchase.shippingCost || 0) + (editPurchase.tax || 0)
-      const bal = Math.max(0, newTotal - paid)
-      const ps = paid <= 0 ? "Unpaid" : paid >= newTotal ? "Paid" : "Partial"
-
-      const tenantId = await getTenantId()
-
-      // Update purchase header
-      await updatePurchaseStatus(editPurchase.id, {
-        paymentStatus: ps as any,
-        deliveryStatus: editDeliveryStatus as any,
-        amountPaid: paid,
-        balanceDue: bal,
-        notes: editNotes,
-      })
-
-      // Update subtotal/total on purchase
-      await supabase.from("purchases").update({
-        subtotal: editSubtotal, total: newTotal, balance_due: bal,
-      }).eq("id", editPurchase.id)
-
-      // Delete old items and re-insert updated ones
-      await supabase.from("purchase_items").delete().eq("purchase_id", editPurchase.id)
-      if (tenantId) {
-        await supabase.from("purchase_items").insert(
-          editItems.map(item => ({
-            tenant_id: tenantId,
-            purchase_id: editPurchase.id,
-            product_id: item.productId || null,
-            product_name: item.productName,
-            product_type: item.productType,
-            quantity: item.quantity,
-            unit_cost: item.unitCost,
-            total: item.total,
-            imeis: item.imeis || null,
-          }))
-        )
-      }
-
-      // ── Sync mobiles.stock for quantity changes ────────────────────────
-      for (const newItem of editItems) {
-        if (newItem.productType !== "Mobile" || !newItem.productId) continue
-        const oldItem = editPurchase.items.find(i => i.productId === newItem.productId)
-        const oldQty = oldItem?.quantity ?? 0
-        const delta = newItem.quantity - oldQty
-        if (delta === 0) continue
-        const { data: mob } = await supabase.from("mobiles")
-          .select("stock").eq("id", newItem.productId).eq("tenant_id", tenantId).maybeSingle()
-        if (mob) {
-          await supabase.from("mobiles")
-            .update({ stock: Math.max(0, (mob as any).stock + delta) })
-            .eq("id", newItem.productId)
-        }
-        if (delta > 0) {
-          // Add placeholder imei_records for added quantity — real IMEIs unknown at edit time
-          const records = Array.from({ length: delta }, (_, i) => ({
-            tenant_id: tenantId,
-            product_id: newItem.productId,
-            imei_number: `EDIT-${editPurchase.id}-${newItem.productId}-${Date.now()}-${i}`,
-            device_status: "in_stock",
-            purchase_id: editPurchase.id,
-          }))
-          await supabase.from("imei_records").insert(records)
-        } else if (delta < 0) {
-          // Remove placeholder imei_records for reduced quantity (in_stock only — never remove sold units)
-          const { data: toRemove } = await supabase.from("imei_records")
-            .select("id").eq("product_id", newItem.productId).eq("purchase_id", editPurchase.id)
-            .eq("device_status", "in_stock").eq("tenant_id", tenantId).limit(Math.abs(delta))
-          if (toRemove && toRemove.length > 0) {
-            await supabase.from("imei_records").delete().in("id", toRemove.map((r: any) => r.id))
-          }
-        }
-      }
-
-      // ── Sync payment records with supplier ledger ──────────────────────
-      // If amount paid changed, update/create/delete the payment record
-      // so the supplier ledger stays in sync
-      if (paid !== previousPaid) {
-        // Remove any existing payment records for this purchase
-        await supabase
-          .from("payments")
-          .delete()
-          .eq("reference_number", editPurchase.poNumber)
-          .eq("entity_type", "Supplier")
-          .eq("type", "Paid")
-          .eq("tenant_id", tenantId)
-
-        // Create a new payment record if amount > 0
-        if (paid > 0) {
-          const supplierName = suppliers.find(s => s.id === editPurchase.supplierId)?.companyName || editPurchase.supplierName
-          const { error: payErr } = await supabase.from("payments").insert({
-            tenant_id: tenantId,
-            date: todayPKT(),
-            type: "Paid",
-            entity_type: "Supplier",
-            entity_id: editPurchase.supplierId,
-            entity_name: supplierName,
-            reference_type: "Purchase",
-            reference_number: editPurchase.poNumber,
-            amount: paid,
-            method: editPurchase.paymentMethod || "Cash",
-            status: "Completed",
-            notes: `Payment for ${editPurchase.poNumber}`,
-          })
-          if (payErr) throw new Error(`Failed to sync payment record: ${payErr.message}`)
-        }
-      }
-
-      setPurchases(prev => prev.map(p => p.id === editPurchase.id ? {
-        ...p, paymentStatus: ps as any, deliveryStatus: editDeliveryStatus as any,
-        amountPaid: paid, balanceDue: bal, notes: editNotes,
-        subtotal: editSubtotal, total: newTotal, items: editItems,
-      } : p))
-      toast.success("Purchase updated")
-      setEditOpen(false)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update")
-    } finally { setEditSaving(false) }
+    setEditSheetPurchaseId(purchase.id)
+    setEditSheetOpen(true)
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -654,11 +485,11 @@ export default function PurchasesPage() {
       {/* Date range */}
       <div className="flex items-center gap-1 shrink-0">
         <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[108px] text-xs" />
-        <span className="text-slate-400 text-xs">—</span>
+        <span className="text-slate-400 text-xs">-</span>
         <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[108px] text-xs" />
       </div>
 
-      {/* Supplier dropdown (secondary — exact match) */}
+      {/* Supplier dropdown (secondary - exact match) */}
       <Select value={supplierFilter} onValueChange={setSupplierFilter}>
         <SelectTrigger className="h-8 w-32 text-xs">
           <SelectValue placeholder="All Suppliers" />
@@ -743,7 +574,7 @@ export default function PurchasesPage() {
         itemCount:      String(p.items.length),
         totalFmt:       "Rs " + p.total.toLocaleString(),
         paidFmt:        "Rs " + p.amountPaid.toLocaleString(),
-        balanceFmt:     p.balanceDue > 0 ? "Rs " + p.balanceDue.toLocaleString() : "—",
+        balanceFmt:     p.balanceDue > 0 ? "Rs " + p.balanceDue.toLocaleString() : "-",
         paymentStatus:  p.paymentStatus,
         deliveryStatus: p.deliveryStatus,
       })),
@@ -798,7 +629,7 @@ export default function PurchasesPage() {
         ],
       }
     )
-    toast.success("Excel exported — " + filteredPurchases.length + " orders")
+    toast.success("Excel exported - " + filteredPurchases.length + " orders")
   }
 
   return (
@@ -825,7 +656,7 @@ export default function PurchasesPage() {
         }
       />
 
-      {/* ── Stat Cards — 4 in one row ────────────────────────────────────────── */}
+      {/* ── Stat Cards - 4 in one row ────────────────────────────────────────── */}
       <div className="grid grid-cols-4 gap-2.5 sm:gap-3 mb-4">
         <StatCard
           title="Today's Purchases"
@@ -837,14 +668,14 @@ export default function PurchasesPage() {
         <StatCard
           title="This Week"
           value={formatCurrency(weekStats.total)}
-          subtext={`${weekStats.count} order${weekStats.count !== 1 ? "s" : ""} · last 7 days`}
+          subtext={`${weekStats.count} order${weekStats.count !== 1 ? "s" : ""} - last 7 days`}
           icon={CalendarDays}
           iconBg="bg-blue-100"
         />
         <StatCard
           title="This Month"
           value={formatCurrency(monthStats.total)}
-          subtext={`${monthStats.count} order${monthStats.count !== 1 ? "s" : ""} · ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`}
+          subtext={`${monthStats.count} order${monthStats.count !== 1 ? "s" : ""} - ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`}
           icon={TrendingDown}
           iconBg="bg-blue-100"
         />
@@ -995,148 +826,17 @@ export default function PurchasesPage() {
         onClose={() => setViewOpen(false)}
       />
 
-      {/* ── Edit Dialog ──────────────────────────────────────────────────────── */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Edit Purchase</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              {editPurchase?.poNumber} · {editPurchase?.supplierName} · {editPurchase?.date}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 sm:space-y-5 py-1 sm:py-2">
-            {/* ── Order Details Section ─────────────────────────── */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Order Details</p>
-              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Payment Status</Label>
-                    <Select value={editPaymentStatus} onValueChange={setEditPaymentStatus}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Paid">Paid</SelectItem>
-                        <SelectItem value="Partial">Partial</SelectItem>
-                        <SelectItem value="Unpaid">Unpaid</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[10px] text-slate-400">Auto-updates when amount paid changes</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Delivery Status</Label>
-                    <Select value={editDeliveryStatus} onValueChange={setEditDeliveryStatus}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Received">Received</SelectItem>
-                        <SelectItem value="Pending">Pending</SelectItem>
-                        <SelectItem value="Partial">Partial</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Amount Paid (Rs)</Label>
-                    <Input type="number" min={0} value={editAmountPaid} onChange={e => {
-                      const val = e.target.value
-                      setEditAmountPaid(val)
-                      const paid = parseFloat(val) || 0
-                      const total = editSubtotal + (editPurchase?.shippingCost || 0) + (editPurchase?.tax || 0)
-                      setEditPaymentStatus(paid <= 0 ? "Unpaid" : paid >= total ? "Paid" : "Partial")
-                    }} className="h-9 text-sm" />
-                    {editPurchase && (
-                      <p className="text-[11px] text-slate-400">
-                        Balance: {formatCurrency(Math.max(0, editPurchase.total - (parseFloat(editAmountPaid) || 0)))}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Notes</Label>
-                    <Input value={editNotes} onChange={e => setEditNotes(e.target.value)} className="h-9 text-sm" placeholder="Optional..." />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Items Section ──────────────────────────────────── */}
-            {editItems.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Items ({editItems.length})</p>
-                <div className="space-y-3">
-                  {editItems.map((item, idx) => (
-                    <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:p-4 space-y-3">
-                      {/* Product & Type */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-500">Product Name</Label>
-                          <Select value={item.productName} onValueChange={v => updateEditItem(idx, "productName", v)}>
-                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select product" /></SelectTrigger>
-                            <SelectContent className="max-h-48">
-                              {item.productName && !productNames.includes(item.productName) && (
-                                <SelectItem value={item.productName}>{item.productName}</SelectItem>
-                              )}
-                              {productNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-500">Type</Label>
-                          <Select value={item.productType} onValueChange={v => updateEditItem(idx, "productType", v)}>
-                            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Mobile">Mobile</SelectItem>
-                              <SelectItem value="Accessory">Accessory</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      {/* Qty, Unit Cost, Total */}
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-500">Qty</Label>
-                          <Input type="number" min={1} value={item.quantity} onChange={e => updateEditItem(idx, "quantity", parseInt(e.target.value) || 1)} className="h-9 text-sm" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-500">Unit Cost</Label>
-                          <Input type="number" min={0} value={item.unitCost} onChange={e => updateEditItem(idx, "unitCost", parseFloat(e.target.value) || 0)} className="h-9 text-sm" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-500">Total</Label>
-                          <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-800">{formatCurrency(item.total)}</div>
-                        </div>
-                      </div>
-                      {/* IMEIs */}
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-500">IMEIs</Label>
-                        <Input value={item.imeis?.join(", ") || ""} onChange={e => updateEditItem(idx, "imeis", e.target.value.split(",").map(s => s.trim()).filter(Boolean) as any)} className="h-9 text-sm font-mono" placeholder="Comma-separated IMEIs..." />
-                      </div>
-                    </div>
-                  ))}
-                  {/* Subtotal */}
-                  <div className="flex justify-end items-center gap-2 pt-1 pr-1">
-                    <span className="text-xs text-slate-500">Subtotal:</span>
-                    <span className="text-sm font-bold text-slate-800">{formatCurrency(editSubtotal)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Action Buttons ────────────────────────────────── */}
-          <div className="flex gap-2 pt-2">
-            <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => setEditOpen(false)}>Cancel</Button>
-            <Button size="sm" className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700" onClick={handleEditSave} disabled={editSaving}>
-              {editSaving ? "Saving..." : "Save Changes"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <NewPurchaseSheet
         open={newPurchaseOpen}
         onClose={() => setNewPurchaseOpen(false)}
         onCreated={loadPurchases}
+      />
+
+      <NewPurchaseSheet
+        open={editSheetOpen}
+        onClose={() => { setEditSheetOpen(false); setEditSheetPurchaseId(null) }}
+        onCreated={loadPurchases}
+        editPurchaseId={editSheetPurchaseId}
       />
 
     </PageWrapper>

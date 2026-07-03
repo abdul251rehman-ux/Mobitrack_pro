@@ -95,7 +95,7 @@ export default function SaleDetailPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-3">
           <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-slate-500">Loading invoice…</p>
+          <p className="text-sm text-slate-500">Loading invoice...</p>
         </div>
       </div>
     )
@@ -206,7 +206,7 @@ export default function SaleDetailPage() {
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Items</p>
             </div>
             <p className="font-semibold text-slate-800 text-sm">
-              {sale.items.length} line{sale.items.length !== 1 ? "s" : ""} ·{" "}
+              {sale.items.length} line{sale.items.length !== 1 ? "s" : ""} -{" "}
               {sale.items.reduce((s, i) => s + i.quantity, 0)} unit{sale.items.reduce((s, i) => s + i.quantity, 0) !== 1 ? "s" : ""}
             </p>
           </div>
@@ -325,7 +325,7 @@ export default function SaleDetailPage() {
                   <td className="px-4 py-3.5 text-right font-semibold text-slate-700">{item.quantity}</td>
                   <td className="px-4 py-3.5 text-right text-slate-700">{formatCurrency(item.unitPrice)}</td>
                   <td className="px-4 py-3.5 text-right text-red-500">
-                    {item.discount > 0 ? `−${formatCurrency(item.discount)}` : <span className="text-slate-300">—</span>}
+                    {item.discount > 0 ? `−${formatCurrency(item.discount)}` : <span className="text-slate-300">-</span>}
                   </td>
                   <td className="px-5 py-3.5 text-right font-bold text-slate-900">{formatCurrency(item.lineTotal)}</td>
                 </tr>
