@@ -1,7 +1,12 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { getShops, createShop, updateShop, deleteShop, getReservedSales, getConsignments } from "@/lib/api/shops"
+import {
+  getShops, createShop, updateShop, deleteShop,
+  getReservedSales, getConsignments,
+  createConsignment, recordConsignmentSale, recordConsignmentReturn,
+  confirmReservedSale, cancelReservedSale,
+} from "@/lib/api/shops"
 import { Shop, ReservedSale, Consignment, ConsignmentTransaction } from "@/data/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -15,7 +20,7 @@ import {
   Layers, RotateCcw, Filter, Printer, Hash, Cpu,
 } from "lucide-react"
 
-// ─── Constants & Helpers ──────────────────────────────────────────────────────
+// â"€â"€â"€ Constants & Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const fmt = (n: number) => "Rs " + n.toLocaleString("en-PK")
 
@@ -61,7 +66,7 @@ function getInitials(name: string) {
   return name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
 }
 
-// ─── Shared Input / Select / Label ────────────────────────────────────────────
+// â"€â"€â"€ Shared Input / Select / Label â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const inputCls = "w-full bg-[#0d1829] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/20 transition-all"
 const selectCls = "bg-[#0d1829] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-slate-300 text-sm focus:outline-none focus:border-blue-500/60 transition-all"
@@ -73,7 +78,7 @@ function FieldErr({ msg }: { msg?: string }) {
   return msg ? <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-red-400 inline-block" />{msg}</p> : null
 }
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Stat Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function StatCard({
   label, value, sub, Icon, color, accent,
@@ -97,7 +102,7 @@ function StatCard({
   )
 }
 
-// ─── Shop Drawer ──────────────────────────────────────────────────────────────
+// â"€â"€â"€ Shop Drawer â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 type ShopForm = {
   name: string; ownerName: string; phone: string; email: string; address: string
@@ -246,7 +251,7 @@ function ShopDrawer({ open, onClose, editing, onSave }: {
           {/* Notes */}
           <div>
             <Label>Notes</Label>
-            <textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={3} placeholder="Any additional information…"
+            <textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={3} placeholder="Any additional information..."
               className={inputCls + " resize-none"} />
           </div>
         </div>
@@ -265,7 +270,7 @@ function ShopDrawer({ open, onClose, editing, onSave }: {
   )
 }
 
-// ─── IMEI Helpers ─────────────────────────────────────────────────────────────
+// â"€â"€â"€ IMEI Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function getOutstandingImeis(it: { imeis?: string[]; soldImeis?: string[]; returnedImeis?: string[] }): string[] {
   if (!it.imeis || it.imeis.length === 0) return []
@@ -273,7 +278,7 @@ function getOutstandingImeis(it: { imeis?: string[]; soldImeis?: string[]; retur
 }
 
 function printReceipt(con: Consignment) {
-  const html = `<!DOCTYPE html><html><head><title>Dispatch Receipt — ${con.dispatchNumber}</title>
+  const html = `<!DOCTYPE html><html><head><title>Dispatch Receipt - ${con.dispatchNumber}</title>
   <style>
     body{font-family:Arial,sans-serif;padding:32px;color:#111;max-width:720px;margin:0 auto}
     h1{font-size:20px;margin-bottom:4px}p{margin:4px 0;font-size:13px}
@@ -287,7 +292,7 @@ function printReceipt(con: Consignment) {
     .sig{border-top:1px solid #d1d5db;padding-top:8px;font-size:12px;color:#6b7280}
     @media print{body{padding:16px}}
   </style></head><body>
-  <h1>MobiTrack Pro — Dispatch Receipt</h1>
+  <h1>MobiTrack Pro - Dispatch Receipt</h1>
   <p style="color:#6b7280;font-size:12px;margin-bottom:16px">Official consignment document</p>
   <table style="width:auto;margin:0;border:none"><tbody>
     <tr><td style="border:none;padding:2px 16px 2px 0;font-size:12px;color:#6b7280;font-weight:600">DISPATCH #</td><td style="border:none;padding:2px 0;font-size:13px;font-weight:700">${con.dispatchNumber}</td></tr>
@@ -306,7 +311,7 @@ function printReceipt(con: Consignment) {
       const isSold = it.soldImeis?.includes(imei)
       const isRet = it.returnedImeis?.includes(imei)
       return `<div class="imei">${imei} <span class="badge ${isSold ? "sold" : isRet ? "returned" : "out"}">${isSold ? "Sold" : isRet ? "Returned" : "With Shop"}</span></div>`
-    }).join("") : "—"}</td>
+    }).join("") : "-"}</td>
   </tr>`).join("")}
   </tbody></table>
   <p style="margin-top:12px;font-weight:700;font-size:14px">Total Value: Rs ${con.totalValue.toLocaleString("en-PK")}</p>
@@ -320,7 +325,7 @@ function printReceipt(con: Consignment) {
   if (w) { w.document.write(html); w.document.close(); w.print() }
 }
 
-// ─── New Consignment Drawer ───────────────────────────────────────────────────
+// â"€â"€â"€ New Consignment Drawer â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 type ConFormItem = {
   id: string; productName: string; productType: "Mobile" | "Accessory"
@@ -437,15 +442,15 @@ function NewConsignmentDrawer({ open, onClose, shops, onSave }: {
               <div className="col-span-2">
                 <Label>Shop *</Label>
                 <select value={shopId} onChange={e => setShopId(e.target.value)} className={"w-full " + selectCls}>
-                  <option value="" style={{ background: "#0d1829" }}>Select a shop…</option>
+                  <option value="" style={{ background: "#0d1829" }}>Select a shop...</option>
                   {shops.filter(s => s.status === "Active").map(s => (
-                    <option key={s.id} value={s.id} style={{ background: "#0d1829" }}>{s.name} — {s.city}</option>
+                    <option key={s.id} value={s.id} style={{ background: "#0d1829" }}>{s.name} - {s.city}</option>
                   ))}
                 </select>
                 {selectedShop && (
                   <div className="mt-2 flex items-center gap-2 text-slate-400 text-xs">
                     <Phone className="w-3.5 h-3.5" />{selectedShop.phone}
-                    <span className="text-slate-700">·</span>
+                    <span className="text-slate-700">-</span>
                     <MapPin className="w-3.5 h-3.5" />{selectedShop.city}
                   </div>
                 )}
@@ -456,7 +461,7 @@ function NewConsignmentDrawer({ open, onClose, shops, onSave }: {
               </div>
               <div>
                 <Label>Notes</Label>
-                <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Agreement details…" className={inputCls} />
+                <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Agreement details..." className={inputCls} />
               </div>
             </div>
           </div>
@@ -489,7 +494,7 @@ function NewConsignmentDrawer({ open, onClose, shops, onSave }: {
                     <div>
                       <Label>Product Name *</Label>
                       <input value={it.productName} onChange={e => updateItem(it.id, "productName", e.target.value)}
-                        placeholder="e.g. iPhone 15 Pro — 256GB Black" className={inputCls} />
+                        placeholder="e.g. iPhone 15 Pro - 256GB Black" className={inputCls} />
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
@@ -502,19 +507,19 @@ function NewConsignmentDrawer({ open, onClose, shops, onSave }: {
                       {it.productType === "Accessory" && (
                         <div>
                           <Label>Qty</Label>
-                          <input type="number" min={1} value={it.quantity} onChange={e => updateItem(it.id, "quantity", Number(e.target.value))} className={inputCls} />
+                          <input type="number" onWheel={e => e.currentTarget.blur()} min={1} value={it.quantity} onChange={e => updateItem(it.id, "quantity", Number(e.target.value))} className={inputCls} />
                         </div>
                       )}
                       {it.productType === "Mobile" && (
                         <div>
                           <Label>Units</Label>
-                          <input type="number" min={1} max={20} value={it.imeis.length}
+                          <input type="number" onWheel={e => e.currentTarget.blur()} min={1} max={20} value={it.imeis.length}
                             onChange={e => updateItem(it.id, "quantity", Number(e.target.value))} className={inputCls} />
                         </div>
                       )}
                       <div>
                         <Label>Unit Price (Rs) *</Label>
-                        <input type="number" min={0} value={it.unitPrice || ""} onChange={e => updateItem(it.id, "unitPrice", Number(e.target.value))}
+                        <input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={it.unitPrice || ""} onChange={e => updateItem(it.id, "unitPrice", Number(e.target.value))}
                           placeholder="0" className={inputCls} />
                       </div>
                     </div>
@@ -592,7 +597,7 @@ function NewConsignmentDrawer({ open, onClose, shops, onSave }: {
   )
 }
 
-// ─── Record Sale Dialog ───────────────────────────────────────────────────────
+// â"€â"€â"€ Record Sale Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function RecordSaleDialog({ con, onClose, onSave }: {
   con: Consignment | null; onClose: () => void
@@ -662,7 +667,7 @@ function RecordSaleDialog({ con, onClose, onSave }: {
               </div>
               <div>
                 <h2 className="text-white font-bold text-lg">Record Sale</h2>
-                <p className="text-slate-500 text-xs mt-0.5">{con.shopName} · {con.dispatchNumber}</p>
+                <p className="text-slate-500 text-xs mt-0.5">{con.shopName} - {con.dispatchNumber}</p>
               </div>
             </div>
             <button onClick={onClose} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/8 transition-all"><X className="w-5 h-5" /></button>
@@ -690,12 +695,12 @@ function RecordSaleDialog({ con, onClose, onSave }: {
                       <div className={cn("px-4 py-3 flex items-center justify-between", isActive ? "bg-emerald-500/8" : "bg-white/3")}>
                         <div>
                           <p className="text-white text-sm font-semibold">{it.productName}</p>
-                          <p className="text-slate-500 text-xs mt-0.5">{remaining} with shop · {fmt(it.unitPrice)} each</p>
+                          <p className="text-slate-500 text-xs mt-0.5">{remaining} with shop - {fmt(it.unitPrice)} each</p>
                         </div>
                         {!hasImeis && (
                           <div className="flex items-center gap-2 shrink-0">
                             <button onClick={() => setQtys(p => ({ ...p, [it.productId]: Math.max(0, (p[it.productId] ?? 0) - 1) }))}
-                              className="w-8 h-8 rounded-xl bg-white/8 hover:bg-white/15 text-white flex items-center justify-center text-base font-bold">−</button>
+                              className="w-8 h-8 rounded-xl bg-white/8 hover:bg-white/15 text-white flex items-center justify-center text-base font-bold">âˆ'</button>
                             <span className={cn("w-8 text-center text-sm font-bold tabular-nums", qty > 0 ? "text-emerald-400" : "text-slate-500")}>{qty}</span>
                             <button onClick={() => setQtys(p => ({ ...p, [it.productId]: Math.min(remaining, (p[it.productId] ?? 0) + 1) }))}
                               className="w-8 h-8 rounded-xl bg-white/8 hover:bg-white/15 text-white flex items-center justify-center text-base font-bold">+</button>
@@ -763,7 +768,7 @@ function RecordSaleDialog({ con, onClose, onSave }: {
 
           <div>
             <Label>Notes (optional)</Label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Who came, what was discussed…" className={inputCls + " resize-none"} />
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Who came, what was discussed..." className={inputCls + " resize-none"} />
           </div>
           {error && <p className="text-red-400 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{error}</p>}
         </div>
@@ -779,7 +784,7 @@ function RecordSaleDialog({ con, onClose, onSave }: {
   )
 }
 
-// ─── Record Return Dialog ─────────────────────────────────────────────────────
+// â"€â"€â"€ Record Return Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function RecordReturnDialog({ con, onClose, onSave }: {
   con: Consignment | null; onClose: () => void
@@ -843,7 +848,7 @@ function RecordReturnDialog({ con, onClose, onSave }: {
               </div>
               <div>
                 <h2 className="text-white font-bold text-lg">Record Return</h2>
-                <p className="text-slate-500 text-xs mt-0.5">{con.shopName} · {con.dispatchNumber}</p>
+                <p className="text-slate-500 text-xs mt-0.5">{con.shopName} - {con.dispatchNumber}</p>
               </div>
             </div>
             <button onClick={onClose} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/8 transition-all"><X className="w-5 h-5" /></button>
@@ -875,14 +880,14 @@ function RecordReturnDialog({ con, onClose, onSave }: {
                       <div className={cn("px-4 py-3.5 flex items-center gap-3", isActive ? "bg-blue-500/8" : "bg-white/3")}>
                         <div className="flex-1 min-w-0">
                           <p className="text-white text-sm font-semibold truncate">{it.productName}</p>
-                          <p className="text-slate-500 text-xs mt-0.5">{remaining} outstanding · {fmt(it.unitPrice)} each</p>
+                          <p className="text-slate-500 text-xs mt-0.5">{remaining} outstanding - {fmt(it.unitPrice)} each</p>
                         </div>
                         {!hasImeis && (
                           <>
                             <button onClick={() => setQtys(p => ({ ...p, [it.productId]: remaining }))} className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold transition-colors shrink-0">All</button>
                             <div className="flex items-center gap-2 shrink-0">
                               <button onClick={() => setQtys(p => ({ ...p, [it.productId]: Math.max(0, (p[it.productId] ?? 0) - 1) }))}
-                                className="w-8 h-8 rounded-xl bg-white/8 hover:bg-white/15 text-white flex items-center justify-center text-base font-bold transition-all">−</button>
+                                className="w-8 h-8 rounded-xl bg-white/8 hover:bg-white/15 text-white flex items-center justify-center text-base font-bold transition-all">âˆ'</button>
                               <span className={cn("w-8 text-center text-sm font-bold tabular-nums", qty > 0 ? "text-blue-400" : "text-slate-500")}>{qty}</span>
                               <button onClick={() => setQtys(p => ({ ...p, [it.productId]: Math.min(remaining, (p[it.productId] ?? 0) + 1) }))}
                                 className="w-8 h-8 rounded-xl bg-white/8 hover:bg-white/15 text-white flex items-center justify-center text-base font-bold transition-all">+</button>
@@ -935,7 +940,7 @@ function RecordReturnDialog({ con, onClose, onSave }: {
 
           <div>
             <Label>Notes (optional)</Label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Reason for return, condition…"
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Reason for return, condition..."
               className={inputCls + " resize-none"} />
           </div>
           {error && <p className="text-red-400 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{error}</p>}
@@ -952,7 +957,7 @@ function RecordReturnDialog({ con, onClose, onSave }: {
   )
 }
 
-// ─── Confirm Sale Dialog ──────────────────────────────────────────────────────
+// â"€â"€â"€ Confirm Sale Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function ConfirmSaleDialog({ reservation: res, onClose, onConfirm }: {
   reservation: ReservedSale | null; onClose: () => void
@@ -988,18 +993,18 @@ function ConfirmSaleDialog({ reservation: res, onClose, onConfirm }: {
                 <div key={i} className="flex justify-between items-start gap-3">
                   <div className="min-w-0">
                     <p className="text-white text-sm font-semibold truncate">{item.productName}</p>
-                    <p className="text-slate-500 text-xs">{item.quantity} × {fmt(item.unitPrice)}</p>
+                    <p className="text-slate-500 text-xs">{item.quantity} Ã- {fmt(item.unitPrice)}</p>
                   </div>
                   <p className="text-white text-sm font-bold shrink-0">{fmt(item.lineTotal)}</p>
                 </div>
               ))}
               <div className="pt-2.5 mt-1 border-t border-white/[0.06] space-y-1.5">
                 {res.discount > 0 && (
-                  <div className="flex justify-between text-sm"><span className="text-slate-500">Discount</span><span className="text-red-400">−{fmt(res.discount)}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-slate-500">Discount</span><span className="text-red-400">âˆ'{fmt(res.discount)}</span></div>
                 )}
                 <div className="flex justify-between"><span className="text-slate-300 font-semibold text-sm">Total</span><span className="text-white font-bold">{fmt(res.total)}</span></div>
                 {res.advancePaid > 0 && (
-                  <div className="flex justify-between text-sm"><span className="text-slate-500">Advance</span><span className="text-emerald-400">−{fmt(res.advancePaid)}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-slate-500">Advance</span><span className="text-emerald-400">âˆ'{fmt(res.advancePaid)}</span></div>
                 )}
               </div>
             </div>
@@ -1038,7 +1043,7 @@ function ConfirmSaleDialog({ reservation: res, onClose, onConfirm }: {
   )
 }
 
-// ─── Delete / Cancel Dialogs ──────────────────────────────────────────────────
+// â"€â"€â"€ Delete / Cancel Dialogs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function MiniDialog({ icon: Icon, iconBg, title, body, cancelLabel, confirmLabel, confirmBg, onClose, onConfirm }: {
   icon: React.ElementType; iconBg: string; title: string; body: React.ReactNode
@@ -1064,7 +1069,7 @@ function MiniDialog({ icon: Icon, iconBg, title, body, cancelLabel, confirmLabel
   )
 }
 
-// ─── Consignment Card ─────────────────────────────────────────────────────────
+// â"€â"€â"€ Consignment Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function ConsignmentCard({ con, onRecordSale, onRecordReturn, onPrint }: {
   con: Consignment; onRecordSale: (c: Consignment) => void; onRecordReturn: (c: Consignment) => void; onPrint: (c: Consignment) => void
@@ -1248,7 +1253,7 @@ function ConsignmentCard({ con, onRecordSale, onRecordReturn, onPrint }: {
                     <span className="text-slate-400 text-xs">{format(parseISO(txn.date), "dd MMM yyyy")}</span>
                   </div>
                   {txn.items.map((it, i) => (
-                    <p key={i} className="text-slate-500 text-xs mt-0.5">{it.productName} ×{it.quantity}{txn.type === "Sale" && <span className="text-slate-400"> — {fmt(it.quantity * it.unitPrice)}</span>}</p>
+                    <p key={i} className="text-slate-500 text-xs mt-0.5">{it.productName} Ã-{it.quantity}{txn.type === "Sale" && <span className="text-slate-400"> - {fmt(it.quantity * it.unitPrice)}</span>}</p>
                   ))}
                   {txn.notes && <p className="text-slate-400 text-xs italic mt-1">{txn.notes}</p>}
                   {txn.type === "Sale" && txn.paymentMethod && (
@@ -1268,7 +1273,7 @@ function ConsignmentCard({ con, onRecordSale, onRecordReturn, onPrint }: {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function ShopsPage() {
   const [activeTab, setActiveTab] = useState<"shops" | "reservations" | "consignments">("shops")
@@ -1390,36 +1395,57 @@ export default function ShopsPage() {
       toast.error(err instanceof Error ? err.message : "Failed to delete shop")
     }
   }
-  const handleConfirmSale = (id: string, pm: string, notes: string) =>
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Confirmed" as const, paymentMethod: pm, notes: notes || r.notes } : r))
-  const handleCancelReservation = (id: string) =>
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Cancelled" as const } : r))
+  const handleConfirmSale = async (id: string, pm: string, notes: string) => {
+    try {
+      await confirmReservedSale(id, pm, notes)
+      setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Confirmed" as const, paymentMethod: pm, notes: notes || r.notes } : r))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm reservation")
+    }
+  }
 
-  const handleRecordSale = (conId: string, txn: ConsignmentTransaction) =>
-    setConsignmentList(prev => prev.map(c => {
-      if (c.id !== conId) return c
-      const updatedItems = c.items.map(it => {
-        const t = txn.items.find(x => x.productId === it.productId)
-        if (!t) return it
-        return { ...it, sold: it.sold + t.quantity, ...(t.imeis ? { soldImeis: [...(it.soldImeis ?? []), ...t.imeis] } : {}) }
-      })
-      return { ...c, items: updatedItems, amountCollected: c.amountCollected + txn.amount, status: recomputeStatus(updatedItems), transactions: [...c.transactions, txn] }
-    }))
+  const handleCancelReservation = async (id: string) => {
+    try {
+      await cancelReservedSale(id)
+      setReservations(prev => prev.map(r => r.id === id ? { ...r, status: "Cancelled" as const } : r))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel reservation")
+    }
+  }
 
-  const handleRecordReturn = (conId: string, txn: ConsignmentTransaction) =>
-    setConsignmentList(prev => prev.map(c => {
-      if (c.id !== conId) return c
-      const updatedItems = c.items.map(it => {
-        const t = txn.items.find(x => x.productId === it.productId)
-        if (!t) return it
-        return { ...it, returned: it.returned + t.quantity, ...(t.imeis ? { returnedImeis: [...(it.returnedImeis ?? []), ...t.imeis] } : {}) }
-      })
-      return { ...c, items: updatedItems, status: recomputeStatus(updatedItems), transactions: [...c.transactions, txn] }
-    }))
+  const handleRecordSale = async (conId: string, txn: ConsignmentTransaction) => {
+    try {
+      const updated = await recordConsignmentSale(conId, txn)
+      setConsignmentList(prev => prev.map(c => c.id === conId ? updated : c))
+      toast.success("Sale recorded")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record sale")
+    }
+  }
 
-  const handleAddConsignment = (con: Consignment) => setConsignmentList(prev => [con, ...prev])
+  const handleRecordReturn = async (conId: string, txn: ConsignmentTransaction) => {
+    try {
+      const updated = await recordConsignmentReturn(conId, txn)
+      setConsignmentList(prev => prev.map(c => c.id === conId ? updated : c))
+      toast.success("Return recorded - stock restored")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record return")
+    }
+  }
 
-  // ── Tab config ──
+  const handleAddConsignment = async (con: Consignment) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id: _id, transactions: _txns, dispatchNumber: _dn, ...rest } = con
+      const saved = await createConsignment(rest as Omit<Consignment, "id" | "transactions">)
+      setConsignmentList(prev => [saved, ...prev])
+      toast.success(`Dispatch ${saved.dispatchNumber} created`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create dispatch")
+    }
+  }
+
+  // â"€â"€ Tab config â"€â"€
   const tabs = [
     { id: "shops" as const, label: "Shops", Icon: Store, badge: null },
     { id: "reservations" as const, label: "Reservations", Icon: Clock, badge: resStats.active > 0 ? resStats.active : null },
@@ -1436,7 +1462,7 @@ export default function ShopsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* ── Hero header ── */}
+      {/* â"€â"€ Hero header â"€â"€ */}
       <div className="relative overflow-hidden bg-white border-b border-slate-200">
         <div className="relative px-6 pt-8 pb-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
@@ -1457,7 +1483,7 @@ export default function ShopsPage() {
             )}
           </div>
 
-          {/* ── Mini stat strip ── */}
+          {/* â"€â"€ Mini stat strip â"€â"€ */}
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {activeTab === "shops" && [
               { label: "Total Shops", value: shopStats.total, Icon: Store, color: "text-blue-400", glow: "#3b82f6", border: "border-blue-500/15" },
@@ -1503,7 +1529,7 @@ export default function ShopsPage() {
             ))}
           </div>
 
-          {/* ── Tab bar ── */}
+          {/* â"€â"€ Tab bar â"€â"€ */}
           <div className="mt-5 flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
             {tabs.map(({ id, label, Icon, badge }) => (
               <button key={id} onClick={() => setActiveTab(id)}
@@ -1523,17 +1549,17 @@ export default function ShopsPage() {
         </div>
       </div>
 
-      {/* ── Content area ── */}
+      {/* â"€â"€ Content area â"€â"€ */}
       <div className="px-4 sm:px-6 py-6 space-y-5">
 
-        {/* ════ TAB: SHOPS ════ */}
+        {/* â•â•â•â• TAB: SHOPS â•â•â•â• */}
         {activeTab === "shops" && (
           <>
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                <input value={shopSearch} onChange={e => setShopSearch(e.target.value)} placeholder="Search shops, owners, city…"
+                <input value={shopSearch} onChange={e => setShopSearch(e.target.value)} placeholder="Search shops, owners, city..."
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all"
                   style={{ background: "#ffffff", border: "1px solid #e2e8f0" }} />
               </div>
@@ -1620,7 +1646,7 @@ export default function ShopsPage() {
                           <td className="px-5 py-4">
                             {shop.outstandingBalance > 0
                               ? <span className="text-amber-600 text-sm font-bold">{fmt(shop.outstandingBalance)}</span>
-                              : <span className="text-slate-300 text-sm">—</span>}
+                              : <span className="text-slate-300 text-sm">-</span>}
                           </td>
                           {/* Status */}
                           <td className="px-5 py-4">
@@ -1670,14 +1696,14 @@ export default function ShopsPage() {
           </>
         )}
 
-        {/* ════ TAB: RESERVATIONS ════ */}
+        {/* â•â•â•â• TAB: RESERVATIONS â•â•â•â• */}
         {activeTab === "reservations" && (
           <>
             {/* Alerts */}
             {resStats.expiring > 0 && (
               <div className="flex items-center gap-3 rounded-2xl px-4 py-3.5 border border-amber-500/25 bg-amber-500/5">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <p className="text-amber-300 text-sm"><span className="font-bold">{resStats.expiring}</span> reservation{resStats.expiring > 1 ? "s" : ""} past due date — action required</p>
+                <p className="text-amber-300 text-sm"><span className="font-bold">{resStats.expiring}</span> reservation{resStats.expiring > 1 ? "s" : ""} past due date - action required</p>
               </div>
             )}
             <div className="flex items-center gap-2.5 rounded-2xl px-4 py-3 border border-blue-200 bg-blue-50">
@@ -1689,7 +1715,7 @@ export default function ShopsPage() {
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                <input value={resSearch} onChange={e => setResSearch(e.target.value)} placeholder="Search shop or reservation number…"
+                <input value={resSearch} onChange={e => setResSearch(e.target.value)} placeholder="Search shop or reservation number..."
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500/30 transition-all"
                   style={{ background: "#ffffff", border: "1px solid #e2e8f0" }} />
               </div>
@@ -1750,7 +1776,7 @@ export default function ShopsPage() {
                                 <div key={i} className="flex items-center gap-2.5">
                                   <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
                                   <span className="text-slate-700 text-xs font-medium">{item.productName}</span>
-                                  <span className="text-slate-400 text-xs">×{item.quantity}</span>
+                                  <span className="text-slate-400 text-xs">Ã-{item.quantity}</span>
                                   <span className="text-slate-500 text-xs">{fmt(item.lineTotal)}</span>
                                 </div>
                               ))}
@@ -1779,7 +1805,7 @@ export default function ShopsPage() {
                         {res.status === "Confirmed" && (
                           <div className="flex items-center gap-2 mt-4 pt-3.5" style={{ borderTop: "1px solid #d1fae5" }}>
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            <p className="text-emerald-600 text-xs font-semibold">Confirmed — counted in sales reports</p>
+                            <p className="text-emerald-600 text-xs font-semibold">Confirmed - counted in sales reports</p>
                           </div>
                         )}
                       </div>
@@ -1791,7 +1817,7 @@ export default function ShopsPage() {
           </>
         )}
 
-        {/* ════ TAB: CONSIGNMENTS ════ */}
+        {/* â•â•â•â• TAB: CONSIGNMENTS â•â•â•â• */}
         {activeTab === "consignments" && (
           <>
             <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 border border-blue-200 bg-blue-50">
@@ -1805,7 +1831,7 @@ export default function ShopsPage() {
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                <input value={conSearch} onChange={e => setConSearch(e.target.value)} placeholder="Search shop or dispatch number…"
+                <input value={conSearch} onChange={e => setConSearch(e.target.value)} placeholder="Search shop or dispatch number..."
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500/30 transition-all"
                   style={{ background: "#ffffff", border: "1px solid #e2e8f0" }} />
               </div>
@@ -1847,7 +1873,7 @@ export default function ShopsPage() {
         )}
       </div>
 
-      {/* ── Drawers & Dialogs ── */}
+      {/* â"€â"€ Drawers & Dialogs â"€â"€ */}
       <ShopDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editingShop} onSave={handleSaveShop} />
 
       {deleteTarget && (

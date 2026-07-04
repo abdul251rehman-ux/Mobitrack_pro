@@ -3,7 +3,7 @@
 export type ConditionGrade = "A+" | "A" | "B+" | "B" | "C" | "D"
 export type ScreenCondition = "perfect" | "minor_scratches" | "cracked" | "replaced"
 export type BodyCondition = "perfect" | "minor_wear" | "dents" | "heavy_damage"
-export type SourceType = "customer_trade_in" | "purchased" | "refurbished_in_house" | "auction"
+export type SourceType = "customer_trade_in" | "walk_in" | "purchased" | "refurbished_in_house" | "auction"
 export type PhoneStatus = "in_stock" | "under_repair" | "sold" | "listed_online"
 export type UsedPTAStatus = "approved" | "pending" | "blocked"
 
@@ -22,7 +22,13 @@ export interface UsedPhone {
   functional_issues: string[]
   accessories_included: string[]
   source_type: SourceType
+  source_customer_id?: string
   source_customer_name?: string
+  source_phone?: string
+  source_cnic?: string
+  source_address?: string
+  supplier_id?: string
+  supplier_name?: string
   purchase_price: number
   refurbishment_cost: number
   selling_price: number

@@ -1,13 +1,15 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import {
   Plus, Search, Grid3X3, List, Smartphone, Copy, Eye, Pencil, Trash2, Filter,
-  TrendingUp, Package, DollarSign, AlertTriangle,
+  TrendingUp, Package, DollarSign, AlertTriangle, ShoppingBag,
   Tag, Hash, Palette, HardDrive, Cpu, Truck, FileText, ArrowDownLeft, ArrowUpRight, Layers,
   ImageIcon, X as XIcon, Upload,
 } from "lucide-react"
+import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -16,6 +18,7 @@ import { format } from "date-fns"
 import { ColumnDef } from "@tanstack/react-table"
 
 import { getMobiles, createMobile, updateMobile, deleteMobile } from "@/lib/api/products"
+import { NewPurchaseSheet } from "@/app/purchases/new-purchase-sheet"
 import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
 import { getSuppliers } from "@/lib/api/suppliers"
@@ -40,10 +43,10 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { cn, formatCurrency, calculateMargin, getStockStatus } from "@/lib/utils"
-// All dropdowns are now dynamic — fetched from database
+import { cn, formatCurrency, calculateMargin } from "@/lib/utils"
+// All dropdowns are now dynamic - fetched from database
 
-// ─── Zod Schema ─────────────────────────────────────────────────────────────
+// â"€â"€â"€ Zod Schema â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const mobileSchema = z.object({
   brand: z.string().min(1, "Brand is required"),
@@ -67,13 +70,18 @@ type MobileFormInput = z.input<typeof mobileSchema>
 // Output type = what the validated/transformed schema produces (numbers for numeric fields)
 type MobileFormOutput = z.output<typeof mobileSchema>
 
+// For mobiles, only In Stock / Out of Stock - no Low Stock concept
+function getMobileStockStatus(stock: number): "In Stock" | "Out of Stock" {
+  return stock > 0 ? "In Stock" : "Out of Stock"
+}
+
 const stockDotColor: Record<string, string> = {
   "In Stock": "bg-emerald-500",
   "Low Stock": "bg-amber-500",
   "Out of Stock": "bg-red-500",
 }
 
-// ─── Stock badge config ───────────────────────────────────────────────────────
+// â"€â"€â"€ Stock badge config â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const stockBadgeStyle: Record<string, string> = {
   "In Stock":     "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -86,7 +94,7 @@ const stockDotStyle: Record<string, string> = {
   "Out of Stock": "bg-red-500",
 }
 
-// ─── Mobile Card ─────────────────────────────────────────────────────────────
+// â"€â"€â"€ Mobile Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function MobileCard({
   mobile,
@@ -100,7 +108,7 @@ function MobileCard({
   onDelete: (m: Mobile) => void
 }) {
   const margin = calculateMargin(mobile.purchasePrice, mobile.sellingPrice)
-  const stockStatus = getStockStatus(mobile.stock)
+  const stockStatus = getMobileStockStatus(mobile.stock)
 
   function handleCopyImei() {
     if (!mobile.imei) {
@@ -114,7 +122,7 @@ function MobileCard({
   return (
     <Card className="relative overflow-hidden border border-slate-200/80 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/8 transition-all duration-200 hover:-translate-y-0.5 bg-white group rounded-xl">
 
-      {/* ── Image / Hero section ───────────────────────────────────────── */}
+      {/* â"€â"€ Image / Hero section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="relative h-28 overflow-hidden bg-linear-to-br from-slate-50 via-blue-50/40 to-slate-100">
         {mobile.image ? (
           <Image
@@ -132,7 +140,7 @@ function MobileCard({
           </div>
         )}
 
-        {/* Brand + OS badges — top left */}
+        {/* Brand + OS badges - top left */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
           <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold bg-white/90 backdrop-blur-sm text-slate-700 shadow-sm border border-slate-200/60">
             {mobile.brand}
@@ -145,7 +153,7 @@ function MobileCard({
           </span>
         </div>
 
-        {/* Margin badge — top right (only shown after purchase sets price) */}
+        {/* Margin badge - top right (only shown after purchase sets price) */}
         {mobile.purchasePrice > 0 && mobile.sellingPrice > 0 && (
           <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
             <TrendingUp className="w-2.5 h-2.5" />
@@ -154,7 +162,7 @@ function MobileCard({
         )}
       </div>
 
-      {/* ── Content ────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Content â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="p-3 space-y-2">
 
         {/* Model name + specs */}
@@ -182,7 +190,7 @@ function MobileCard({
           </div>
         ) : (
           <div className="rounded-lg bg-amber-50 border border-amber-100 px-2.5 py-2 text-center">
-            <p className="text-[10px] text-amber-600 font-medium">No price set — purchase to stock</p>
+            <p className="text-[10px] text-amber-600 font-medium">No price set - purchase to stock</p>
           </div>
         )}
 
@@ -238,7 +246,7 @@ function MobileCard({
   )
 }
 
-// ─── View Dialog ─────────────────────────────────────────────────────────────
+// â"€â"€â"€ View Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function ViewDialog({
   mobile,
@@ -256,7 +264,7 @@ function ViewDialog({
   const m = mobile
   const supplier = suppliers.find(s => s.id === m.supplierId)
   const margin = calculateMargin(m.purchasePrice, m.sellingPrice)
-  const stockStatus = getStockStatus(m.stock)
+  const stockStatus = getMobileStockStatus(m.stock)
   function handleCopyImei() {
     if (!m.imei) {
       toast.info("No IMEI recorded for this stock batch")
@@ -281,7 +289,7 @@ function ViewDialog({
           <div>
             <p className="text-white/70 text-sm">{m.brand}</p>
             <h3 className="text-xl font-bold">{m.model}</h3>
-            <p className="text-white/70 text-sm mt-0.5">{m.color} · {m.storage} / {m.ram}</p>
+            <p className="text-white/70 text-sm mt-0.5">{m.color} - {m.storage} / {m.ram}</p>
           </div>
         </div>
 
@@ -342,7 +350,7 @@ function ViewDialog({
             <div className="col-span-2 rounded-lg bg-slate-50 p-3">
               <p className="text-slate-400 text-xs mb-1">Supplier</p>
               <p className="font-medium text-slate-700">{supplier.companyName}</p>
-              <p className="text-xs text-slate-400">{supplier.contactPerson} · {supplier.phone}</p>
+              <p className="text-xs text-slate-400">{supplier.contactPerson} - {supplier.phone}</p>
             </div>
           )}
           {m.notes && (
@@ -361,7 +369,7 @@ function ViewDialog({
   )
 }
 
-// ─── Add/Edit Drawer ─────────────────────────────────────────────────────────
+// â"€â"€â"€ Add/Edit Drawer â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 
 interface IPhoneFormState {
@@ -521,7 +529,7 @@ function MobileFormDrawer({
         },
   })
 
-  // price/stock set via Purchase page — no live margin in catalog form
+  // price/stock set via Purchase page - no live margin in catalog form
 
   function handleClose() {
     reset()
@@ -533,7 +541,7 @@ function MobileFormDrawer({
     onOpenChange(false)
   }
 
-  // ── Batch staging ────────────────────────────────────────────────────────
+  // â"€â"€ Batch staging â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   type StagedPhone = { data: MobileFormOutput; imageUrl: string; deviceType: "android" | "iphone" }
   const [stagedPhones, setStagedPhones] = useState<StagedPhone[]>([])
 
@@ -544,7 +552,7 @@ function MobileFormDrawer({
     reset({ brand: keepBrand, model: "", color: "", storage: "", ram: "", condition: "", category: "", notes: "" })
     setIp({ ...defaultIPhoneForm })
     setImageUrl("")
-    toast.success(`${data.brand} ${data.model} staged — add another or save all`)
+    toast.success(`${data.brand} ${data.model} staged - add another or save all`)
   }
 
   async function saveAll(current?: StagedPhone) {
@@ -655,7 +663,7 @@ function MobileFormDrawer({
             <Upload className="w-5 h-5 text-slate-400 group-hover:text-pink-500" />
           </div>
           <p className="text-sm font-medium text-slate-500 group-hover:text-pink-600">Click to upload image</p>
-          <p className="text-xs text-slate-400">PNG, JPG, WEBP — up to 5 MB</p>
+          <p className="text-xs text-slate-400">PNG, JPG, WEBP - up to 5 MB</p>
         </button>
       )}
     </div>
@@ -680,7 +688,7 @@ function MobileFormDrawer({
           open ? "translate-x-0" : "translate-x-full"
         )}
       >
-        {/* ── Header ── */}
+        {/* â"€â"€ Header â"€â"€ */}
         <div className={cn(
           "shrink-0 px-6 py-4",
           isEditing ? "bg-gradient-to-r from-blue-500 to-indigo-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"
@@ -688,13 +696,11 @@ function MobileFormDrawer({
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                {isEditing ? <Pencil className="w-5 h-5 text-white" /> : <Plus className="w-5 h-5 text-white" />}
+                <Pencil className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white leading-tight">
-                  {isEditing ? "Edit Mobile Phone" : "Add New Mobile Phone"}
-                </h2>
-                <p className="text-xs text-white/70 mt-0.5">Fill in the details to add a new device.</p>
+                <h2 className="text-base font-bold text-white leading-tight">Edit Mobile Phone</h2>
+                <p className="text-xs text-white/70 mt-0.5">Update details for this catalog entry.</p>
               </div>
             </div>
             <button type="button" onClick={handleClose}
@@ -703,7 +709,7 @@ function MobileFormDrawer({
             </button>
           </div>
 
-          {/* ── Android / iPhone tabs ── */}
+          {/* â"€â"€ Android / iPhone tabs â"€â"€ */}
           <div className="flex gap-2 bg-white/10 rounded-xl p-1">
             <button type="button" onClick={() => setDeviceType("android")}
               className={cn(
@@ -725,10 +731,10 @@ function MobileFormDrawer({
           </div>
         </div>
 
-        {/* ── Scrollable body ── */}
+        {/* â"€â"€ Scrollable body â"€â"€ */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* ══ ANDROID FORM ══ */}
+          {/* â•â• ANDROID FORM â•â• */}
           {deviceType === "android" && (
             <form id="android-form" onSubmit={handleAndroidSubmit(onAndroidValid)} className="p-3 sm:p-5 space-y-4 overflow-x-hidden">
 
@@ -925,7 +931,7 @@ function MobileFormDrawer({
                                   <XIcon className="w-4 h-4" />
                                 </button>
                               </div>
-                              <p className="text-[10px] text-slate-400">Press Enter or click Save — model will be added to your list</p>
+                              <p className="text-[10px] text-slate-400">Press Enter or click Save - model will be added to your list</p>
                             </div>
                           )}
                         </>
@@ -1250,7 +1256,7 @@ function MobileFormDrawer({
             </form>
           )}
 
-          {/* ══ IPHONE FORM ══ */}
+          {/* â•â• IPHONE FORM â•â• */}
           {deviceType === "iphone" && (
             <div className="p-5 space-y-4">
 
@@ -1547,7 +1553,7 @@ function MobileFormDrawer({
                     <div className="flex items-center gap-3">
                       <input type="range" min={1} max={100} value={ip.batteryHealth || "100"}
                         onChange={e => upIp("batteryHealth", e.target.value)} className="flex-1 accent-blue-600" />
-                      <Input type="number" min={1} max={100} value={ip.batteryHealth}
+                      <Input type="number" onWheel={e => e.currentTarget.blur()} min={1} max={100} value={ip.batteryHealth}
                         onChange={e => upIp("batteryHealth", e.target.value)} className="w-20 h-8 text-sm text-center font-bold" />
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -1568,7 +1574,7 @@ function MobileFormDrawer({
                       placeholder="15-digit IMEI number" maxLength={15}
                       className={cn("bg-slate-50 h-9 text-sm font-mono", ipErrors.imei && "border-red-400")} />
                     {ipErrors.imei ? <p className="text-xs text-red-500">{ipErrors.imei}</p>
-                      : <p className="text-[11px] text-slate-400">Settings → General → About → IMEI</p>}
+                      : <p className="text-[11px] text-slate-400">Settings â†' General â†' About â†' IMEI</p>}
                   </div>
 
                   {/* Face ID + iCloud toggles */}
@@ -1607,7 +1613,7 @@ function MobileFormDrawer({
                   {ip.iCloudLocked && (
                     <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
                       <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                      <p className="text-xs text-red-600 font-medium">iCloud locked — cannot activate without original Apple ID. Price accordingly.</p>
+                      <p className="text-xs text-red-600 font-medium">iCloud locked - cannot activate without original Apple ID. Price accordingly.</p>
                     </div>
                   )}
                 </div>
@@ -1629,22 +1635,22 @@ function MobileFormDrawer({
           )}
         </div>
 
-        {/* ── Staged phones list ── */}
+        {/* â"€â"€ Staged phones list â"€â"€ */}
         {stagedPhones.length > 0 && (
           <div className="shrink-0 border-t border-slate-200 bg-amber-50 px-5 py-3 space-y-1.5">
-            <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">Staged — ready to save ({stagedPhones.length})</p>
+            <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">Staged - ready to save ({stagedPhones.length})</p>
             {stagedPhones.map((p, i) => (
               <div key={i} className="flex items-center justify-between bg-white rounded-lg border border-amber-200 px-3 py-1.5 text-xs">
                 <span className="font-medium text-slate-800">{p.data.brand} {p.data.model}</span>
-                <span className="text-slate-400">{p.data.color} · {p.data.storage} · {p.data.condition}</span>
+                <span className="text-slate-400">{p.data.color} - {p.data.storage} - {p.data.condition}</span>
                 <button type="button" onClick={() => setStagedPhones(prev => prev.filter((_, j) => j !== i))}
-                  className="ml-2 text-slate-400 hover:text-red-500">✕</button>
+                  className="ml-2 text-slate-400 hover:text-red-500">âœ•</button>
               </div>
             ))}
           </div>
         )}
 
-        {/* ── Sticky footer ── */}
+        {/* â"€â"€ Sticky footer â"€â"€ */}
         <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 flex items-center gap-3 flex-wrap">
           <Button type="button" variant="outline" onClick={handleClose} className="w-28">Cancel</Button>
           {!isEditing && (
@@ -1678,7 +1684,7 @@ function MobileFormDrawer({
   )
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function MobilesPage() {
   const [mobileList, setMobileList] = useState<Mobile[]>([])
@@ -1705,8 +1711,10 @@ export default function MobilesPage() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Mobile | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [editSheetPurchaseId, setEditSheetPurchaseId] = useState<string | null>(null)
+  const [editSheetOpen, setEditSheetOpen] = useState(false)
 
-  // ─── Fetch brands from DB ──────────────────────────────────────────────────
+  // â"€â"€â"€ Fetch brands from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function fetchBrands() {
     try {
@@ -1747,7 +1755,7 @@ export default function MobilesPage() {
     }
   }
 
-  // ─── Fetch colors from DB ──────────────────────────────────────────────────
+  // â"€â"€â"€ Fetch colors from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function fetchColors() {
     try {
@@ -1785,7 +1793,7 @@ export default function MobilesPage() {
     }
   }
 
-  // ─── Add supplier inline ────────────────────────────────────────────────────
+  // â"€â"€â"€ Add supplier inline â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function handleAddSupplier(name: string, phone: string): Promise<Supplier | null> {
     try {
@@ -1808,7 +1816,7 @@ export default function MobilesPage() {
     } catch { toast.error("Failed to add supplier"); return null }
   }
 
-  // ─── Fetch mobile categories from DB ────────────────────────────────────────
+  // â"€â"€â"€ Fetch mobile categories from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function fetchMobileCategories() {
     try {
@@ -1850,76 +1858,25 @@ export default function MobilesPage() {
     }
   }
 
-  // ─── Fetch iPhone models from DB ─────────────────────────────────────────
-
-  async function fetchAndroidModels() {
-    try {
-      const tenantId = await getTenantId()
-      const { data } = await supabase
-        .from("android_models")
-        .select("name")
-        .eq("tenant_id", tenantId)
-        .order("name")
-      if (data) setAndroidModels(data.map((d: { name: string }) => d.name))
-    } catch {
-      // empty — table may not exist yet
-    }
-  }
+  // â"€â"€â"€ Fetch iPhone models from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function handleAddAndroidModel(name: string): Promise<boolean> {
-    try {
-      const tenantId = await getTenantId()
-      const { error } = await supabase.from("android_models").insert({
-        tenant_id: tenantId,
-        name: name.trim(),
-      })
-      if (error) { toast.error("Failed to add model: " + error.message); return false }
-      setAndroidModels(prev => Array.from(new Set([...prev, name.trim()])).sort())
-      toast.success(`Model "${name.trim()}" added!`)
-      return true
-    } catch {
-      toast.error("Failed to add model")
-      return false
-    }
-  }
-
-  async function fetchIphoneModels() {
-    try {
-      const tenantId = await getTenantId()
-      const { data } = await supabase
-        .from("iphone_models")
-        .select("name")
-        .eq("tenant_id", tenantId)
-        .order("name")
-      if (data) {
-        setIphoneModels(data.map((d: { name: string }) => d.name))
-      }
-    } catch {
-      // empty
-    }
+    const trimmed = name.trim()
+    if (!trimmed) return false
+    setAndroidModels(prev => Array.from(new Set([...prev, trimmed])).sort())
+    toast.success(`Model "${trimmed}" added!`)
+    return true
   }
 
   async function handleAddIphoneModel(name: string): Promise<boolean> {
-    try {
-      const tenantId = await getTenantId()
-      const { error } = await supabase.from("iphone_models").insert({
-        tenant_id: tenantId,
-        name: name.trim(),
-      })
-      if (error) {
-        toast.error("Failed to add model: " + error.message)
-        return false
-      }
-      setIphoneModels(prev => Array.from(new Set([...prev, name.trim()])).sort())
-      toast.success(`Model "${name.trim()}" added!`)
-      return true
-    } catch {
-      toast.error("Failed to add model")
-      return false
-    }
+    const trimmed = name.trim()
+    if (!trimmed) return false
+    setIphoneModels(prev => Array.from(new Set([...prev, trimmed])).sort())
+    toast.success(`Model "${trimmed}" added!`)
+    return true
   }
 
-  // ─── Fetch storage options from DB ──────────────────────────────────────────
+  // â"€â"€â"€ Fetch storage options from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function fetchStorageOptions() {
     try {
@@ -1957,7 +1914,7 @@ export default function MobilesPage() {
     }
   }
 
-  // ─── Fetch RAM options from DB ──────────────────────────────────────────────
+  // â"€â"€â"€ Fetch RAM options from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function fetchRamOptions() {
     try {
@@ -1995,7 +1952,7 @@ export default function MobilesPage() {
     }
   }
 
-  // ─── Fetch conditions from DB ──────────────────────────────────────────────
+  // â"€â"€â"€ Fetch conditions from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function fetchConditions() {
     try {
@@ -2020,7 +1977,7 @@ export default function MobilesPage() {
     } catch { toast.error("Failed to add condition"); return false }
   }
 
-  // ─── Fetch data from Supabase ──────────────────────────────────────────────
+  // â"€â"€â"€ Fetch data from Supabase â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function fetchData() {
     try {
@@ -2030,6 +1987,9 @@ export default function MobilesPage() {
       ])
       setMobileList(mobilesRes)
       setSupplierList(suppliersRes)
+      // Seed model lists from existing catalog entries
+      setAndroidModels(Array.from(new Set(mobilesRes.filter(m => m.deviceType !== "iphone").map(m => m.model))).sort())
+      setIphoneModels(Array.from(new Set(mobilesRes.filter(m => m.deviceType === "iphone").map(m => m.model))).sort())
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
@@ -2043,26 +2003,26 @@ export default function MobilesPage() {
     fetchColors()
     fetchMobileCategories()
     fetchConditions()
-    fetchAndroidModels()
-    fetchIphoneModels()
     fetchStorageOptions()
     fetchRamOptions()
   }, [])
 
-  // ─── Derived stats ────────────────────────────────────────────────────────
+  // â"€â"€â"€ Derived stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   const stats = useMemo(() => {
-    const total = mobileList.length
-    const totalStock = mobileList.reduce((s, m) => s + m.stock, 0)
+    const inStock = mobileList.filter(m => m.stock > 0)
+    const total = inStock.length
+    const totalStock = inStock.reduce((s, m) => s + m.stock, 0)
     const outOfStock = mobileList.filter(m => m.stock === 0).length
-    const totalValue = mobileList.reduce((s, m) => s + m.sellingPrice * m.stock, 0)
+    const totalValue = inStock.reduce((s, m) => s + m.sellingPrice * m.stock, 0)
     return { total, totalStock, outOfStock, totalValue }
   }, [mobileList])
 
-  // ─── Filtered list ────────────────────────────────────────────────────────
+  // â"€â"€â"€ Filtered list â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   const filtered = useMemo(() => {
     return mobileList.filter(m => {
+      if (m.stock === 0) return false
       const q = search.toLowerCase()
       const matchSearch =
         !q ||
@@ -2073,26 +2033,39 @@ export default function MobilesPage() {
       const matchBrand = brandFilter === "all" || m.brand.toLowerCase() === brandFilter.toLowerCase()
       const matchCategory = categoryFilter === "all" || m.category === categoryFilter
       const matchDeviceType = deviceTypeFilter === "all" || m.deviceType === deviceTypeFilter
-      const stockStatus = getStockStatus(m.stock)
+      const stockStatus = getMobileStockStatus(m.stock)
       const matchStock =
         stockFilter === "all" ||
         (stockFilter === "in" && stockStatus === "In Stock") ||
-        (stockFilter === "low" && stockStatus === "Low Stock") ||
         (stockFilter === "out" && stockStatus === "Out of Stock")
       return matchSearch && matchBrand && matchCategory && matchDeviceType && matchStock
     })
   }, [mobileList, search, brandFilter, categoryFilter, deviceTypeFilter, stockFilter])
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
+  // â"€â"€â"€ Handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-  function handleAdd() {
-    setEditingMobile(null)
-    setDialogOpen(true)
-  }
-
-  function handleEdit(mobile: Mobile) {
-    setEditingMobile(mobile)
-    setDialogOpen(true)
+  async function handleEdit(mobile: Mobile) {
+    try {
+      const tenantId = await getTenantId()
+      const { data } = await supabase
+        .from("purchase_items")
+        .select("purchase_id")
+        .eq("product_id", mobile.id)
+        .eq("tenant_id", tenantId)
+        .limit(1)
+        .maybeSingle()
+      if (data?.purchase_id) {
+        setEditSheetPurchaseId(data.purchase_id)
+        setEditSheetOpen(true)
+      } else {
+        // No purchase record - fall back to simple mobile edit dialog
+        setEditingMobile(mobile)
+        setDialogOpen(true)
+      }
+    } catch {
+      setEditingMobile(mobile)
+      setDialogOpen(true)
+    }
   }
 
   function handleView(mobile: Mobile) {
@@ -2174,7 +2147,7 @@ export default function MobilesPage() {
     setStockFilter("all")
   }
 
-  // ─── Table columns ────────────────────────────────────────────────────────
+  // â"€â"€â"€ Table columns â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   const columns: ColumnDef<Mobile>[] = useMemo(
     () => [
@@ -2217,7 +2190,7 @@ export default function MobilesPage() {
         header: "Stock",
         cell: ({ row }) => {
           const s = row.original.stock
-          const status = getStockStatus(s)
+          const status = getMobileStockStatus(s)
           return (
             <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", stockBadgeStyle[status])}>
               <span className={cn("w-1.5 h-1.5 rounded-full", stockDotStyle[status])} />
@@ -2261,13 +2234,6 @@ export default function MobilesPage() {
         },
       },
       {
-        accessorKey: "stock",
-        header: "Stock",
-        cell: ({ row }) => (
-          <span className="font-medium text-slate-700">{row.original.stock}</span>
-        ),
-      },
-      {
         accessorKey: "condition",
         header: "Condition",
         cell: ({ row }) => <StatusBadge status={row.original.condition} />,
@@ -2276,7 +2242,7 @@ export default function MobilesPage() {
         id: "status",
         header: "Status",
         cell: ({ row }) => {
-          const st = getStockStatus(row.original.stock)
+          const st = getMobileStockStatus(row.original.stock)
           return <StatusBadge status={st} />
         },
       },
@@ -2323,7 +2289,7 @@ export default function MobilesPage() {
   const hasActiveFilters =
     search !== "" || brandFilter !== "all" || categoryFilter !== "all" || deviceTypeFilter !== "all" || stockFilter !== "all"
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // â"€â"€â"€ Render â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   if (loading) {
     return (
@@ -2343,7 +2309,7 @@ export default function MobilesPage() {
       {/* Header */}
       <PageHeader
         title="Mobile Phones"
-        description="Manage your mobile phone inventory"
+        description="Catalog is built automatically from purchases - edit entries here"
         icon={<Smartphone />}
         iconBg="bg-blue-600"
         badge={
@@ -2352,10 +2318,12 @@ export default function MobilesPage() {
           </Badge>
         }
         action={
-          <Button onClick={handleAdd} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add New Mobile
-          </Button>
+          <Link href="/purchases/new">
+            <Button className="gap-2">
+              <ShoppingBag className="w-4 h-4" />
+              New Purchase
+            </Button>
+          </Link>
         }
       />
 
@@ -2469,7 +2437,6 @@ export default function MobilesPage() {
             <SelectContent>
               <SelectItem value="all">All Stock</SelectItem>
               <SelectItem value="in">In Stock</SelectItem>
-              <SelectItem value="low">Low Stock</SelectItem>
               <SelectItem value="out">Out of Stock</SelectItem>
             </SelectContent>
           </Select>
@@ -2496,8 +2463,7 @@ export default function MobilesPage() {
             <EmptyState
               icon={Smartphone}
               title="No mobile phones found"
-              description="Try adjusting your filters or add a new mobile phone"
-              action={{ label: "Add Mobile Phone", onClick: handleAdd }}
+              description="Create a purchase order to add phones to the catalog automatically"
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -2522,32 +2488,29 @@ export default function MobilesPage() {
             <EmptyState
               icon={Smartphone}
               title="No mobile phones found"
-              description="Try adjusting your filters or add a new mobile phone"
-              action={{ label: "Add Mobile Phone", onClick: handleAdd }}
+              description="Create a purchase order to add phones to the catalog automatically"
             />
           ) : (
             <>
-              {/* ── Mobile: professional list cards (hidden on md+) ──── */}
+              {/* â"€â"€ Mobile: professional list cards (hidden on md+) â"€â"€â"€â"€ */}
               <div className="md:hidden space-y-2.5">
                 {filtered.map(mobile => {
                   const margin = calculateMargin(mobile.purchasePrice, mobile.sellingPrice)
-                  const stockStatus = getStockStatus(mobile.stock)
+                  const stockStatus = getMobileStockStatus(mobile.stock)
                   const accentColor =
-                    stockStatus === "In Stock"     ? "bg-emerald-500" :
-                    stockStatus === "Low Stock"    ? "bg-amber-400"   :
-                                                    "bg-red-500"
+                    stockStatus === "In Stock" ? "bg-emerald-500" : "bg-red-500"
                   return (
                     <div
                       key={mobile.id}
                       className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex"
                     >
-                      {/* Left accent strip — color = stock status */}
+                      {/* Left accent strip - color = stock status */}
                       <div className={cn("w-1 shrink-0", accentColor)} />
 
                       {/* Card body */}
                       <div className="flex-1 p-3 space-y-2.5 min-w-0">
 
-                        {/* Zone 1 — Identity */}
+                        {/* Zone 1 - Identity */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -2569,14 +2532,14 @@ export default function MobilesPage() {
                                 {mobile.stock} units
                               </span>
                               <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-                                ↗ {margin.toFixed(1)}%
+                                â†- {margin.toFixed(1)}%
                               </span>
                             </div>
                           </div>
                           <StatusBadge status={stockStatus} className="shrink-0 text-[10px] px-1.5 py-0.5" />
                         </div>
 
-                        {/* Zone 2 — Prices */}
+                        {/* Zone 2 - Prices */}
                         <div className="flex items-center gap-2">
                           {/* Buy */}
                           <div className="flex-1 min-w-0">
@@ -2610,7 +2573,7 @@ export default function MobilesPage() {
                           </div>
                         </div>
 
-                        {/* Zone 3 — Actions */}
+                        {/* Zone 3 - Actions */}
                         <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                           <button
                             onClick={() => handleView(mobile)}
@@ -2637,7 +2600,7 @@ export default function MobilesPage() {
                 })}
               </div>
 
-              {/* ── Desktop: full DataTable (hidden on mobile) ─────────── */}
+              {/* â"€â"€ Desktop: full DataTable (hidden on mobile) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
               <div className="hidden md:block">
                 <DataTable
                   columns={columns}
@@ -2698,6 +2661,14 @@ export default function MobilesPage() {
         cancelLabel="Cancel"
         variant="destructive"
         onConfirm={handleDeleteConfirm}
+      />
+
+      {/* Edit Purchase Sheet */}
+      <NewPurchaseSheet
+        open={editSheetOpen}
+        onClose={() => { setEditSheetOpen(false); setEditSheetPurchaseId(null) }}
+        onCreated={fetchData}
+        editPurchaseId={editSheetPurchaseId}
       />
     </div>
   )

@@ -1,14 +1,22 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet } from "lucide-react"
+import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet, Plus, Banknote } from "lucide-react"
 import { toast } from "sonner"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
 import { getPayments } from "@/lib/api/payments"
+import { getFinanceAccounts } from "@/lib/api/finance"
+import { supabase } from "@/lib/supabase"
+import { getTenantId } from "@/lib/api/helpers"
 import type { Supplier, Purchase, Payment } from "@/data/types"
+import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 type LedgerEntry = {
   id: string
@@ -29,23 +37,90 @@ export default function SupplierLedgerPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [supplierPayments, setSupplierPayments] = useState<Payment[]>([])
+  const [accounts, setAccounts] = useState<FinanceAccount[]>([])
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [sup, pur, pay] = await Promise.all([getSuppliers(), getPurchases(), getPayments()])
-        setSuppliers(sup)
-        setPurchases(pur)
-        setSupplierPayments(pay.filter((p) => p.entityType === "Supplier" && p.type === "Paid"))
-      } catch (err) {
-        toast.error("Failed to load supplier ledger data")
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
+  async function loadAll() {
+    try {
+      const [sup, pur, pay, accs] = await Promise.all([getSuppliers(), getPurchases(), getPayments(), getFinanceAccounts()])
+      setSuppliers(sup)
+      setPurchases(pur)
+      setSupplierPayments(pay.filter((p) => p.entityType === "Supplier" && p.type === "Paid"))
+      setAccounts(accs)
+    } catch (err) {
+      toast.error("Failed to load supplier ledger data")
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [])
+  }
+
+  useEffect(() => { loadAll() }, [])
+
+  // â"€â"€ Pay Supplier dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  const [payDialogOpen, setPayDialogOpen] = useState(false)
+  const [payAmount, setPayAmount] = useState("")
+  const [payMethod, setPayMethod] = useState("Cash")
+  const [payAccountId, setPayAccountId] = useState("")
+  const [payDate, setPayDate] = useState(todayPKT())
+  const [payNotes, setPayNotes] = useState("")
+  const [paying, setPaying] = useState(false)
+
+  function openPayDialog() {
+    if (!selectedSupplierId) { toast.error("Select a supplier first"); return }
+    setPayAmount(closingBalance > 0 ? String(closingBalance) : "")
+    setPayMethod(accounts[0]?.type === "bank" ? "Bank Transfer" : "Cash")
+    setPayAccountId(accounts[0]?.id ?? "")
+    setPayDate(todayPKT())
+    setPayNotes("")
+    setPayDialogOpen(true)
+  }
+
+  async function handlePaySupplier() {
+    if (!selectedSupplierId || !payAmount || parseFloat(payAmount) <= 0) {
+      toast.error("Enter a valid amount"); return
+    }
+    if (!payAccountId) { toast.error("Select a payment account"); return }
+    setPaying(true)
+    try {
+      const tenantId = await getTenantId()
+      const amount = parseFloat(payAmount)
+      const selectedAccount = accounts.find(a => a.id === payAccountId)
+      const refNum = "PAY-SUP-" + Date.now().toString().slice(-8)
+
+      // 1. Insert payment record
+      const { error: payErr } = await supabase.from("payments").insert({
+        tenant_id: tenantId,
+        entity_type: "Supplier",
+        entity_id: selectedSupplierId,
+        entity_name: selectedSupplier?.companyName ?? "",
+        type: "Paid",
+        amount,
+        method: payMethod,
+        account_id: payAccountId,
+        reference_number: refNum,
+        date: payDate,
+        notes: payNotes.trim() || null,
+        status: "Completed",
+      })
+      if (payErr) throw new Error(payErr.message)
+
+      // 2. Deduct from finance account balance
+      const { error: accErr } = await supabase
+        .from("finance_accounts")
+        .update({ current_balance: (selectedAccount?.currentBalance ?? 0) - amount })
+        .eq("id", payAccountId)
+      if (accErr) throw new Error(accErr.message)
+
+      toast.success(`Payment of ${formatCurrency(amount)} recorded to ${selectedSupplier?.companyName}`)
+      setPayDialogOpen(false)
+      setLoading(true)
+      await loadAll()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record payment")
+    } finally {
+      setPaying(false)
+    }
+  }
 
   const [selectedSupplierId, setSelectedSupplierId] = useState("")
   const [dateFrom, setDateFrom] = useState("")
@@ -56,33 +131,31 @@ export default function SupplierLedgerPage() {
 
   const selectedSupplier = suppliers.find((s) => s.id === selectedSupplierId)
 
-  // Only suppliers with an unpaid balance (we still owe them money)
-  const creditSuppliers = useMemo(() => {
-    return suppliers.filter((s) => {
-      const suppPurchases = purchases.filter((p) => p.supplierId === s.id)
-      const totalBilled = suppPurchases.reduce((sum, p) => sum + p.total, 0)
-      const totalPaidOnPurchases = suppPurchases.reduce((sum, p) => sum + p.amountPaid, 0)
-      const totalPaidViaPayments = supplierPayments
-        .filter((sp) => sp.entityId === s.id)
-        .reduce((sum, sp) => sum + sp.amount, 0)
-      return totalBilled - totalPaidOnPurchases - totalPaidViaPayments > 0
-    })
-  }, [suppliers, purchases, supplierPayments])
+  // All suppliers who have at least one purchase recorded
+  const activeSuppliers = useMemo(() => {
+    const withPurchases = new Set(purchases.map(p => p.supplierId))
+    return suppliers.filter(s => withPurchases.has(s.id))
+  }, [suppliers, purchases])
 
   const allEntries = useMemo<LedgerEntry[]>(() => {
     const raw: Omit<LedgerEntry, "balance">[] = []
 
-    const creditSupplierIds = new Set(creditSuppliers.map((s) => s.id))
-
     const filteredPurchases = selectedSupplierId
       ? purchases.filter((p) => p.supplierId === selectedSupplierId)
-      : purchases.filter((p) => p.supplierId && creditSupplierIds.has(p.supplierId))
+      : purchases
 
     filteredPurchases.forEach((p) => {
       const supName = suppliers.find((s) => s.id === p.supplierId)?.companyName || p.supplierName
+      const names   = p.items.map(i => i.productName.trim()).filter(Boolean)
+      const preview = names.length <= 2
+        ? names.join(", ")
+        : `${names[0]}, ${names[1]} +${names.length - 2} more`
+      const payStatus = p.paymentStatus === "Paid" ? "Fully Paid"
+        : p.paymentStatus === "Partial" ? `Partial — Rs ${p.amountPaid.toLocaleString("en-PK")} paid`
+        : "Unpaid"
       raw.push({
         id: p.id, date: p.date, reference: p.poNumber,
-        description: "Purchase — " + p.items.length + " item(s) via " + p.paymentMethod,
+        description: `${preview || `${p.items.length} item(s)`}  ·  ${payStatus}`,
         debit: 0, credit: p.total, type: "purchase", supplierName: supName,
       })
     })
@@ -91,35 +164,34 @@ export default function SupplierLedgerPage() {
       ? supplierPayments.filter((sp) => sp.entityId === selectedSupplierId)
       : supplierPayments
 
-    filteredPayments.forEach((sp) =>
+    filteredPayments.forEach((sp) => {
+      const notes = (sp.notes ?? "")
+        .replace(/^(Payment for|Outstanding for)\s+PO-[\w-]+\s*/i, "")
+        .replace(/^\(|\)$/g, "")
+        .trim()
       raw.push({
         id: sp.id, date: sp.date,
         reference: sp.referenceNumber || sp.id.slice(0, 8),
-        description: "Payment Made — " + sp.method + (sp.notes ? " (" + sp.notes + ")" : ""),
+        description: `Payment to Supplier${notes ? `  ·  ${notes}` : ""}  ·  ${sp.method}`,
         debit: sp.amount, credit: 0, type: "payment", supplierName: sp.entityName,
       })
-    )
-
-    const paymentRefNumbers = new Set(filteredPayments.map((sp) => sp.referenceNumber))
-    filteredPurchases.forEach((p) => {
-      if (p.amountPaid > 0 && !paymentRefNumbers.has(p.poNumber)) {
-        const supName = suppliers.find((s) => s.id === p.supplierId)?.companyName || p.supplierName
-        raw.push({
-          id: "reconcile-" + p.id, date: p.date, reference: p.poNumber,
-          description: "Payment Made — " + p.paymentMethod + " (Payment for " + p.poNumber + ")",
-          debit: p.amountPaid, credit: 0, type: "payment", supplierName: supName,
-        })
-      }
     })
 
-    raw.sort((a, b) => a.date.localeCompare(b.date))
+    // Same-date: purchases (credits) before payments (debits) so balance reads correctly
+    raw.sort((a, b) => {
+      const d = a.date.localeCompare(b.date)
+      if (d !== 0) return d
+      if (a.type === "purchase" && b.type !== "purchase") return -1
+      if (a.type !== "purchase" && b.type === "purchase") return  1
+      return 0
+    })
 
     const result: LedgerEntry[] = []
     let balance = openingBalance
 
     if (openingBalance !== 0) {
       result.push({
-        id: "opening", date: raw[0]?.date ?? "", reference: "—",
+        id: "opening", date: raw[0]?.date ?? "", reference: "-",
         description: "Opening Balance",
         debit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
         credit: openingBalance > 0 ? openingBalance : 0,
@@ -133,7 +205,7 @@ export default function SupplierLedgerPage() {
     })
 
     return result
-  }, [selectedSupplierId, openingBalance, purchases, supplierPayments, suppliers, creditSuppliers])
+  }, [selectedSupplierId, openingBalance, purchases, supplierPayments, suppliers])
 
   const filtered = useMemo(() => {
     return allEntries.filter((e) => {
@@ -149,8 +221,9 @@ export default function SupplierLedgerPage() {
   const totalCredit = txEntries.reduce((s, e) => s + e.credit, 0)
   const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const displayEntries = [...filtered].reverse()
+  const totalPages = Math.ceil(displayEntries.length / PAGE_SIZE)
+  const paginated = displayEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const accentColor = (type: LedgerEntry["type"]) => {
     if (type === "opening") return "bg-slate-400"
@@ -181,11 +254,11 @@ export default function SupplierLedgerPage() {
 
     const rows = filtered.map((e) => ({
       date:         e.date,
-      supplierName: e.supplierName || "—",
+      supplierName: e.supplierName || "-",
       reference:    e.reference,
       description:  e.description,
-      debitFmt:     e.debit > 0 ? "Rs " + e.debit.toLocaleString() : "—",
-      creditFmt:    e.credit > 0 ? "Rs " + e.credit.toLocaleString() : "—",
+      debitFmt:     e.debit > 0 ? "Rs " + e.debit.toLocaleString() : "-",
+      creditFmt:    e.credit > 0 ? "Rs " + e.credit.toLocaleString() : "-",
       balanceFmt:   "Rs " + Math.abs(e.balance).toLocaleString() + (e.balance > 0 ? " Cr" : e.balance < 0 ? " Dr" : ""),
     }))
 
@@ -227,7 +300,7 @@ export default function SupplierLedgerPage() {
 
     const rows = filtered.map((e) => ({
       date:         e.date,
-      supplierName: e.supplierName || "—",
+      supplierName: e.supplierName || "-",
       reference:    e.reference,
       description:  e.description,
       debit:        e.debit || "",
@@ -246,7 +319,7 @@ export default function SupplierLedgerPage() {
         { label: "Outstanding",     value: "Rs " + Math.abs(closingBalance).toLocaleString() + balLabel },
       ],
     })
-    toast.success("Excel exported — " + filtered.length + " entries")
+    toast.success("Excel exported - " + filtered.length + " entries")
   }
 
   if (loading) {
@@ -269,6 +342,9 @@ export default function SupplierLedgerPage() {
           <p className="text-slate-500 text-xs mt-0.5">View financial records and outstanding payables for any supplier</p>
         </div>
         <div className="flex gap-1.5">
+          <Button onClick={openPayDialog} size="sm" className="h-8 text-xs gap-1.5 px-3 bg-emerald-600 hover:bg-emerald-700">
+            <Banknote className="w-3.5 h-3.5" />Pay Supplier
+          </Button>
           <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
             <FileText className="w-3.5 h-3.5" />PDF
           </button>
@@ -289,9 +365,9 @@ export default function SupplierLedgerPage() {
                 onChange={(e) => { setSelectedSupplierId(e.target.value); setPage(1) }}
                 className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">All Credit Suppliers ({creditSuppliers.length})</option>
-                {creditSuppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.companyName} — {s.city}</option>
+                <option value="">All Suppliers ({activeSuppliers.length})</option>
+                {activeSuppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.companyName} - {s.city}</option>
                 ))}
               </select>
             </div>
@@ -308,10 +384,10 @@ export default function SupplierLedgerPage() {
           </div>
           {selectedSupplierId && (
             <div className="mt-2 flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Opening Balance (₨)</label>
-              <input type="number" value={openingBalance} onChange={(e) => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Opening Balance (Rs)</label>
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={openingBalance} onChange={(e) => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
                 className="w-32 h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" />
-              <span className="text-[10px] text-slate-400">Positive = we owe supplier · Negative = advance paid</span>
+              <span className="text-[10px] text-slate-400">Positive = we owe supplier - Negative = advance paid</span>
             </div>
           )}
         </CardContent>
@@ -349,7 +425,7 @@ export default function SupplierLedgerPage() {
               {formatCurrency(Math.abs(closingBalance))}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
-              {closingBalance > 0 ? "Payable — we owe supplier" : closingBalance < 0 ? "Advance paid to supplier" : "Account settled"}
+              {closingBalance > 0 ? "Payable - we owe supplier" : closingBalance < 0 ? "Advance paid to supplier" : "Account settled"}
             </p>
           </CardContent>
         </Card>
@@ -367,7 +443,7 @@ export default function SupplierLedgerPage() {
           <CardHeader className="px-3 py-2 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold text-slate-800">
-                {selectedSupplier ? selectedSupplier.companyName + " — Account Statement" : "All Suppliers — Account Statement"}
+                {selectedSupplier ? selectedSupplier.companyName + " - Account Statement" : "All Suppliers - Account Statement"}
               </CardTitle>
               <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
                 <span className="flex items-center gap-1">
@@ -434,14 +510,14 @@ export default function SupplierLedgerPage() {
                   {paginated.map((entry) => (
                     <tr key={entry.id} className={`hover:bg-slate-50/70 transition-colors ${entry.type === "opening" ? "bg-slate-50 italic" : ""}`}>
                       <td className="px-3 py-2 text-slate-500 whitespace-nowrap text-xs">{formatDate(entry.date)}</td>
-                      {!selectedSupplierId && <td className="px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap">{entry.supplierName || "—"}</td>}
+                      {!selectedSupplierId && <td className="px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap">{entry.supplierName || "-"}</td>}
                       <td className="px-3 py-2 font-mono text-xs text-slate-400 whitespace-nowrap">{entry.reference}</td>
                       <td className="px-3 py-2 text-xs text-slate-700">{entry.description}</td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-emerald-600 whitespace-nowrap">
-                        {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">—</span>}
+                        {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-orange-600 whitespace-nowrap">
-                        {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">—</span>}
+                        {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-red-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                         {formatCurrency(Math.abs(entry.balance))}
@@ -474,7 +550,7 @@ export default function SupplierLedgerPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400">
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  {(page - 1) * PAGE_SIZE + 1}-"{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
@@ -492,6 +568,85 @@ export default function SupplierLedgerPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Pay Supplier Dialog */}
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-emerald-600" />
+              Pay Supplier
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Paying to</span>
+              <span className="text-xs font-bold text-slate-800">{selectedSupplier?.companyName}</span>
+            </div>
+            {closingBalance > 0 && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 flex items-center justify-between">
+                <span className="text-xs text-red-600">Outstanding balance</span>
+                <span className="text-sm font-bold text-red-700">{formatCurrency(closingBalance)}</span>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label className="text-xs">Amount (â‚¨) <span className="text-red-500">*</span></Label>
+              <Input
+                type="number" onWheel={e => e.currentTarget.blur()} min={1} placeholder="0"
+                value={payAmount}
+                onChange={e => setPayAmount(e.target.value)}
+                className="h-8 text-sm font-semibold"
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Date</Label>
+                <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Method</Label>
+                <select
+                  value={payMethod}
+                  onChange={e => setPayMethod(e.target.value)}
+                  className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                >
+                  <option>Cash</option>
+                  <option>Bank Transfer</option>
+                  <option>Cheque</option>
+                  <option>JazzCash</option>
+                  <option>EasyPaisa</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Pay From Account <span className="text-red-500">*</span></Label>
+              <select
+                value={payAccountId}
+                onChange={e => setPayAccountId(e.target.value)}
+                className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              >
+                <option value="">Select account...</option>
+                {accounts.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} - {formatCurrency(a.currentBalance)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Notes (optional)</Label>
+              <Input placeholder="e.g. Cheque #1234, partial payment..." value={payNotes} onChange={e => setPayNotes(e.target.value)} className="h-8 text-xs" />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={handlePaySupplier} disabled={paying}>
+              {paying ? "Recording..." : "Record Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Side Drawer */}
       {drawerEntry && (

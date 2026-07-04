@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MobiTrack Pro - Template 3: Corporate Slate</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #e8edf2; }
+
+  .page {
+    width: 794px;
+    min-height: 1123px;
+    margin: 30px auto;
+    background: #fff;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.15);
+  }
+
+  /* ─── SIDEBAR HEADER ─── */
+  .header { display: flex; }
+  .header-sidebar {
+    width: 200px;
+    background: #0f172a;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .logo-circle {
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b5bdb, #7c3aed);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px;
+    box-shadow: 0 8px 24px rgba(59,91,219,0.5);
+    border: 3px solid rgba(255,255,255,0.1);
+  }
+  .shop-title { color: #fff; font-size: 14px; font-weight: 800; text-align: center; letter-spacing: 0.3px; }
+  .shop-divider { width: 40px; height: 2px; background: linear-gradient(90deg, #3b5bdb, #7c3aed); border-radius: 2px; }
+  .sidebar-info { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+  .info-item { display: flex; gap: 8px; align-items: flex-start; }
+  .info-icon { width: 16px; height: 16px; background: rgba(59,91,219,0.3); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; margin-top: 1px; }
+  .info-text { font-size: 10px; color: #94a3b8; line-height: 1.5; }
+
+  .header-main { flex: 1; }
+  .header-top {
+    background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+  }
+  .doc-type-big { font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -1px; line-height: 1; }
+  .doc-type-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+  .doc-badges { display: flex; gap: 8px; margin-top: 20px; }
+  .doc-badge {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 8px 14px;
+    backdrop-filter: blur(4px);
+  }
+  .doc-badge label { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.5); margin-bottom: 2px; }
+  .doc-badge span { font-size: 12px; font-weight: 700; color: #fff; }
+  .status-paid { background: rgba(22,163,74,0.2) !important; border-color: rgba(22,163,74,0.4) !important; }
+  .status-paid span { color: #4ade80 !important; }
+
+  /* ─── BODY ─── */
+  .body { padding: 28px 28px 28px 28px; }
+
+  /* Parties */
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .party {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 18px;
+  }
+  .party-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    color: #3b5bdb; font-weight: 700; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .party-label::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+  .party .pname { font-size: 14px; font-weight: 700; color: #0f172a; }
+  .party p { font-size: 11px; color: #64748b; line-height: 1.7; margin-top: 4px; }
+
+  /* Table */
+  .table-wrap {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .table-header-bar {
+    background: #0f172a;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .table-header-bar span { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.6); }
+  .table-header-bar .count { background: #3b5bdb; color: #fff; font-size: 10px; font-weight: 700; border-radius: 12px; padding: 2px 8px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #f1f5f9; }
+  thead th { font-size: 10px; font-weight: 700; color: #475569; padding: 9px 16px; text-align: left; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }
+  thead th:last-child { text-align: right; }
+  tbody tr { border-bottom: 1px solid #f1f5f9; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { font-size: 12px; color: #374151; padding: 12px 16px; vertical-align: top; }
+  tbody td.amount { text-align: right; font-weight: 700; font-size: 13px; color: #0f172a; }
+  .sr { color: #94a3b8; font-size: 11px; font-weight: 600; }
+  .item-name { font-weight: 600; color: #1e293b; font-size: 13px; }
+  .item-desc { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .imei { font-family: monospace; font-size: 9px; background: #eff6ff; color: #3b5bdb; border: 1px solid #bfdbfe; border-radius: 4px; padding: 1px 5px; margin-top: 3px; display: inline-block; }
+
+  /* Totals */
+  .bottom-section { display: flex; gap: 20px; }
+  .bottom-left { flex: 1; }
+  .terms-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; }
+  .terms-box h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 8px; }
+  .terms-box p { font-size: 11px; color: #64748b; line-height: 1.7; }
+
+  .totals-box { width: 240px; flex-shrink: 0; }
+  .t-line { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+  .t-line:last-child { border-bottom: none; }
+  .t-line label { font-size: 11px; color: #64748b; }
+  .t-line span { font-size: 12px; font-weight: 600; color: #1e293b; }
+  .t-total {
+    margin-top: 10px;
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .t-total label { font-size: 11px; color: #94a3b8; }
+  .t-total span { font-size: 20px; font-weight: 800; color: #fff; }
+
+  /* Signatures */
+  .signatures { display: flex; justify-content: space-between; margin-top: 28px; padding-top: 20px; border-top: 1px solid #f1f5f9; }
+  .sig { text-align: center; }
+  .sig-line { width: 130px; border-top: 1px solid #cbd5e1; margin: 0 auto 6px; }
+  .sig p { font-size: 10px; color: #94a3b8; }
+
+  .footer-note { text-align: center; margin-top: 16px; font-size: 10px; color: #94a3b8; }
+  .footer-note strong { color: #3b5bdb; }
+
+  .bottom-accent { height: 5px; background: linear-gradient(90deg, #0f172a 0%, #3b5bdb 50%, #7c3aed 100%); }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- HEADER WITH SIDEBAR -->
+  <div class="header">
+    <div class="header-sidebar">
+      <div class="logo-circle">📱</div>
+      <div class="shop-title">MobiTrack Pro</div>
+      <div class="shop-divider"></div>
+      <div class="sidebar-info">
+        <div class="info-item">
+          <div class="info-icon">👤</div>
+          <div class="info-text">Ahmed Khan<br>Owner</div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">📞</div>
+          <div class="info-text">+92-300-1234567</div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">📍</div>
+          <div class="info-text">Shop #12<br>Mobile Market<br>Lahore</div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">✉</div>
+          <div class="info-text">ahmed@<br>mobitrackpro.com</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-main">
+      <div class="header-top">
+        <div>
+          <div class="doc-type-big">SALES<br>INVOICE</div>
+          <div class="doc-type-sub">MobiTrack Pro · Original</div>
+        </div>
+        <div class="doc-badges">
+          <div class="doc-badge">
+            <label>Invoice No</label>
+            <span>#INV-2026-0042</span>
+          </div>
+          <div class="doc-badge">
+            <label>Date</label>
+            <span>20 May 2026</span>
+          </div>
+          <div class="doc-badge status-paid">
+            <label>Status</label>
+            <span>✓ Paid</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- Parties -->
+    <div class="parties">
+      <div class="party">
+        <div class="party-label">Customer Details</div>
+        <div class="pname">Ali Hassan</div>
+        <p>📞 +92-321-9876543<br>📍 Gulberg, Lahore</p>
+      </div>
+      <div class="party">
+        <div class="party-label">Payment Details</div>
+        <div class="pname">Cash Payment</div>
+        <p>Due: 20 May 2026<br>Ref: WALK-IN-042</p>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-header-bar">
+        <span>Items & Products</span>
+        <span class="count">3 Items</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product Description</th>
+            <th>IMEI / Code</th>
+            <th style="text-align:center">Qty</th>
+            <th style="text-align:right">Rate</th>
+            <th style="text-align:right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="sr">01</span></td>
+            <td>
+              <div class="item-name">Samsung Galaxy S24 Ultra</div>
+              <div class="item-desc">256GB · Titanium Black · Android 14</div>
+            </td>
+            <td><span class="imei">359274-12-345678-9</span></td>
+            <td style="text-align:center">1</td>
+            <td style="text-align:right">285,000</td>
+            <td class="amount">Rs 285,000</td>
+          </tr>
+          <tr>
+            <td><span class="sr">02</span></td>
+            <td>
+              <div class="item-name">Samsung Clear Case</div>
+              <div class="item-desc">S24 Ultra Compatible · Transparent</div>
+            </td>
+            <td><span class="imei">ACC-0089</span></td>
+            <td style="text-align:center">2</td>
+            <td style="text-align:right">1,500</td>
+            <td class="amount">Rs 3,000</td>
+          </tr>
+          <tr>
+            <td><span class="sr">03</span></td>
+            <td>
+              <div class="item-name">Tempered Glass 9H</div>
+              <div class="item-desc">Screen Protector · Anti-glare</div>
+            </td>
+            <td><span class="imei">ACC-0201</span></td>
+            <td style="text-align:center">1</td>
+            <td style="text-align:right">800</td>
+            <td class="amount">Rs 800</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bottom -->
+    <div class="bottom-section">
+      <div class="bottom-left">
+        <div class="terms-box">
+          <h4>Terms & Conditions</h4>
+          <p>Goods once sold will not be returned. Warranty claims subject to manufacturer policy. All prices in PKR. Thank you for shopping with MobiTrack Pro!</p>
+        </div>
+      </div>
+      <div class="totals-box">
+        <div class="t-line"><label>Subtotal</label><span>Rs 288,800</span></div>
+        <div class="t-line"><label>Discount (2%)</label><span>−Rs 5,776</span></div>
+        <div class="t-line"><label>Tax / GST</label><span>Rs 0</span></div>
+        <div class="t-total"><label>Grand Total</label><span>Rs 283,024</span></div>
+      </div>
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="sig">
+        <div class="sig-line"></div>
+        <p>Customer Signature</p>
+      </div>
+      <div class="sig">
+        <div class="sig-line"></div>
+        <p>Cashier / Sales Rep</p>
+      </div>
+      <div class="sig">
+        <div class="sig-line"></div>
+        <p>Authorized Signature</p>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Generated by <strong>MobiTrack Pro</strong> · 20 May 2026 · mobitrackpro.com
+    </div>
+
+  </div>
+
+  <div class="bottom-accent"></div>
+</div>
+
+</body>
+</html>

@@ -234,7 +234,13 @@ export async function createUsedPhone(
       functional_issues: data.functional_issues,
       accessories_included: data.accessories_included,
       source_type: data.source_type,
+      source_customer_id: data.source_customer_id || null,
       source_customer_name: data.source_customer_name || null,
+      source_phone: (data as any).source_phone || null,
+      source_cnic: (data as any).source_cnic || null,
+      source_address: (data as any).source_address || null,
+      supplier_id: (data as any).supplier_id || null,
+      supplier_name: (data as any).supplier_name || null,
       purchase_price: data.purchase_price,
       refurbishment_cost: data.refurbishment_cost,
       selling_price: data.selling_price,
@@ -279,7 +285,13 @@ export async function updateUsedPhone(
     if (data.functional_issues !== undefined) updatePayload.functional_issues = data.functional_issues
     if (data.accessories_included !== undefined) updatePayload.accessories_included = data.accessories_included
     if (data.source_type !== undefined) updatePayload.source_type = data.source_type
-    if (data.source_customer_name !== undefined) updatePayload.source_customer_name = data.source_customer_name
+    if (data.source_customer_id !== undefined) updatePayload.source_customer_id = data.source_customer_id || null
+    if (data.source_customer_name !== undefined) updatePayload.source_customer_name = data.source_customer_name || null
+    if ((data as any).source_phone !== undefined) updatePayload.source_phone = (data as any).source_phone || null
+    if ((data as any).source_cnic !== undefined) updatePayload.source_cnic = (data as any).source_cnic || null
+    if ((data as any).source_address !== undefined) updatePayload.source_address = (data as any).source_address || null
+    if ((data as any).supplier_id !== undefined) updatePayload.supplier_id = (data as any).supplier_id || null
+    if ((data as any).supplier_name !== undefined) updatePayload.supplier_name = (data as any).supplier_name || null
     if (data.purchase_price !== undefined) updatePayload.purchase_price = data.purchase_price
     if (data.refurbishment_cost !== undefined) updatePayload.refurbishment_cost = data.refurbishment_cost
     if (data.selling_price !== undefined) updatePayload.selling_price = data.selling_price

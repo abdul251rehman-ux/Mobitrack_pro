@@ -55,12 +55,16 @@ export interface Customer {
   id: string;
   name: string;
   phone: string;
+  cnic?: string;
+  whatsapp?: string;
   email?: string;
   address?: string;
+  city?: string;
   totalPurchases: number;
   totalSpent: number;
-  lastPurchaseDate: string;
+  lastPurchaseDate?: string;
   loyaltyTier: "Bronze" | "Silver" | "Gold" | "Platinum";
+  creditLimit?: number;
   notes?: string;
 }
 
@@ -72,6 +76,7 @@ export interface SaleItem {
   unitPrice: number;
   discount: number;
   lineTotal: number;
+  imei?: string;
 }
 
 export interface Sale {
@@ -90,6 +95,7 @@ export interface Sale {
   amountReceived: number;
   changeDue: number;
   status: "Completed" | "Pending" | "Refunded";
+  warrantyDays?: number;
   notes?: string;
 }
 
@@ -220,10 +226,12 @@ export interface Consignment {
 }
 
 export interface PurchaseItem {
+  id?: string;               // purchase_items row id — needed for returned_qty updates
   productId: string;
   productName: string;
   productType: "Mobile" | "Accessory";
   quantity: number;
+  returnedQty: number;       // how many already returned across all past returns
   unitCost: number;
   total: number;
   imeis?: string[];
@@ -266,7 +274,7 @@ export type ReturnStatus = "Pending" | "Approved" | "Rejected" | "Completed" | "
 export interface ReturnItem {
   productId: string
   productName: string
-  productType: "Mobile" | "Accessory"
+  productType: "Mobile" | "Accessory" | "UsedPhone"
   quantity: number
   unitPrice: number
   lineTotal: number

@@ -76,6 +76,7 @@ export async function updateMobile(id: string, data: Partial<Mobile>): Promise<M
       .from('mobiles')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select()
       .single()
 
@@ -88,13 +89,14 @@ export async function updateMobile(id: string, data: Partial<Mobile>): Promise<M
 
 export async function deleteMobile(id: string): Promise<void> {
   try {
-    // Clean up linked IMEI records first
-    await supabase.from('imei_records').delete().eq('product_id', id)
+    const tenantId = await getTenantId()
+    await supabase.from('imei_records').delete().eq('product_id', id).eq('tenant_id', tenantId)
 
     const { error } = await supabase
       .from('mobiles')
       .delete()
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to delete mobile: ${error.message}`)
   } catch (err) {
@@ -168,6 +170,7 @@ export async function updateAccessory(id: string, data: Partial<Accessory>): Pro
       .from('accessories')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select()
       .single()
 
@@ -180,10 +183,12 @@ export async function updateAccessory(id: string, data: Partial<Accessory>): Pro
 
 export async function deleteAccessory(id: string): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const { error } = await supabase
       .from('accessories')
       .delete()
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to delete accessory: ${error.message}`)
   } catch (err) {

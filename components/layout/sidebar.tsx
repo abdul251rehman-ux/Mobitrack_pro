@@ -1,20 +1,20 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Smartphone, Package, ShoppingCart, TrendingUp, Users, Truck, ShoppingBag,
   BarChart2, Settings, ChevronLeft, ChevronRight, LogOut, Layers, Tag, Award, ChevronDown, X, BookOpen, UserCheck, Building2, Bell, RefreshCw, Plus, Receipt,
-  RotateCcw, Wallet, ClipboardList, DollarSign,
+  RotateCcw, Wallet, ClipboardList, DollarSign, UserRound, Palette, HardDrive, Cpu,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/context/app-context"
 import { useAuth } from "@/context/auth-context"
 import { cn } from "@/lib/utils"
 
-type SubItem = { label: string; icon: React.ElementType; href: string }
-type NavLink = { label: string; icon: React.ElementType; href: string; children?: never }
-type NavAccordion = { label: string; icon: React.ElementType; href?: never; children: SubItem[] }
+type SubItem = { label: string; icon: React.ElementType; href: string; permission?: string }
+type NavLink = { label: string; icon: React.ElementType; href: string; children?: never; permission?: string }
+type NavAccordion = { label: string; icon: React.ElementType; href?: never; children: SubItem[]; permission?: string }
 type NavItem = NavLink | NavAccordion
 type NavSection = { section: string; items: NavItem[] }
 
@@ -26,16 +26,21 @@ const navSections: NavSection[] = [
   {
     section: "INVENTORY",
     items: [
-      { label: "Mobile Phones", icon: Smartphone, href: "/products/mobiles" },
-      { label: "Accessories", icon: Package, href: "/products/accessories" },
-      { label: "Stock Alerts", icon: Bell, href: "/inventory/stock-alerts" },
-      { label: "Used Phones", icon: RefreshCw, href: "/inventory/used-phones" },
+      { label: "Mobile Phones", icon: Smartphone, href: "/products/mobiles", permission: "products.view" },
+      { label: "Accessories", icon: Package, href: "/products/accessories", permission: "products.view" },
+      { label: "Stock Alerts", icon: Bell, href: "/inventory/stock-alerts", permission: "inventory.view" },
+      { label: "Used Phones", icon: RefreshCw, href: "/inventory/used-phones", permission: "inventory.view" },
       {
         label: "Catalog",
         icon: Layers,
+        permission: "catalog.view",
         children: [
-          { label: "Categories", icon: Tag, href: "/catalog/categories" },
-          { label: "Brands", icon: Award, href: "/catalog/brands" },
+          { label: "Categories", icon: Tag, href: "/catalog/categories", permission: "catalog.view" },
+          { label: "Brands", icon: Award, href: "/catalog/brands", permission: "catalog.view" },
+          { label: "Models", icon: Smartphone, href: "/catalog/models", permission: "catalog.view" },
+          { label: "Colors", icon: Palette, href: "/catalog/colors", permission: "catalog.view" },
+          { label: "Storage", icon: HardDrive, href: "/catalog/storage", permission: "catalog.view" },
+          { label: "RAM", icon: Cpu, href: "/catalog/ram", permission: "catalog.view" },
         ],
       },
     ],
@@ -43,17 +48,20 @@ const navSections: NavSection[] = [
   {
     section: "TRANSACTIONS",
     items: [
-      { label: "Sales", icon: ShoppingCart, href: "/sales" },
-      { label: "Purchases", icon: TrendingUp, href: "/purchases" },
-      { label: "Returns", icon: RotateCcw, href: "/returns" },
-      { label: "Finance", icon: Wallet, href: "/finance" },
-      { label: "Expenses", icon: Receipt, href: "/expenses" },
+      { label: "Sales", icon: ShoppingCart, href: "/sales", permission: "sales.view" },
+      { label: "Purchases", icon: TrendingUp, href: "/purchases", permission: "purchases.view" },
+      { label: "Returns", icon: RotateCcw, href: "/returns", permission: "returns.view" },
+      { label: "Purchase Returns", icon: RefreshCw, href: "/purchase-returns", permission: "purchases.view" },
+      { label: "Finance", icon: Wallet, href: "/finance", permission: "payments.view" },
+      { label: "Expenses", icon: Receipt, href: "/expenses", permission: "expenses.view" },
       {
         label: "Ledger",
         icon: BookOpen,
+        permission: "ledger.view",
         children: [
-          { label: "Customer Ledger", icon: UserCheck, href: "/ledger/customers" },
-          { label: "Supplier Ledger", icon: Building2, href: "/ledger/suppliers" },
+          { label: "Customer Ledger", icon: UserCheck, href: "/ledger/customers", permission: "ledger.view" },
+          { label: "Supplier Ledger", icon: Building2, href: "/ledger/suppliers", permission: "ledger.view" },
+          { label: "Person Ledger", icon: UserRound, href: "/ledger/persons", permission: "ledger.view" },
         ],
       },
     ],
@@ -61,23 +69,24 @@ const navSections: NavSection[] = [
   {
     section: "PEOPLE",
     items: [
-      { label: "Suppliers", icon: Truck, href: "/suppliers" },
-      { label: "Customers", icon: Users, href: "/customers" },
-      { label: "Dealers", icon: Building2, href: "/shops" },
+      { label: "Suppliers", icon: Truck, href: "/suppliers", permission: "suppliers.view" },
+      { label: "Customers", icon: Users, href: "/customers", permission: "customers.view" },
+      { label: "Dealers", icon: Building2, href: "/shops", permission: "shops.view" },
+      { label: "Persons", icon: UserRound, href: "/persons", permission: "ledger.view" },
     ],
   },
   {
     section: "INSIGHTS",
     items: [
-      { label: "Reports & Analytics", icon: BarChart2, href: "/reports" },
-      { label: "Profit & Loss", icon: DollarSign, href: "/profit-loss" },
+      { label: "Reports & Analytics", icon: BarChart2, href: "/reports", permission: "reports.view" },
+      { label: "Profit & Loss", icon: DollarSign, href: "/profit-loss", permission: "reports.view" },
     ],
   },
   {
     section: "SYSTEM",
     items: [
-      { label: "Audit Log", icon: ClipboardList, href: "/audit-log" },
-      { label: "Settings", icon: Settings, href: "/settings" },
+      { label: "Audit Log", icon: ClipboardList, href: "/audit-log", permission: "audit-log.view" },
+      { label: "Settings", icon: Settings, href: "/settings", permission: "settings.general" },
     ],
   },
 ]
@@ -95,12 +104,17 @@ function SidebarContent({
 }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, logout, hasPermission } = useAuth()
   const [openAccordion, setOpenAccordion] = useState<string | null>(
     pathname.startsWith("/catalog") ? "Catalog"
       : pathname.startsWith("/ledger") ? "Ledger"
       : null
   )
+  // Keep accordion open when navigating within it
+  useEffect(() => {
+    if (pathname.startsWith("/catalog")) setOpenAccordion("Catalog")
+    else if (pathname.startsWith("/ledger")) setOpenAccordion("Ledger")
+  }, [pathname])
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
@@ -149,50 +163,61 @@ function SidebarContent({
       <div className={cn("px-2.5 pt-2.5 pb-1 shrink-0 space-y-1.5", sidebarCollapsed && "px-2")}>
         {sidebarCollapsed ? (
           <>
-            <button
-              onClick={() => { router.push("/sales/new"); onNavClick?.() }}
-              title="New Sale"
-              className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-md shadow-blue-900/30"
-            >
-              <Plus className="w-4 h-4 text-white" />
-              <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                New Sale
-              </div>
-            </button>
-            <button
-              onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
-              title="New Purchase"
-              className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-95 transition-all"
-            >
-              <ShoppingCart className="w-4 h-4 text-white" />
-              <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                New Purchase
-              </div>
-            </button>
+            {hasPermission("sales.create") && (
+              <button
+                onClick={() => { router.push("/sales/new"); onNavClick?.() }}
+                title="New Sale"
+                className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-md shadow-blue-900/30"
+              >
+                <Plus className="w-4 h-4 text-white" />
+                <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
+                  New Sale
+                </div>
+              </button>
+            )}
+            {hasPermission("purchases.create") && (
+              <button
+                onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
+                title="New Purchase"
+                className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-95 transition-all"
+              >
+                <ShoppingCart className="w-4 h-4 text-white" />
+                <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
+                  New Purchase
+                </div>
+              </button>
+            )}
           </>
         ) : (
           <>
-            <button
-              onClick={() => { router.push("/sales/new"); onNavClick?.() }}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md shadow-blue-900/30 group"
-            >
-              <Plus className="w-3.5 h-3.5 text-white" />
-              <span className="text-white font-semibold text-xs tracking-wide">New Sale</span>
-            </button>
-            <button
-              onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
-              className="w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-[0.98] transition-all group"
-            >
-              <ShoppingCart className="w-3.5 h-3.5 text-slate-300" />
-              <span className="text-slate-300 font-medium text-xs tracking-wide">New Purchase</span>
-            </button>
+            {hasPermission("sales.create") && (
+              <button
+                onClick={() => { router.push("/sales/new"); onNavClick?.() }}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md shadow-blue-900/30 group"
+              >
+                <Plus className="w-3.5 h-3.5 text-white" />
+                <span className="text-white font-semibold text-xs tracking-wide">New Sale</span>
+              </button>
+            )}
+            {hasPermission("purchases.create") && (
+              <button
+                onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
+                className="w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-[0.98] transition-all group"
+              >
+                <ShoppingCart className="w-3.5 h-3.5 text-slate-300" />
+                <span className="text-slate-300 font-medium text-xs tracking-wide">New Purchase</span>
+              </button>
+            )}
           </>
         )}
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-1.5 px-2 space-y-px scrollbar-none">
-        {navSections.map(({ section, items }) => (
+        {navSections.map(({ section, items }) => {
+          const visibleItems = items.filter(item => !item.permission || hasPermission(item.permission))
+          if (visibleItems.length === 0) return null
+          return (
           <div key={section} className="mb-0.5">
             {!sidebarCollapsed && (
               <p className="text-slate-600 text-[9px] font-bold uppercase tracking-widest px-2 pt-3 pb-1">
@@ -201,14 +226,16 @@ function SidebarContent({
             )}
             {sidebarCollapsed && <div className="h-2.5" />}
 
-            {items.map((item) => {
+            {visibleItems.map((item) => {
               if (item.children) {
+                const visibleChildren = item.children.filter(c => !c.permission || hasPermission(c.permission))
+                if (visibleChildren.length === 0) return null
                 const isOpen = openAccordion === item.label
-                const anyChildActive = item.children.some((c) => isActive(c.href))
+                const anyChildActive = visibleChildren.some((c) => isActive(c.href))
                 const Icon = item.icon
 
                 if (sidebarCollapsed) {
-                  return item.children.map((child) => {
+                  return visibleChildren.map((child) => {
                     const ChildIcon = child.icon
                     const active = isActive(child.href)
                     return (
@@ -258,7 +285,7 @@ function SidebarContent({
 
                     {isOpen && (
                       <div className="ml-3 pl-2.5 border-l border-white/[0.07] space-y-px mb-0.5">
-                        {item.children.map((child) => {
+                        {visibleChildren.map((child) => {
                           const ChildIcon = child.icon
                           const active = isActive(child.href)
                           return (
@@ -321,7 +348,8 @@ function SidebarContent({
               )
             })}
           </div>
-        ))}
+          )
+        })}
       </nav>
 
       {/* User Profile */}

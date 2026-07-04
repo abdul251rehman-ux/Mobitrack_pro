@@ -1,410 +1,252 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Plus, Pencil, Trash2, Tag, Smartphone, Package, Layers, Search, Calendar, Hash } from "lucide-react"
-import { ColumnDef } from "@tanstack/react-table"
-import { toast } from "sonner"
-
+import { Tag, Smartphone, Package, Layers, ChevronDown, ChevronUp } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
+import { toast } from "sonner"
 
-interface Category {
+// ─── Hardcoded categories ─────────────────────────────────────────────────────
+const CATEGORIES = [
+  { name: "PTA Approved", type: "iPhone",  description: "Officially PTA approved iPhones" },
+  { name: "Non-PTA",      type: "iPhone",  description: "Non-PTA / imported iPhones" },
+  { name: "JV",           type: "iPhone",  description: "Joint Venture iPhones" },
+  { name: "PTA Approved", type: "Android", description: "Officially PTA approved Android phones" },
+  { name: "Non-PTA",      type: "Android", description: "Non-PTA / imported Android phones" },
+]
+
+type FilterType = "All" | "iPhone" | "Android"
+
+interface PhoneRow {
   id: string
-  name: string
-  type: "Mobile" | "Accessory" | "Both"
-  description: string
-  itemCount: number
-  createdAt: string
+  brand: string
+  model: string
+  color: string
+  storage: string
+  stock: number
+  selling_price: number
+  category: string
+  device_type: string
 }
 
-import { DataTable } from "@/components/shared/data-table"
-import { ConfirmDialog } from "@/components/shared/confirm-dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog"
-import { formatDate } from "@/lib/utils"
-
-// ─── Type chip ────────────────────────────────────────────────────────────────
-function TypeChip({ type }: { type: Category["type"] }) {
-  const cfg = {
-    Mobile:    "bg-blue-50 text-blue-700 border-blue-200",
-    Accessory: "bg-slate-50 text-slate-600 border-slate-200",
-    Both:      "bg-violet-50 text-violet-700 border-violet-200",
+function TypeChip({ type }: { type: string }) {
+  const cfg: Record<string, string> = {
+    iPhone:  "bg-blue-50 text-blue-700 border-blue-200",
+    Android: "bg-emerald-50 text-emerald-700 border-emerald-200",
   }
   return (
-    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${cfg[type]}`}>
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${cfg[type] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
       {type}
     </span>
   )
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
-export default function CategoriesPage() {
-  const [list, setList] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState<Category | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
-  const [mobileSearch, setMobileSearch] = useState("")
+function StockPill({ stock }: { stock: number }) {
+  if (stock <= 0)
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Out of Stock</span>
+  if (stock <= 3)
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Low: {stock}</span>
+  return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">{stock} in stock</span>
+}
 
-  const [formName, setFormName] = useState("")
-  const [formType, setFormType] = useState<Category["type"]>("Mobile")
-  const [formDesc, setFormDesc] = useState("")
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+function CategoryCard({ cat, phones, loading }: {
+  cat: typeof CATEGORIES[0]
+  phones: PhoneRow[]
+  loading: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isIphone = cat.type === "iPhone"
+  const accentBg   = isIphone ? "bg-blue-50"   : "bg-emerald-50"
+  const accentText = isIphone ? "text-blue-600" : "text-emerald-600"
+  const accentBorder = isIphone ? "border-blue-100" : "border-emerald-100"
 
-  async function fetchCategories() {
-    try {
-      const [{ data, error }, { data: mobiles }, { data: accessories }] = await Promise.all([
-        supabase.from("categories").select("*").order("created_at", { ascending: false }),
-        supabase.from("mobiles").select("category"),
-        supabase.from("accessories").select("category"),
-      ])
-      if (error) throw error
-
-      // Count real products per category (case-insensitive match)
-      const countMap: Record<string, number> = {}
-      for (const m of mobiles ?? []) {
-        if (m.category) countMap[m.category.toLowerCase()] = (countMap[m.category.toLowerCase()] ?? 0) + 1
-      }
-      for (const a of accessories ?? []) {
-        if (a.category) countMap[a.category.toLowerCase()] = (countMap[a.category.toLowerCase()] ?? 0) + 1
-      }
-
-      const mapped: Category[] = (data ?? []).map((c: Record<string, unknown>) => ({
-        id: c.id as string,
-        name: c.name as string,
-        type: (c.type ?? "Mobile") as Category["type"],
-        description: (c.description ?? "") as string,
-        itemCount: countMap[(c.name as string).toLowerCase()] ?? 0,
-        createdAt: (c.created_at ?? new Date().toISOString()) as string,
-      }))
-      setList(mapped)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to fetch categories")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { fetchCategories() }, [])
-
-  const stats = useMemo(() => ({
-    total:     list.length,
-    mobile:    list.filter((c) => c.type === "Mobile").length,
-    accessory: list.filter((c) => c.type === "Accessory").length,
-    both:      list.filter((c) => c.type === "Both").length,
-    totalItems: list.reduce((s, c) => s + c.itemCount, 0),
-  }), [list])
-
-  function openAdd() {
-    setEditTarget(null); setFormName(""); setFormType("Mobile"); setFormDesc(""); setFormErrors({})
-    setDialogOpen(true)
-  }
-  function openEdit(cat: Category) {
-    setEditTarget(cat); setFormName(cat.name); setFormType(cat.type); setFormDesc(cat.description); setFormErrors({})
-    setDialogOpen(true)
-  }
-
-  function validate() {
-    const errs: Record<string, string> = {}
-    if (!formName.trim()) errs.name = "Name is required"
-    else if (list.some((c) => c.name.toLowerCase() === formName.trim().toLowerCase() && c.id !== editTarget?.id))
-      errs.name = "Category name already exists"
-    setFormErrors(errs)
-    return Object.keys(errs).length === 0
-  }
-
-  async function handleSave() {
-    if (!validate()) return
-    try {
-      if (editTarget) {
-        const { error } = await supabase.from("categories")
-          .update({ name: formName.trim(), type: formType, description: formDesc.trim() })
-          .eq("id", editTarget.id)
-        if (error) throw error
-        toast.success("Category updated successfully")
-      } else {
-        const tenantId = await getTenantId()
-        const { error } = await supabase.from("categories")
-          .insert({ tenant_id: tenantId, name: formName.trim(), type: formType, description: formDesc.trim(), item_count: 0 })
-        if (error) throw error
-        toast.success("Category added successfully")
-      }
-      setDialogOpen(false)
-      await fetchCategories()
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save category")
-    }
-  }
-
-  async function handleDelete() {
-    if (!deleteTarget) return
-    try {
-      const { error } = await supabase.from("categories").delete().eq("id", deleteTarget.id)
-      if (error) throw error
-      toast.success(`"${deleteTarget.name}" deleted`)
-      setDeleteTarget(null)
-      await fetchCategories()
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete category")
-    }
-  }
-
-  const columns: ColumnDef<Category>[] = useMemo(() => [
-    {
-      accessorKey: "name",
-      header: "Category Name",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
-            <Tag className="w-3.5 h-3.5 text-blue-600" />
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Card header */}
+      <div className="p-4 flex items-start gap-3">
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${accentBg}`}>
+          <Tag className={`w-4 h-4 ${accentText}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-bold text-slate-800">{cat.name}</span>
+            <TypeChip type={cat.type} />
           </div>
-          <span className="text-xs font-semibold text-slate-800">{row.original.name}</span>
+          <p className="text-[11px] text-slate-400 mb-2">{cat.description}</p>
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              phones.length > 0 ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-400"
+            }`}>
+              {loading ? "..." : `${phones.length} model${phones.length !== 1 ? "s" : ""}`}
+            </span>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              phones.reduce((s, p) => s + p.stock, 0) > 0 ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-400"
+            }`}>
+              {loading ? "..." : `${phones.reduce((s, p) => s + p.stock, 0)} units`}
+            </span>
+          </div>
         </div>
-      ),
-    },
-    {
-      accessorKey: "type",
-      header: "Type",
-      cell: ({ row }) => <TypeChip type={row.original.type} />,
-    },
-    {
-      accessorKey: "description",
-      header: "Description",
-      cell: ({ row }) => (
-        <span className="text-xs text-slate-400 line-clamp-1 max-w-56">
-          {row.original.description || "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "itemCount",
-      header: "Items",
-      cell: ({ row }) => (
-        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
-          {row.original.itemCount}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "createdAt",
-      header: "Created",
-      cell: ({ row }) => (
-        <span className="text-xs text-slate-400">{formatDate(row.original.createdAt)}</span>
-      ),
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-0.5">
+        {!loading && phones.length > 0 && (
           <button
-            onClick={() => openEdit(row.original)}
-            className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
-            title="Edit"
+            onClick={() => setExpanded(v => !v)}
+            className="shrink-0 w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            {expanded
+              ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+              : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
           </button>
-          <button
-            onClick={() => setDeleteTarget(row.original)}
-            className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ),
-    },
-  ], [])
-
-  const statCards = [
-    { title: "Total Categories",    value: stats.total,     sub: `${stats.totalItems} total items`, Icon: Layers,     iconBg: "bg-blue-500" },
-    { title: "Mobile Categories",   value: stats.mobile,    sub: "For mobile phones",               Icon: Smartphone, iconBg: "bg-sky-500"  },
-    { title: "Accessory Categories",value: stats.accessory, sub: "For accessories",                 Icon: Package,    iconBg: "bg-slate-500"},
-    { title: "Shared (Both)",       value: stats.both,      sub: "Used for both types",             Icon: Tag,        iconBg: "bg-violet-500"},
-  ]
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        )}
       </div>
-    )
+
+      {/* Phone list (expanded) */}
+      {expanded && phones.length > 0 && (
+        <div className={`border-t ${accentBorder}`}>
+          <div className="divide-y divide-slate-100">
+            {phones.map(phone => (
+              <div key={phone.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${accentBg}`}>
+                  <Smartphone className={`w-3.5 h-3.5 ${accentText}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-800 truncate">
+                    {phone.brand} {phone.model}
+                  </p>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {phone.color} - {phone.storage}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-xs font-bold text-slate-700">
+                    PKR {phone.selling_price?.toLocaleString() ?? "-"}
+                  </span>
+                  <StockPill stock={phone.stock} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state inside card */}
+      {expanded && phones.length === 0 && (
+        <div className={`border-t ${accentBorder} py-6 text-center`}>
+          <Package className="w-6 h-6 text-slate-300 mx-auto mb-1" />
+          <p className="text-[11px] text-slate-400">No phones in this category</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function CategoriesPage() {
+  const [phones, setPhones] = useState<PhoneRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<FilterType>("All")
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const tenantId = await getTenantId()
+        const { data, error } = await supabase
+          .from("mobiles")
+          .select("id, brand, model, color, storage, stock, selling_price, category, device_type")
+          .eq("tenant_id", tenantId)
+        if (error) throw error
+        setPhones(data ?? [])
+      } catch {
+        toast.error("Failed to load phones")
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const filtered = useMemo(() =>
+    filter === "All" ? CATEGORIES : CATEGORIES.filter(c => c.type === filter),
+    [filter]
+  )
+
+  function getPhonesForCat(cat: typeof CATEGORIES[0]) {
+    return phones.filter(p => {
+      const deviceType = p.device_type === "iphone" ? "iPhone" : "Android"
+      return p.category === cat.name && deviceType === cat.type
+    })
+  }
+
+  const totalUnits = phones.reduce((s, p) => s + (p.stock ?? 0), 0)
+
+  const stats = {
+    total:   CATEGORIES.length,
+    iphone:  CATEGORIES.filter(c => c.type === "iPhone").length,
+    android: CATEGORIES.filter(c => c.type === "Android").length,
+    totalUnits,
   }
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="p-4 space-y-4">
 
-      {/* ── Compact header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-            <Layers className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-900 leading-none">Categories</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Manage product categories for mobiles and accessories</p>
-          </div>
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+          <Layers className="w-4 h-4 text-white" />
         </div>
-        <Button onClick={openAdd} size="sm" className="h-8 text-xs gap-1.5 px-3">
-          <Plus className="w-3.5 h-3.5" />
-          Add Category
-        </Button>
+        <div>
+          <h1 className="text-sm font-bold text-slate-900 leading-none">Categories</h1>
+          <p className="text-[10px] text-slate-400 mt-0.5">Device categories used across purchases and inventory</p>
+        </div>
       </div>
 
-      {/* ── 4 stat cards in one row ─────────────────────────────────────────── */}
+      {/* Stat cards */}
       <div className="grid grid-cols-4 gap-2.5">
-        {statCards.map((card) => (
+        {[
+          { title: "Total Categories",   value: stats.total,      sub: `${stats.totalUnits} total units`,  Icon: Layers,     bg: "bg-blue-500"    },
+          { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA - Non-PTA - JV",               Icon: Smartphone, bg: "bg-sky-500"     },
+          { title: "Android Categories", value: stats.android,    sub: "PTA - Non-PTA",                    Icon: Smartphone, bg: "bg-emerald-500" },
+          { title: "Total Units",        value: stats.totalUnits, sub: "Across all categories",             Icon: Package,    bg: "bg-violet-500"  },
+        ].map(card => (
           <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none">{card.title}</p>
-              <div className={`w-6 h-6 rounded-md ${card.iconBg} flex items-center justify-center shrink-0`}>
+              <div className={`w-6 h-6 rounded-md ${card.bg} flex items-center justify-center shrink-0`}>
                 <card.Icon className="w-3.5 h-3.5 text-white" />
               </div>
             </div>
-            <p className="text-lg font-bold text-slate-900 leading-none">{card.value}</p>
+            <p className="text-lg font-bold text-slate-900 leading-none">{loading ? "-" : card.value}</p>
             <p className="text-[10px] text-slate-400">{card.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* ── Mobile cards (md:hidden) ────────────────────────────────────────── */}
-      <div className="md:hidden space-y-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search categories..."
-            value={mobileSearch}
-            onChange={(e) => setMobileSearch(e.target.value)}
-            className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+      {/* Filter tabs */}
+      <div className="flex items-center gap-2">
+        {(["All", "iPhone", "Android"] as FilterType[]).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              filter === f
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600"
+            }`}
+          >
+            {f === "All" ? "All Categories" : `${f} Only`}
+          </button>
+        ))}
+      </div>
+
+      {/* Category cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {filtered.map((cat, i) => (
+          <CategoryCard
+            key={i}
+            cat={cat}
+            phones={getPhonesForCat(cat)}
+            loading={loading}
           />
-        </div>
-        {list
-          .filter((c) => c.name.toLowerCase().includes(mobileSearch.toLowerCase()))
-          .map((cat) => {
-            const accentBg = cat.type === "Mobile" ? "bg-blue-500" : cat.type === "Accessory" ? "bg-slate-400" : "bg-violet-500"
-            return (
-              <div key={cat.id} className="flex rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div className={`w-1 shrink-0 ${accentBg}`} />
-                <div className="flex-1 p-2.5 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
-                      <Tag className="w-3.5 h-3.5 text-blue-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-800 truncate flex-1">{cat.name}</span>
-                    <TypeChip type={cat.type} />
-                  </div>
-                  {cat.description && (
-                    <p className="text-[10px] text-slate-400 line-clamp-1 ml-8 mb-1">{cat.description}</p>
-                  )}
-                  <div className="flex items-center gap-3 ml-8 mb-2">
-                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-                      <Hash className="w-3 h-3" />{cat.itemCount} items
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
-                      <Calendar className="w-3 h-3" />{formatDate(cat.createdAt)}
-                    </span>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => openEdit(cat)}>
-                      <Pencil className="w-3 h-3" />Edit
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-red-500 border-red-200 hover:bg-red-50" onClick={() => setDeleteTarget(cat)}>
-                      <Trash2 className="w-3 h-3" />Delete
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        {list.filter((c) => c.name.toLowerCase().includes(mobileSearch.toLowerCase())).length === 0 && (
-          <div className="text-center py-8 text-xs text-slate-400">No categories found</div>
-        )}
+        ))}
       </div>
 
-      {/* ── Desktop table ───────────────────────────────────────────────────── */}
-      <div className="hidden md:block">
-        <DataTable columns={columns} data={list} searchKey="name" searchPlaceholder="Search categories..." />
-      </div>
-
-      {/* ── Add / Edit Dialog ───────────────────────────────────────────────── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-bold">
-              {editTarget ? "Edit Category" : "Add New Category"}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 py-1">
-            <div className="space-y-1">
-              <Label className="text-xs">Name <span className="text-red-500">*</span></Label>
-              <Input
-                placeholder="e.g. Flagship, Cases & Covers"
-                value={formName}
-                onChange={(e) => { setFormName(e.target.value); if (formErrors.name) setFormErrors((p) => ({ ...p, name: "" })) }}
-                className={`h-8 text-xs ${formErrors.name ? "border-red-400" : ""}`}
-              />
-              {formErrors.name && <p className="text-[10px] text-red-500">{formErrors.name}</p>}
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs">Type</Label>
-              <Select value={formType} onValueChange={(v) => setFormType(v as Category["type"])}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Mobile">Mobile</SelectItem>
-                  <SelectItem value="Accessory">Accessory</SelectItem>
-                  <SelectItem value="Both">Both</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs">
-                Description <span className="text-slate-400 font-normal">(optional)</span>
-              </Label>
-              <Textarea
-                placeholder="Brief description of this category..."
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                rows={2}
-                className="resize-none text-xs"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
-              {editTarget ? "Save Changes" : "Add Category"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Delete Confirm ──────────────────────────────────────────────────── */}
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete Category"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        onConfirm={handleDelete}
-      />
     </div>
   )
 }

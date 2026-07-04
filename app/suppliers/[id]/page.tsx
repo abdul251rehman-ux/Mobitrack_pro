@@ -6,7 +6,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin,
   ShoppingBag, CreditCard, AlertCircle, Package,
-  CalendarDays, FileText, Star,
+  CalendarDays, FileText, Star, Wallet,
 } from "lucide-react"
 
 import { getSupplierById } from "@/lib/api/suppliers"
@@ -122,7 +122,7 @@ const purchaseColumns: ColumnDef<Purchase>[] = [
           {formatCurrency(balance)}
         </span>
       ) : (
-        <span className="text-xs text-slate-400">—</span>
+        <span className="text-xs text-slate-400">-</span>
       )
     },
   },
@@ -186,6 +186,11 @@ export default function SupplierDetailPage() {
   const balanceDue = useMemo(
     () => supplierPurchases.reduce((sum, p) => sum + p.balanceDue, 0),
     [supplierPurchases]
+  )
+  // When totalPaid > totalPurchased, supplier owes us (advance/credit)
+  const creditBalance = useMemo(
+    () => Math.max(0, totalPaid - totalPurchased),
+    [totalPaid, totalPurchased]
   )
   const recentPayments = useMemo(() => {
     return supplierPurchases
@@ -294,14 +299,25 @@ export default function SupplierDetailPage() {
           icon={CreditCard}
           iconBg="bg-emerald-100"
         />
-        <StatCard
-          title="Balance Due"
-          value={formatCurrency(balanceDue)}
-          subtext={balanceDue > 0 ? "Outstanding" : "No balance"}
-          icon={AlertCircle}
-          iconBg={balanceDue > 0 ? "bg-red-100" : "bg-slate-100"}
-          className={balanceDue > 0 ? "border-red-200" : ""}
-        />
+        {creditBalance > 0 ? (
+          <StatCard
+            title="Advance / Credit"
+            value={formatCurrency(creditBalance)}
+            subtext="Supplier owes you"
+            icon={Wallet}
+            iconBg="bg-blue-100"
+            className="border-blue-200"
+          />
+        ) : (
+          <StatCard
+            title="Balance Due"
+            value={formatCurrency(balanceDue)}
+            subtext={balanceDue > 0 ? "Outstanding" : "Fully settled"}
+            icon={AlertCircle}
+            iconBg={balanceDue > 0 ? "bg-red-100" : "bg-slate-100"}
+            className={balanceDue > 0 ? "border-red-200" : ""}
+          />
+        )}
         <StatCard
           title="No. of Orders"
           value={String(supplierPurchases.length)}
@@ -392,12 +408,21 @@ export default function SupplierDetailPage() {
                   <span className="text-xs font-bold text-blue-700">{formatCurrency(totalPaid)}</span>
                 </div>
                 <div className="border-t border-blue-200 pt-2 flex justify-between items-center">
-                  <span className={`text-[10px] font-semibold ${balanceDue > 0 ? "text-red-600" : "text-slate-500"}`}>
-                    Balance Due
-                  </span>
-                  <span className={`text-xs font-bold ${balanceDue > 0 ? "text-red-600" : "text-slate-500"}`}>
-                    {balanceDue > 0 ? formatCurrency(balanceDue) : "—"}
-                  </span>
+                  {creditBalance > 0 ? (
+                    <>
+                      <span className="text-[10px] font-semibold text-blue-700">Advance / Credit</span>
+                      <span className="text-xs font-bold text-blue-700">+{formatCurrency(creditBalance)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`text-[10px] font-semibold ${balanceDue > 0 ? "text-red-600" : "text-slate-500"}`}>
+                        Balance Due
+                      </span>
+                      <span className={`text-xs font-bold ${balanceDue > 0 ? "text-red-600" : "text-slate-500"}`}>
+                        {balanceDue > 0 ? formatCurrency(balanceDue) : "-"}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <div>
                   <div className="flex justify-between text-[10px] text-blue-500 mb-1">

@@ -1,11 +1,11 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useEffect } from "react"
 import {
   Plus, Banknote, Building2, Smartphone, Zap, CreditCard,
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Wallet,
   Search, Download, Eye, Pencil, X, CheckCircle, AlertCircle,
-  Users, Truck, TrendingUp,
+  Users, Truck, TrendingUp, FileText,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -27,6 +27,8 @@ import type {
 import type { Payment, Customer, Supplier, Sale, Purchase } from "@/data/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
 import { exportToCSV } from "@/lib/csv-export"
+import { generateReportPDF } from "@/lib/pdf/report"
+import { getTenant } from "@/lib/api/settings"
 
 import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/shared/stat-card"
@@ -50,7 +52,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const ACCOUNT_TYPE_META: Record<FinanceAccountType, {
   label: string
@@ -74,6 +76,8 @@ const TX_META: Record<string, { label: string; color: string; bg: string; border
   purchase_payment: { label: "Purchase Payment", color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
   expense:          { label: "Expense",          color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
   opening_balance:  { label: "Opening Balance",  color: "text-slate-700",   bg: "bg-slate-50",   border: "border-slate-200",   icon: <Wallet className="h-3 w-3" />        },
+  person_gave:      { label: "Gave to Person",   color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
+  person_took:      { label: "Took from Person", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
 }
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card", "Cheque"]
@@ -81,18 +85,18 @@ const PAYMENT_METHODS = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card
 const BANK_NAMES = ["HBL", "Meezan Bank", "UBL", "MCB", "Bank Alfalah", "Allied Bank", "Standard Chartered", "Faysal Bank", "Askari Bank", "Silk Bank", "Other"]
 const WALLET_NAMES = ["JazzCash", "EasyPaisa", "NayaPay", "SadaPay", "UPaisa", "Other"]
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const TODAY = todayPKT()
 
 function isInflow(type: string) {
-  return ["deposit", "transfer_in", "sale_receipt", "opening_balance"].includes(type)
+  return ["deposit", "transfer_in", "sale_receipt", "opening_balance", "person_took"].includes(type)
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function FinancePage() {
-  // ── Data state ────────────────────────────────────────────────────────────
+  // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
@@ -103,13 +107,13 @@ export default function FinancePage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("accounts")
 
-  // ── Dialog state ──────────────────────────────────────────────────────────
+  // â"€â"€ Dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   type ModalType = null | "addAccount" | "deposit" | "withdraw" | "transfer" | "editAccount" | "recordPayment"
   const [modal, setModal] = useState<ModalType>(null)
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // ── Add Account form ──────────────────────────────────────────────────────
+  // â"€â"€ Add Account form â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [accForm, setAccForm] = useState({
     type: "bank" as FinanceAccountType,
     name: "",
@@ -119,13 +123,13 @@ export default function FinancePage() {
     openingBalance: "",
   })
 
-  // ── Deposit/Withdraw form ─────────────────────────────────────────────────
+  // â"€â"€ Deposit/Withdraw form â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [txForm, setTxForm] = useState({ amount: "", date: TODAY, description: "", notes: "" })
 
-  // ── Transfer form ─────────────────────────────────────────────────────────
+  // â"€â"€ Transfer form â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [transferForm, setTransferForm] = useState({ fromId: "", toId: "", amount: "", date: TODAY, notes: "" })
 
-  // ── Record Payment form (receivables tab) ─────────────────────────────────
+  // â"€â"€ Record Payment form (receivables tab) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [payForm, setPayForm] = useState({
     type: "Received" as "Received" | "Paid",
     entityType: "Customer" as "Customer" | "Supplier",
@@ -137,14 +141,15 @@ export default function FinancePage() {
     notes: "",
   })
 
-  // ── Transaction filters ───────────────────────────────────────────────────
+  // â"€â"€ Transaction filters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [txSearch, setTxSearch] = useState("")
   const [txFilterType, setTxFilterType] = useState("All")
   const [txFilterAccount, setTxFilterAccount] = useState("All")
   const [txDateFrom, setTxDateFrom] = useState("")
   const [txDateTo, setTxDateTo] = useState("")
+  const [reportPeriod, setReportPeriod] = useState("this_month")
 
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // â"€â"€ Load â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   useEffect(() => {
     async function load() {
       try {
@@ -176,7 +181,7 @@ export default function FinancePage() {
     load()
   }, [])
 
-  // ── Summary stats ─────────────────────────────────────────────────────────
+  // â"€â"€ Summary stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const summary = useMemo(() => {
     const cash  = accounts.filter(a => a.type === "cash").reduce((s, a) => s + a.currentBalance, 0)
     const banks = accounts.filter(a => a.type === "bank").reduce((s, a) => s + a.currentBalance, 0)
@@ -184,7 +189,7 @@ export default function FinancePage() {
     return { cash, banks, wallets, total: cash + banks + wallets }
   }, [accounts])
 
-  // ── Filtered transactions ─────────────────────────────────────────────────
+  // â"€â"€ Filtered transactions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const filteredTx = useMemo(() => {
     return transactions.filter(tx => {
       if (txSearch) {
@@ -203,7 +208,7 @@ export default function FinancePage() {
     })
   }, [transactions, txSearch, txFilterType, txFilterAccount, txDateFrom, txDateTo])
 
-  // ── Customer receivables ──────────────────────────────────────────────────
+  // â"€â"€ Customer receivables â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const customerReceivables = useMemo(() => {
     return customers.map(c => {
       const custSales = sales.filter(s => s.customerId === c.id)
@@ -221,7 +226,7 @@ export default function FinancePage() {
     }).filter(c => c.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding)
   }, [customers, sales, payments])
 
-  // ── Supplier payables ─────────────────────────────────────────────────────
+  // â"€â"€ Supplier payables â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const supplierPayables = useMemo(() => {
     return suppliers.map(s => {
       const suppPurchases = purchases.filter(p => p.supplierId === s.id)
@@ -239,7 +244,7 @@ export default function FinancePage() {
     }).filter(s => s.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding)
   }, [suppliers, purchases, payments])
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // â"€â"€ Handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   function openDeposit(acc: FinanceAccount) {
     setSelectedAccount(acc)
@@ -417,7 +422,7 @@ export default function FinancePage() {
         createdAt: new Date().toISOString(),
       })
 
-      // Finance transaction: customer payment → money IN, supplier payment → money OUT
+      // Finance transaction: customer payment â†' money IN, supplier payment â†' money OUT
       const txType = payForm.type === "Received" ? "customer_payment" : "supplier_payment"
       const { data: accRow } = await supabase
         .from("finance_accounts").select("current_balance").eq("id", payForm.accountId).single()
@@ -444,7 +449,7 @@ export default function FinancePage() {
 
       setPayments(prev => [created, ...prev])
       setModal(null)
-      toast.success(`${formatCurrency(amount)} ${payForm.type === "Received" ? "collected" : "paid"} — account updated`)
+      toast.success(`${formatCurrency(amount)} ${payForm.type === "Received" ? "collected" : "paid"} - account updated`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to record payment")
     } finally {
@@ -453,29 +458,138 @@ export default function FinancePage() {
   }
 
   function handleExportTx() {
-    exportToCSV(filteredTx.map(tx => ({
-      date: tx.date,
-      type: TX_META[tx.type]?.label ?? tx.type,
-      account: accounts.find(a => a.id === tx.accountId)?.name ?? tx.accountId,
-      amount: tx.amount,
-      direction: isInflow(tx.type) ? "In" : "Out",
-      description: tx.description ?? "",
-      reference: tx.referenceNumber ?? "",
-      notes: tx.notes ?? "",
-    })), "finance-transactions", [
-      { key: "date", header: "Date" },
-      { key: "type", header: "Type" },
-      { key: "account", header: "Account" },
-      { key: "direction", header: "Direction" },
-      { key: "amount", header: "Amount (PKR)" },
+    exportToCSV(filteredTx.map(tx => {
+      const inflow = isInflow(tx.type)
+      return {
+        date:        tx.date,
+        type:        TX_META[tx.type]?.label ?? tx.type,
+        account:     accounts.find(a => a.id === tx.accountId)?.name ?? "",
+        flow:        inflow ? "IN (+)" : "OUT (-)",
+        amount:      tx.amount,
+        signed:      inflow ? tx.amount : -tx.amount,
+        description: (tx.description ?? "").replace(/[^\x20-\x7E]/g, ""),
+        reference:   tx.referenceNumber ?? "",
+        notes:       (tx.notes ?? "").replace(/[^\x20-\x7E]/g, ""),
+      }
+    }), "finance-transactions", [
+      { key: "date",        header: "Date" },
+      { key: "type",        header: "Transaction Type" },
+      { key: "account",     header: "Account" },
+      { key: "flow",        header: "Flow" },
+      { key: "amount",      header: "Amount (Rs)" },
+      { key: "signed",      header: "Signed Amount (Rs)" },
       { key: "description", header: "Description" },
-      { key: "reference", header: "Reference" },
-      { key: "notes", header: "Notes" },
+      { key: "reference",   header: "Reference No." },
+      { key: "notes",       header: "Notes" },
     ])
     toast.success(`Exported ${filteredTx.length} transactions`)
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  async function handlePDFReport() {
+    // Determine date range from selected period
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, "0")
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+    let fromDate = ""
+    let toDate = fmt(now)
+    let periodLabel = ""
+
+    if (reportPeriod === "this_week") {
+      const day = now.getDay()
+      const mon = new Date(now); mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1))
+      fromDate = fmt(mon); toDate = fmt(now)
+      periodLabel = `Week: ${fromDate} to ${toDate}`
+    } else if (reportPeriod === "last_week") {
+      const day = now.getDay()
+      const mon = new Date(now); mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1) - 7)
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+      fromDate = fmt(mon); toDate = fmt(sun)
+      periodLabel = `Week: ${fromDate} to ${toDate}`
+    } else if (reportPeriod === "this_month") {
+      fromDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`
+      toDate = fmt(now)
+      const monthName = now.toLocaleString("en-PK", { month: "long", year: "numeric" })
+      periodLabel = `Month: ${monthName}`
+    } else if (reportPeriod === "last_month") {
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const last  = new Date(now.getFullYear(), now.getMonth(), 0)
+      fromDate = fmt(first); toDate = fmt(last)
+      const monthName = first.toLocaleString("en-PK", { month: "long", year: "numeric" })
+      periodLabel = `Month: ${monthName}`
+    } else if (reportPeriod === "this_year") {
+      fromDate = `${now.getFullYear()}-01-01`; toDate = fmt(now)
+      periodLabel = `Year: ${now.getFullYear()}`
+    } else if (reportPeriod === "last_year") {
+      const y = now.getFullYear() - 1
+      fromDate = `${y}-01-01`; toDate = `${y}-12-31`
+      periodLabel = `Year: ${y}`
+    } else {
+      // "all" — no filter
+      periodLabel = "All Time"
+    }
+
+    const txForPeriod = transactions.filter(tx => {
+      if (fromDate && tx.date < fromDate) return false
+      if (toDate   && tx.date > toDate)   return false
+      return true
+    })
+
+    if (txForPeriod.length === 0) {
+      toast.error("No transactions found for the selected period")
+      return
+    }
+
+    const totalIn  = txForPeriod.filter(tx => isInflow(tx.type)).reduce((s, tx) => s + tx.amount, 0)
+    const totalOut = txForPeriod.filter(tx => !isInflow(tx.type)).reduce((s, tx) => s + tx.amount, 0)
+    const netFlow  = totalIn - totalOut
+
+    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = ""
+    try {
+      const tenant = await getTenant()
+      shopName    = tenant.name ?? shopName
+      shopAddress = tenant.address ?? ""
+      shopPhone   = tenant.phone ?? ""
+    } catch { /* use defaults */ }
+
+    const periodSlug = periodLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+
+    generateReportPDF({
+      shopName, shopAddress, shopPhone,
+      title: "Finance Transaction Report",
+      subtitle: `${periodLabel}  |  ${txForPeriod.length} transactions`,
+      orientation: "landscape",
+      columns: [
+        { header: "Date",        dataKey: "date",        width: 24,  halign: "center" },
+        { header: "Type",        dataKey: "type",        width: 30 },
+        { header: "Account",     dataKey: "account",     width: 28 },
+        { header: "Description", dataKey: "description"              },
+        { header: "Reference",   dataKey: "reference",   width: 40 },
+        { header: "Amount (Rs)", dataKey: "amount",      width: 32,  halign: "right", bold: true },
+      ],
+      rows: txForPeriod.map(tx => {
+        const inflow = isInflow(tx.type)
+        return {
+          date:        tx.date,
+          type:        TX_META[tx.type]?.label ?? tx.type,
+          account:     accounts.find(a => a.id === tx.accountId)?.name ?? "-",
+          description: tx.description ?? "-",
+          reference:   tx.referenceNumber ?? "-",
+          amount:      `${inflow ? "+" : "-"} Rs ${tx.amount.toLocaleString("en-PK")}`,
+        }
+      }),
+      summary: [
+        { label: "Total Inflow",  value: `Rs ${totalIn.toLocaleString("en-PK")}` },
+        { label: "Total Outflow", value: `Rs ${totalOut.toLocaleString("en-PK")}` },
+        { label: "Net Cash Flow", value: `${netFlow >= 0 ? "+" : "-"} Rs ${Math.abs(netFlow).toLocaleString("en-PK")}` },
+      ],
+      filename: `finance-report-${periodSlug}`,
+      action: "save",
+    })
+    toast.success(`Finance report downloaded (${txForPeriod.length} transactions)`)
+  }
+
+  // â"€â"€ Render â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   if (loading) {
     return (
@@ -494,7 +608,7 @@ export default function FinancePage() {
         iconBg="bg-emerald-600"
       />
 
-      {/* ─── Summary Bar ─────────────────────────────────────────────────── */}
+      {/* â"€â"€â"€ Summary Bar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-4 gap-2.5">
         <StatCard title="Cash in Hand"   value={formatCurrency(summary.cash)}    icon={Banknote}   iconBg="bg-emerald-100" subtext={`${accounts.filter(a => a.type === "cash").length} cash account(s)`} />
         <StatCard title="In Banks"        value={formatCurrency(summary.banks)}   icon={Building2}  iconBg="bg-violet-100"  subtext={`${accounts.filter(a => a.type === "bank").length} bank account(s)`} />
@@ -502,7 +616,7 @@ export default function FinancePage() {
         <StatCard title="Total Available" value={formatCurrency(summary.total)}   icon={Wallet}     iconBg="bg-blue-100"    subtext="Across all accounts" />
       </div>
 
-      {/* ─── Tabs ────────────────────────────────────────────────────────── */}
+      {/* â"€â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
         <div className="flex items-center justify-between">
           <TabsList className="bg-slate-100 h-8 p-0.5">
@@ -528,7 +642,7 @@ export default function FinancePage() {
           )}
         </div>
 
-        {/* ════ ACCOUNTS TAB ═══════════════════════════════════════════════ */}
+        {/* â•â•â•â• ACCOUNTS TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="accounts" className="space-y-3">
           {accounts.length === 0 ? (
             <Card className="border-slate-100 shadow-sm">
@@ -561,9 +675,9 @@ export default function FinancePage() {
                             <p className="text-sm font-semibold text-slate-800 leading-tight">{acc.name}</p>
                             <p className="text-[10px] text-slate-400 mt-0.5">
                               {meta.label}
-                              {acc.bankName ? ` · ${acc.bankName}` : ""}
-                              {acc.accountTitle ? ` · ${acc.accountTitle}` : ""}
-                              {acc.accountNumber ? ` · ****${acc.accountNumber.slice(-4)}` : ""}
+                              {acc.bankName ? ` - ${acc.bankName}` : ""}
+                              {acc.accountTitle ? ` - ${acc.accountTitle}` : ""}
+                              {acc.accountNumber ? ` - ****${acc.accountNumber.slice(-4)}` : ""}
                             </p>
                           </div>
                         </div>
@@ -627,7 +741,7 @@ export default function FinancePage() {
           )}
         </TabsContent>
 
-        {/* ════ TRANSACTIONS TAB ═══════════════════════════════════════════ */}
+        {/* â•â•â•â• TRANSACTIONS TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="transactions" className="space-y-3">
           {/* Filters */}
           <Card className="border-slate-100 shadow-sm">
@@ -652,11 +766,28 @@ export default function FinancePage() {
                   </SelectContent>
                 </Select>
                 <Input type="date" value={txDateFrom} onChange={e => setTxDateFrom(e.target.value)} className="h-8 w-[108px] text-xs" />
-                <span className="text-slate-400 text-xs">—</span>
+                <span className="text-slate-400 text-xs">-</span>
                 <Input type="date" value={txDateTo} onChange={e => setTxDateTo(e.target.value)} className="h-8 w-[108px] text-xs" />
-                <div className="ml-auto shrink-0">
+                <div className="ml-auto flex items-center gap-1.5 shrink-0">
                   <Button variant="outline" onClick={handleExportTx} className="h-8 text-xs gap-1.5 px-3">
-                    <Download className="h-3.5 w-3.5" /> Export
+                    <Download className="h-3.5 w-3.5" /> CSV
+                  </Button>
+                  <Select value={reportPeriod} onValueChange={setReportPeriod}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="this_week">This Week</SelectItem>
+                      <SelectItem value="last_week">Last Week</SelectItem>
+                      <SelectItem value="this_month">This Month</SelectItem>
+                      <SelectItem value="last_month">Last Month</SelectItem>
+                      <SelectItem value="this_year">This Year</SelectItem>
+                      <SelectItem value="last_year">Last Year</SelectItem>
+                      <SelectItem value="all">All Time</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={handlePDFReport} className="h-8 text-xs gap-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white">
+                    <FileText className="h-3.5 w-3.5" /> PDF Report
                   </Button>
                 </div>
               </div>
@@ -687,7 +818,7 @@ export default function FinancePage() {
                       </TableRow>
                     ) : filteredTx.map(tx => {
                       const meta = TX_META[tx.type] ?? TX_META.deposit
-                      const accName = accounts.find(a => a.id === tx.accountId)?.name ?? "—"
+                      const accName = accounts.find(a => a.id === tx.accountId)?.name ?? "-"
                       const inflow = isInflow(tx.type)
                       return (
                         <TableRow key={tx.id} className="hover:bg-slate-50/50 transition-colors">
@@ -703,14 +834,14 @@ export default function FinancePage() {
                             {accName}
                           </TableCell>
                           <TableCell className="px-3 py-2 text-xs text-slate-600 max-w-[180px] truncate">
-                            {tx.description ?? "—"}
+                            {tx.description ?? "-"}
                           </TableCell>
                           <TableCell className="px-3 py-2 text-xs font-mono text-slate-400">
-                            {tx.referenceNumber ?? "—"}
+                            {tx.referenceNumber ?? "-"}
                           </TableCell>
                           <TableCell className="px-3 py-2 text-right whitespace-nowrap">
                             <span className={cn("text-xs font-semibold", inflow ? "text-emerald-600" : "text-red-600")}>
-                              {inflow ? "+" : "−"}{formatCurrency(tx.amount)}
+                              {inflow ? "+" : "-"}{formatCurrency(tx.amount)}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -733,7 +864,7 @@ export default function FinancePage() {
           </Card>
         </TabsContent>
 
-        {/* ════ RECEIVABLES & PAYABLES TAB ══════════════════════════════════ */}
+        {/* â•â•â•â• RECEIVABLES & PAYABLES TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="receivables" className="space-y-3">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
@@ -840,7 +971,7 @@ export default function FinancePage() {
         </TabsContent>
       </Tabs>
 
-      {/* ════ ADD ACCOUNT DIALOG ══════════════════════════════════════════════ */}
+      {/* â•â•â•â• ADD ACCOUNT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "addAccount"} onOpenChange={o => !o && setModal(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -933,7 +1064,7 @@ export default function FinancePage() {
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Opening Balance (Rs)</Label>
               <Input
-                type="number"
+                type="number" onWheel={e => e.currentTarget.blur()}
                 min="0"
                 value={accForm.openingBalance}
                 onChange={e => setAccForm(f => ({ ...f, openingBalance: e.target.value }))}
@@ -952,7 +1083,7 @@ export default function FinancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ════ EDIT ACCOUNT DIALOG ═════════════════════════════════════════════ */}
+      {/* â•â•â•â• EDIT ACCOUNT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "editAccount"} onOpenChange={o => !o && setModal(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -991,7 +1122,7 @@ export default function FinancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ════ DEPOSIT DIALOG ══════════════════════════════════════════════════ */}
+      {/* â•â•â•â• DEPOSIT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "deposit"} onOpenChange={o => !o && setModal(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1008,7 +1139,7 @@ export default function FinancePage() {
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
-              <Input type="number" min="1" value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
+              <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Date</Label>
@@ -1032,7 +1163,7 @@ export default function FinancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ════ WITHDRAW DIALOG ════════════════════════════════════════════════ */}
+      {/* â•â•â•â• WITHDRAW DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "withdraw"} onOpenChange={o => !o && setModal(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1049,7 +1180,7 @@ export default function FinancePage() {
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
-              <Input type="number" min="1" max={selectedAccount?.currentBalance} value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
+              <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" max={selectedAccount?.currentBalance} value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
               {selectedAccount && Number(txForm.amount) > selectedAccount.currentBalance && (
                 <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Exceeds available balance</p>
               )}
@@ -1076,7 +1207,7 @@ export default function FinancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ════ TRANSFER DIALOG ════════════════════════════════════════════════ */}
+      {/* â•â•â•â• TRANSFER DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "transfer"} onOpenChange={o => !o && setModal(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1092,7 +1223,7 @@ export default function FinancePage() {
                 <SelectContent>
                   {accounts.map(a => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.name} — {formatCurrency(a.currentBalance)}
+                      {a.name} - {formatCurrency(a.currentBalance)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1114,7 +1245,7 @@ export default function FinancePage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
-              <Input type="number" min="1" value={transferForm.amount} onChange={e => setTransferForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
+              <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={transferForm.amount} onChange={e => setTransferForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Date</Label>
@@ -1134,7 +1265,7 @@ export default function FinancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* ════ RECORD PAYMENT DIALOG ═══════════════════════════════════════════ */}
+      {/* â•â•â•â• RECORD PAYMENT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "recordPayment"} onOpenChange={o => !o && setModal(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1184,7 +1315,7 @@ export default function FinancePage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
-                <Input type="number" min="1" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
+                <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-600">Method</Label>
@@ -1205,7 +1336,7 @@ export default function FinancePage() {
                 <SelectContent>
                   {accounts.map(a => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.name} — Rs {a.currentBalance.toLocaleString()}
+                      {a.name} - Rs {a.currentBalance.toLocaleString()}
                     </SelectItem>
                   ))}
                 </SelectContent>

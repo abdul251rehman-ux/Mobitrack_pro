@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
@@ -159,6 +159,7 @@ export default function CustomerDetailPage() {
   const totalReceivedFromSales = useMemo(() => customerSales.reduce((acc, s) => acc + s.amountReceived, 0), [customerSales])
   const effectiveTotalPaid     = Math.max(totalPaid, totalReceivedFromSales)
   const outstandingBalance     = Math.max(0, totalBilled - effectiveTotalPaid)
+  const creditBalance          = effectiveTotalPaid > totalBilled ? effectiveTotalPaid - totalBilled : 0
   const avgOrder               = customerSales.length > 0 ? totalBilled / customerSales.length : 0
 
   const unpaidSales = useMemo(() => customerSales.filter(s => {
@@ -297,7 +298,7 @@ export default function CustomerDetailPage() {
     {
       accessorKey: "notes",
       header: "Notes",
-      cell: ({ row }) => <span className="text-xs text-slate-400 truncate max-w-[180px] block">{row.original.notes || "—"}</span>,
+      cell: ({ row }) => <span className="text-xs text-slate-400 truncate max-w-[180px] block">{row.original.notes || "-"}</span>,
     },
     {
       accessorKey: "status",
@@ -386,13 +387,23 @@ export default function CustomerDetailPage() {
               accent="border-blue-200" />
             <StatMini title="Total Paid" value={formatCurrency(effectiveTotalPaid)}
               sub="Payments received" accent="border-emerald-200" valueColor="text-emerald-700" />
-            <StatMini
-              title="Outstanding"
-              value={outstandingBalance > 0 ? formatCurrency(outstandingBalance) : "Settled"}
-              sub={outstandingBalance > 0 ? "Customer owes" : "No balance due"}
-              accent={outstandingBalance > 0 ? "border-red-200" : "border-emerald-200"}
-              valueColor={outstandingBalance > 0 ? "text-red-600" : "text-emerald-700"}
-            />
+            {creditBalance > 0 ? (
+              <StatMini
+                title="Advance / Credit"
+                value={formatCurrency(creditBalance)}
+                sub="Customer paid extra"
+                accent="border-blue-200"
+                valueColor="text-blue-700"
+              />
+            ) : (
+              <StatMini
+                title="Outstanding"
+                value={outstandingBalance > 0 ? formatCurrency(outstandingBalance) : "Settled"}
+                sub={outstandingBalance > 0 ? "Customer owes" : "No balance due"}
+                accent={outstandingBalance > 0 ? "border-red-200" : "border-emerald-200"}
+                valueColor={outstandingBalance > 0 ? "text-red-600" : "text-emerald-700"}
+              />
+            )}
           </div>
 
           {/* Row 2: 3 more stats */}
@@ -407,9 +418,9 @@ export default function CustomerDetailPage() {
                 <p className="text-base font-bold text-slate-900">{customer.loyaltyTier}</p>
               </div>
               <p className="text-[10px] text-slate-400 mt-0.5">
-                {customer.loyaltyTier === "Platinum" ? "Top tier — Rs 500k+" :
-                 customer.loyaltyTier === "Gold"     ? "Rs 200k–500k spent" :
-                 customer.loyaltyTier === "Silver"   ? "Rs 50k–200k spent" :
+                {customer.loyaltyTier === "Platinum" ? "Top tier - Rs 500k+" :
+                 customer.loyaltyTier === "Gold"     ? "Rs 200k-500k spent" :
+                 customer.loyaltyTier === "Silver"   ? "Rs 50k-200k spent" :
                                                        "Under Rs 50k spent"}
               </p>
             </div>
@@ -458,6 +469,9 @@ export default function CustomerDetailPage() {
             Total: <span className="font-semibold text-slate-800">{formatCurrency(totalBilled)}</span>
             {outstandingBalance > 0 && (
               <span className="text-red-600 font-semibold ml-2">Due: {formatCurrency(outstandingBalance)}</span>
+            )}
+            {creditBalance > 0 && (
+              <span className="text-blue-600 font-semibold ml-2">Credit: +{formatCurrency(creditBalance)}</span>
             )}
           </span>
         </div>
@@ -521,6 +535,15 @@ export default function CustomerDetailPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {creditBalance > 0 && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-blue-700">Credit: +{formatCurrency(creditBalance)}</p>
+                <p className="text-[10px] text-blue-500 mt-0.5">Customer has advance credit on account</p>
+              </div>
+            </div>
+          )}
           {outstandingBalance > 0 && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
@@ -544,7 +567,7 @@ export default function CustomerDetailPage() {
                       const due = s.total - Math.max(paidForThis, s.amountReceived)
                       return (
                         <SelectItem key={s.invoiceNumber} value={s.invoiceNumber}>
-                          {s.invoiceNumber} — Due: {formatCurrency(Math.max(0, due))}
+                          {s.invoiceNumber} - Due: {formatCurrency(Math.max(0, due))}
                         </SelectItem>
                       )
                     })}
@@ -554,7 +577,7 @@ export default function CustomerDetailPage() {
             )}
             <div className="space-y-1">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
-              <Input type="number" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)}
+              <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)}
                 placeholder="0" className="h-8 text-xs" autoFocus />
             </div>
             <div className="space-y-1">

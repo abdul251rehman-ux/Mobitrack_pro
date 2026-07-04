@@ -1,6 +1,7 @@
-"use client"
+﻿"use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import {
   RotateCcw, Search, Plus, Eye, CheckCircle2, XCircle,
   Clock, ArrowLeftRight, Package, AlertTriangle,
@@ -37,7 +38,7 @@ import {
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
 } from "@/components/ui/table"
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const RETURN_REASONS: ReturnReason[] = [
   "Defective",
@@ -88,11 +89,12 @@ const REASON_COLORS: Record<ReturnReason, string> = {
   Other: "bg-slate-100 text-slate-500 border border-slate-200",
 }
 
-// ─── New-item template ────────────────────────────────────────────────────────
+// â"€â"€â"€ New-item template â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 interface NewReturnItem {
+  productId: string      // real product id from sale_items, used for inventory restock
   productName: string
-  productType: "Mobile" | "Accessory"
+  productType: "Mobile" | "Accessory" | "UsedPhone"
   quantity: number
   unitPrice: number
   condition: ReturnItem["condition"]
@@ -100,6 +102,7 @@ interface NewReturnItem {
 }
 
 const EMPTY_ITEM: NewReturnItem = {
+  productId: "",
   productName: "",
   productType: "Mobile",
   quantity: 1,
@@ -108,10 +111,14 @@ const EMPTY_ITEM: NewReturnItem = {
   imei: "",
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function ReturnsPage() {
-  // ── Data state ────────────────────────────────────────────────────────────
+  const searchParams = useSearchParams()
+  const autoInvoice = searchParams.get("invoice") ?? ""
+  const autoOpened = useRef(false)
+
+  // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [returnsList, setReturnsList] = useState<Return[]>([])
   const [salesList, setSalesList] = useState<Sale[]>([])
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
@@ -136,18 +143,46 @@ export default function ReturnsPage() {
     fetchData()
   }, [])
 
-  // ── Filter state ──────────────────────────────────────────────────────────
+  // Auto-open create dialog and lookup invoice when arriving from sales list with ?invoice=
+  useEffect(() => {
+    if (autoInvoice && !loading && salesList.length > 0 && !autoOpened.current) {
+      autoOpened.current = true
+      setNewInvoice(autoInvoice)
+      setShowCreate(true)
+      // Auto-lookup after state settles
+      setTimeout(() => {
+        const match = salesList.find(s => s.invoiceNumber?.toLowerCase() === autoInvoice.toLowerCase())
+        if (match) {
+          setNewCustomerName(match.customerName)
+          setNewCustomerPhone(match.customerPhone)
+          if (match.items?.length > 0) {
+            setNewItems(match.items.map(si => ({
+              productId: si.productId ?? "",
+              productName: si.productName,
+              productType: si.productType as "Mobile" | "Accessory" | "UsedPhone",
+              quantity: si.quantity,
+              unitPrice: si.unitPrice,
+              condition: "Good" as ReturnItem["condition"],
+              imei: si.imei ?? "",
+            })))
+          }
+        }
+      }, 0)
+    }
+  }, [autoInvoice, loading, salesList])
+
+  // â"€â"€ Filter state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [reasonFilter, setReasonFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
 
-  // ── Dialog state ──────────────────────────────────────────────────────────
+  // â"€â"€ Dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [showCreate, setShowCreate] = useState(false)
   const [viewReturn, setViewReturn] = useState<Return | null>(null)
 
-  // ── New return form state ─────────────────────────────────────────────────
+  // â"€â"€ New return form state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [newInvoice, setNewInvoice] = useState("")
   const [newCustomerName, setNewCustomerName] = useState("")
   const [newCustomerPhone, setNewCustomerPhone] = useState("")
@@ -159,7 +194,7 @@ export default function ReturnsPage() {
   const [newNotes, setNewNotes] = useState("")
   const [newItems, setNewItems] = useState<NewReturnItem[]>([{ ...EMPTY_ITEM }])
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
+  // â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const stats = useMemo(() => {
     const total = returnsList.length
     const pending = returnsList.filter((r) => r.status === "Pending").length
@@ -171,7 +206,7 @@ export default function ReturnsPage() {
     return { total, pending, totalRefunded, returnRate, totalSales }
   }, [returnsList, salesList])
 
-  // ── Filtered data ─────────────────────────────────────────────────────────
+  // â"€â"€ Filtered data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const filtered = useMemo(() => {
     return returnsList.filter((r) => {
       if (
@@ -189,7 +224,7 @@ export default function ReturnsPage() {
     })
   }, [returnsList, search, statusFilter, reasonFilter, dateFrom, dateTo])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   function resetFilters() {
     setSearch("")
@@ -224,20 +259,21 @@ export default function ReturnsPage() {
       if (match.items && match.items.length > 0) {
         setNewItems(
           match.items.map((si) => ({
+            productId: si.productId ?? "",
             productName: si.productName,
-            productType: (si.productType === "UsedPhone" ? "Mobile" : si.productType) as "Mobile" | "Accessory",
+            productType: si.productType as "Mobile" | "Accessory" | "UsedPhone",
             quantity: si.quantity,
             unitPrice: si.unitPrice,
             condition: "Good" as ReturnItem["condition"],
-            imei: "",
+            imei: si.imei ?? "",
           }))
         )
-        toast.success(`Invoice found — ${match.items.length} item(s) pre-filled from sale`)
+        toast.success(`Invoice found - ${match.items.length} item(s) pre-filled from sale`)
       } else {
-        toast.success("Invoice found — customer info populated")
+        toast.success("Invoice found - customer info populated")
       }
     } else {
-      toast.error("Invoice not found — please enter customer details manually")
+      toast.error("Invoice not found - please enter customer details manually")
     }
   }
 
@@ -259,7 +295,7 @@ export default function ReturnsPage() {
     setNewItems((prev) => [...prev, { ...EMPTY_ITEM }])
   }
 
-  // ── Create return ─────────────────────────────────────────────────────────
+  // â"€â"€ Create return â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function handleCreateReturn() {
     if (!newInvoice.trim()) {
@@ -275,13 +311,13 @@ export default function ReturnsPage() {
       return
     }
 
-    const nextNum = returnsList.length + 1
     const refundAmount = calcRefundTotal()
 
-    const items: ReturnItem[] = newItems.map((it, idx) => ({
-      productId: `ret-prod-${Date.now()}-${idx}`,
+    const items: ReturnItem[] = newItems.map((it) => ({
+      productId: it.productId || `ret-${Date.now()}`,
       productName: it.productName,
-      productType: it.productType,
+      // DB return_items CHECK only allows Mobile/Accessory - map UsedPhone â†' Mobile
+      productType: (it.productType === "UsedPhone" ? "Mobile" : it.productType) as ReturnItem["productType"],
       quantity: it.quantity,
       unitPrice: it.unitPrice,
       lineTotal: it.quantity * it.unitPrice,
@@ -289,9 +325,15 @@ export default function ReturnsPage() {
       condition: it.condition,
     }))
 
+    // Generate return number from DB count to avoid clashes
+    const tenantId = await getTenantId()
+    const { count } = await supabase.from("returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId)
+    const nextNum = (count ?? returnsList.length) + 1
+    const dateTag = todayPKT().replace(/-/g, "").slice(0, 8)
+
     const newReturn: Return = {
       id: `ret-${String(nextNum).padStart(3, "0")}`,
-      returnNumber: `RET-2026-${String(nextNum).padStart(4, "0")}`,
+      returnNumber: `RET-${dateTag}-${String(nextNum).padStart(4, "0")}`,
       date: todayPKT(),
       saleId: `sale-lookup-${newInvoice}`,
       invoiceNumber: newInvoice,
@@ -336,7 +378,6 @@ export default function ReturnsPage() {
 
       // Finance: record cash refund as money OUT of the account
       if (newRefundType === "cash" && newAccountId && refundAmount > 0) {
-        const tenantId = await getTenantId()
         await supabase.from("finance_transactions").insert({
           tenant_id: tenantId,
           date: newReturn.date,
@@ -345,14 +386,14 @@ export default function ReturnsPage() {
           amount: refundAmount,
           reference_type: "Return",
           reference_number: newReturn.returnNumber,
-          description: `Refund — ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
+          description: `Refund - ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
           notes: newReturn.notes ?? null,
         })
         const { data: accRow } = await supabase
           .from("finance_accounts").select("current_balance").eq("id", newAccountId).single()
         if (accRow) {
           await supabase.from("finance_accounts")
-            .update({ current_balance: Math.max(0, (accRow as any).current_balance - refundAmount) })
+            .update({ current_balance: (accRow as any).current_balance - refundAmount })
             .eq("id", newAccountId)
         }
         // tag return with account
@@ -368,13 +409,13 @@ export default function ReturnsPage() {
       setReturnsList((prev) => [created, ...prev])
       setShowCreate(false)
       resetForm()
-      toast.success(`Return ${newReturn.returnNumber} created — ${newRefundType === "store_credit" ? "Store Credit issued" : `Rs ${refundAmount.toLocaleString()} refunded from account`}`)
+      toast.success(`Return ${newReturn.returnNumber} created - ${newRefundType === "store_credit" ? "Store Credit issued" : `Rs ${refundAmount.toLocaleString()} refunded from account`}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create return")
     }
   }
 
-  // ── Status actions ────────────────────────────────────────────────────────
+  // â"€â"€ Status actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function approveReturn(id: string) {
     try {
@@ -390,6 +431,38 @@ export default function ReturnsPage() {
 
   async function rejectReturn(id: string) {
     try {
+      const tenantId = await getTenantId()
+
+      // Reverse cash refund that was issued when the return was created
+      const { data: retRow } = await supabase
+        .from("returns")
+        .select("refund_type, account_id, refund_amount")
+        .eq("id", id)
+        .single()
+
+      if (retRow && (retRow as any).refund_type === "cash" && (retRow as any).account_id && (retRow as any).refund_amount > 0) {
+        const accId = (retRow as any).account_id
+        const amount = (retRow as any).refund_amount
+        const { data: accRow } = await supabase
+          .from("finance_accounts").select("current_balance").eq("id", accId).single()
+        if (accRow) {
+          await supabase.from("finance_accounts")
+            .update({ current_balance: (accRow as any).current_balance + amount })
+            .eq("id", accId)
+        }
+        // Record the reversal transaction
+        await supabase.from("finance_transactions").insert({
+          tenant_id: tenantId,
+          date: todayPKT(),
+          type: "return_reversal",
+          account_id: accId,
+          amount,
+          reference_type: "Return",
+          reference_number: id,
+          description: `Return rejected - refund reversed`,
+        })
+      }
+
       await updateReturnStatus(id, "Rejected")
       setReturnsList((prev) =>
         prev.map((r) =>
@@ -398,29 +471,97 @@ export default function ReturnsPage() {
             : r
         )
       )
-      toast.success("Return rejected")
+      toast.success("Return rejected - cash refund reversed")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to reject return")
     }
   }
 
   async function completeReturn(id: string) {
+    const ret = returnsList.find(r => r.id === id)
+    if (!ret) return
     try {
+      const tenantId = await getTenantId()
+
+      // â"€â"€ 1. Reverse inventory - all steps must succeed before marking Completed
+      if (ret.restockItems) {
+        for (const item of ret.items) {
+          if (item.imei) {
+            // Determine whether this is a new-phone (imei_records with product_id)
+            // or a used phone (used_phones table). Phantom imei_records rows
+            // created by the old bulk-add bug have product_id = NULL - treat those
+            // the same as used phones.
+            const { data: imeiRow, error: imeiErr } = await supabase.from("imei_records")
+              .select("id, product_id, device_status")
+              .eq("imei_number", item.imei).eq("tenant_id", tenantId)
+              .not("product_id", "is", null)   // only real new-phone records
+              .maybeSingle()
+
+            if (imeiErr) throw new Error(`IMEI lookup failed: ${imeiErr.message}`)
+
+            if (imeiRow) {
+              // â"€â"€ Real new phone from purchases â"€â"€
+              if ((imeiRow as any).device_status !== "sold") {
+                throw new Error(`Phone with IMEI ${item.imei} is not marked as sold - cannot restock`)
+              }
+              const { error: restoreErr } = await supabase.from("imei_records")
+                .update({ device_status: "in_stock", sold_date: null, customer_name: null, customer_phone: null, customer_id: null })
+                .eq("id", (imeiRow as any).id)
+              if (restoreErr) throw new Error(`Failed to restore IMEI record: ${restoreErr.message}`)
+
+              const pid = (imeiRow as any).product_id
+              if (pid) {
+                const { data: mob } = await supabase.from("mobiles").select("stock").eq("id", pid).single()
+                if (mob) {
+                  const { error: stockErr } = await supabase.from("mobiles")
+                    .update({ stock: (mob as any).stock + 1 }).eq("id", pid)
+                  if (stockErr) throw new Error(`Failed to update mobile stock: ${stockErr.message}`)
+                }
+              }
+            } else {
+              // â"€â"€ Used phone - restore in used_phones â"€â"€
+              const { data: usedRow, error: usedLookupErr } = await supabase.from("used_phones")
+                .select("id, status").eq("imei_number", item.imei).eq("tenant_id", tenantId).maybeSingle()
+              if (usedLookupErr) throw new Error(`Used phone lookup failed: ${usedLookupErr.message}`)
+              if (!usedRow) throw new Error(`No phone found with IMEI ${item.imei} - cannot restock`)
+              if ((usedRow as any).status !== "sold") {
+                throw new Error(`Used phone with IMEI ${item.imei} is not marked as sold - cannot restock`)
+              }
+              const { error: usedErr } = await supabase.from("used_phones")
+                .update({ status: "in_stock", sold_date: null, source_customer_name: null })
+                .eq("id", (usedRow as any).id).eq("tenant_id", tenantId)
+              if (usedErr) throw new Error(`Failed to restore used phone: ${usedErr.message}`)
+              // Also restore any phantom imei_records row from old bulk-add bug
+              await supabase.from("imei_records")
+                .update({ device_status: "in_stock", sold_date: null, customer_name: null })
+                .eq("imei_number", item.imei).eq("tenant_id", tenantId).is("product_id", null)
+            }
+          } else if (item.productType === "Accessory") {
+            const { data: acc, error: accErr } = await supabase.from("accessories")
+              .select("stock").eq("id", item.productId).eq("tenant_id", tenantId).maybeSingle()
+            if (accErr) throw new Error(`Accessory lookup failed: ${accErr.message}`)
+            if (!acc) throw new Error(`Accessory not found - cannot restock`)
+            const { error: updErr } = await supabase.from("accessories")
+              .update({ stock: (acc as any).stock + item.quantity }).eq("id", item.productId)
+            if (updErr) throw new Error(`Failed to update accessory stock: ${updErr.message}`)
+          }
+        }
+      }
+
+      // Finance was already deducted when the return was created (Pending state).
+      // No second deduction here - just mark as Completed.
+
       await updateReturnStatus(id, "Completed")
-      setReturnsList((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? { ...r, status: "Completed" as ReturnStatus, resolvedAt: new Date().toISOString() }
-            : r
-        )
-      )
-      toast.success("Return completed — refund processed")
+      setReturnsList(prev => prev.map(r =>
+        r.id === id ? { ...r, status: "Completed" as ReturnStatus, resolvedAt: new Date().toISOString() } : r
+      ))
+      toast.success("Return completed - inventory restocked & refund recorded")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to complete return")
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // â"€â"€ Render â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   if (loading) {
     return (
@@ -485,21 +626,25 @@ export default function ReturnsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="border border-slate-100 shadow-sm">
-        <CardContent className="px-3 py-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[180px] max-w-[220px]">
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+        <div className="flex flex-wrap items-end gap-2">
+          {/* Search */}
+          <div className="flex-1 min-w-[180px] max-w-[240px]">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Search</label>
+            <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <Input
-                placeholder="Search return # or customer..."
+                placeholder="Return # or customer name..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-8 h-8 text-xs"
               />
             </div>
+          </div>
 
-            {/* Status */}
+          {/* Status */}
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Status</label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-8 w-[130px] text-xs">
                 <SelectValue placeholder="All Statuses" />
@@ -511,10 +656,13 @@ export default function ReturnsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
 
-            {/* Reason */}
+          {/* Reason */}
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Reason</label>
             <Select value={reasonFilter} onValueChange={setReasonFilter}>
-              <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectTrigger className="h-8 w-[150px] text-xs">
                 <SelectValue placeholder="All Reasons" />
               </SelectTrigger>
               <SelectContent>
@@ -524,21 +672,25 @@ export default function ReturnsPage() {
                 ))}
               </SelectContent>
             </Select>
-
-            {/* Date from */}
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[110px] text-xs" />
-            <span className="text-slate-400 text-xs">—</span>
-            {/* Date to */}
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[110px] text-xs" />
-
-            {/* Reset */}
-            <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs shrink-0">
-              <RotateCcw className="w-3 h-3" />
-              Reset
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Date range */}
+          <div>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Date Range</label>
+            <div className="flex items-center gap-1">
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[115px] text-xs" />
+              <span className="text-slate-300 text-xs">—</span>
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[115px] text-xs" />
+            </div>
+          </div>
+
+          {/* Reset */}
+          <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs text-slate-600 hover:text-red-600 hover:border-red-300 self-end">
+            <RotateCcw className="w-3 h-3" />
+            Reset
+          </Button>
+        </div>
+      </div>
 
       {/* Table */}
       <Card className="border border-slate-100 shadow-sm overflow-hidden">
@@ -621,7 +773,7 @@ export default function ReturnsPage() {
         </div>
       </Card>
 
-      {/* ─── Process Return Dialog ──────────────────────────────────────────── */}
+      {/* â"€â"€â"€ Process Return Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -735,7 +887,7 @@ export default function ReturnsPage() {
                       <div className="space-y-1">
                         <Label className="text-xs">Quantity</Label>
                         <Input
-                          type="number"
+                          type="number" onWheel={e => e.currentTarget.blur()}
                           min={1}
                           value={item.quantity}
                           onChange={(e) => updateItem(idx, { quantity: Math.max(1, Number(e.target.value)) })}
@@ -743,9 +895,9 @@ export default function ReturnsPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Unit Price (₨)</Label>
+                        <Label className="text-xs">Unit Price (â‚¨)</Label>
                         <Input
-                          type="number"
+                          type="number" onWheel={e => e.currentTarget.blur()}
                           min={0}
                           value={item.unitPrice}
                           onChange={(e) => updateItem(idx, { unitPrice: Math.max(0, Number(e.target.value)) })}
@@ -811,7 +963,7 @@ export default function ReturnsPage() {
                   <SelectContent>
                     {financeAccounts.map(a => (
                       <SelectItem key={a.id} value={a.id}>
-                        {a.name} — Rs {a.currentBalance.toLocaleString()}
+                        {a.name} - Rs {a.currentBalance.toLocaleString()}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -821,7 +973,7 @@ export default function ReturnsPage() {
             )}
             {newRefundType === "store_credit" && (
               <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs text-blue-700">
-                Store Credit issued — no money leaves any account. Customer can use this credit on next purchase.
+                Store Credit issued - no money leaves any account. Customer can use this credit on next purchase.
               </div>
             )}
 
@@ -861,7 +1013,7 @@ export default function ReturnsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── View Details Dialog ────────────────────────────────────────────── */}
+      {/* â"€â"€â"€ View Details Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Dialog open={!!viewReturn} onOpenChange={(open) => !open && setViewReturn(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {viewReturn && (

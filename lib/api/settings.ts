@@ -64,9 +64,37 @@ export async function getTenantSettings(): Promise<TenantSettings> {
       .from('tenant_settings')
       .select('*')
       .eq('tenant_id', tenantId)
-      .single()
+      .maybeSingle()
 
     if (error) throw new Error(`Failed to fetch tenant settings: ${error.message}`)
+
+    // No row yet — insert defaults and return them
+    if (!data) {
+      const defaults = {
+        tenant_id: tenantId,
+        low_stock_threshold: 5,
+        default_warranty_months: 6,
+        invoice_prefix: 'INV',
+        po_prefix: 'PO',
+        return_prefix: 'RET',
+        reservation_prefix: 'RES',
+        consignment_prefix: 'CON',
+        repair_prefix: 'REP',
+        tax_enabled: false,
+        tax_rate: 0,
+        currency: 'PKR',
+        date_format: 'DD/MM/YYYY',
+        receipt_footer: '',
+      }
+      const { data: created, error: insertErr } = await supabase
+        .from('tenant_settings')
+        .insert(defaults)
+        .select('*')
+        .single()
+      if (insertErr) throw new Error(`Failed to create tenant settings: ${insertErr.message}`)
+      return toTenantSettings(created as DbTenantSettings)
+    }
+
     return toTenantSettings(data as DbTenantSettings)
   } catch (err) {
     throw err instanceof Error ? err : new Error('Failed to fetch tenant settings')
@@ -143,6 +171,7 @@ export async function getProfileById(id: string): Promise<Profile | null> {
 
 export async function updateProfile(id: string, data: Partial<Profile>): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const updatePayload: Record<string, unknown> = {}
     if (data.name !== undefined) updatePayload.name = data.name
     if (data.phone !== undefined) updatePayload.phone = data.phone
@@ -154,6 +183,7 @@ export async function updateProfile(id: string, data: Partial<Profile>): Promise
       .from('profiles')
       .update(updatePayload)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to update profile: ${error.message}`)
   } catch (err) {
@@ -198,6 +228,7 @@ export async function updateProfileFull(id: string, data: {
   status: "Active" | "Inactive"
 }): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const payload: Record<string, unknown> = {
       name: data.name,
       email: data.email.toLowerCase().trim(),
@@ -206,7 +237,11 @@ export async function updateProfileFull(id: string, data: {
     }
     if (data.password) payload.password = data.password
 
-    const { error } = await supabase.from('profiles').update(payload).eq('id', id)
+    const { error } = await supabase
+      .from('profiles')
+      .update(payload)
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
     if (error) throw new Error(`Failed to update user: ${error.message}`)
   } catch (err) {
     throw err instanceof Error ? err : new Error('Failed to update user')

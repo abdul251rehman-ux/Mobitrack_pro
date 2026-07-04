@@ -1,4 +1,4 @@
-"use client"
+﻿﻿"use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
@@ -31,7 +31,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { cn, formatDate } from "@/lib/utils"
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const ACCESSORY_CATEGORIES = [
   "Headphones/Earbuds", "Chargers & Cables", "Screen Protectors",
   "Phone Cases", "Power Banks", "Speakers", "Smartwatches",
@@ -55,7 +55,7 @@ const CHANNEL_META: Record<NotifyChannel, { icon: React.ElementType; label: stri
   sms:       { icon: MessageSquare, label: "SMS"       },
 }
 
-// ─── Chip Components ──────────────────────────────────────────────────────────
+// â"€â"€â"€ Chip Components â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function AlertTypeBadge({ type }: { type: AlertType }) {
   const { label, className, icon: Icon } = ALERT_TYPE_META[type]
   return (
@@ -104,7 +104,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
   )
 }
 
-// ─── Table Header / Cell helpers ──────────────────────────────────────────────
+// â"€â"€â"€ Table Header / Cell helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const TH = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
   <TableHead className={cn("text-[10px] font-semibold text-slate-500 uppercase tracking-wide px-3 py-2 whitespace-nowrap bg-slate-50", right && "text-right")}>
     {children}
@@ -116,13 +116,13 @@ const TD = ({ children, right, className }: { children: React.ReactNode; right?:
   </TableCell>
 )
 
-// ─── Zod Schema ───────────────────────────────────────────────────────────────
+// â"€â"€â"€ Zod Schema â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const ruleSchema = z.object({
   product_type:           z.enum(["mobile_phone", "accessory"] as const),
   brand:                  z.string().optional(),
   model:                  z.string().optional(),
   category:               z.string().optional(),
-  minimum_stock_level:    z.string().min(1, "Required").refine((v) => !isNaN(Number(v)) && Number(v) >= 1, "Must be ≥ 1"),
+  minimum_stock_level:    z.string().min(1, "Required").refine((v) => !isNaN(Number(v)) && Number(v) >= 1, "Must be â‰¥ 1"),
   reorder_quantity:       z.string().optional(),
   preferred_supplier_id:  z.string().optional(),
   notify_via_dashboard:   z.boolean(),
@@ -131,7 +131,7 @@ const ruleSchema = z.object({
 })
 type RuleFormData = z.infer<typeof ruleSchema>
 
-// ─── Rule Form Dialog ─────────────────────────────────────────────────────────
+// â"€â"€â"€ Rule Form Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function RuleFormDialog({ open, editRule, onClose, onSave, suppliers }: {
   open: boolean; editRule: StockAlertRule | null
   onClose: () => void; onSave: (data: RuleFormData, rule: StockAlertRule | null) => void
@@ -213,12 +213,12 @@ function RuleFormDialog({ open, editRule, onClose, onSave, suppliers }: {
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Min Stock Level *</Label>
-              <Input {...register("minimum_stock_level")} type="number" min="1" placeholder="5" className="h-8 text-xs" />
+              <Input {...register("minimum_stock_level")} type="number" onWheel={e => e.currentTarget.blur()} min="1" placeholder="5" className="h-8 text-xs" />
               {errors.minimum_stock_level && <p className="text-[10px] text-red-500">{errors.minimum_stock_level.message}</p>}
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Reorder Qty</Label>
-              <Input {...register("reorder_quantity")} type="number" min="0" placeholder="10" className="h-8 text-xs" />
+              <Input {...register("reorder_quantity")} type="number" onWheel={e => e.currentTarget.blur()} min="0" placeholder="10" className="h-8 text-xs" />
             </div>
           </div>
 
@@ -266,7 +266,7 @@ function RuleFormDialog({ open, editRule, onClose, onSave, suppliers }: {
   )
 }
 
-// ─── Confirm Delete Dialog ────────────────────────────────────────────────────
+// â"€â"€â"€ Confirm Delete Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function ConfirmDeleteDialog({ open, title, description, onConfirm, onClose }: {
   open: boolean; title: string; description: string; onConfirm: () => void; onClose: () => void
 }) {
@@ -288,7 +288,7 @@ function ConfirmDeleteDialog({ open, title, description, onConfirm, onClose }: {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 type AlertTypeFilter = AlertType | "all"
 type ActiveTab = "alerts" | "rules" | "history"
 
@@ -455,7 +455,7 @@ export default function StockAlertsPage() {
     )
   }
 
-  // ── Stat card definitions ──────────────────────────────────────────────────
+  // â"€â"€ Stat card definitions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const statCards = [
     { type: "out_of_stock" as AlertTypeFilter, title: "Out of Stock", value: stats.outOfStock, sub: "Immediate action required", Icon: AlertOctagon, iconBg: "bg-red-500",    active: alertTypeFilter === "out_of_stock", activeBorder: "border-red-300 bg-red-50/40", hoverBorder: "hover:border-red-200", pulse: stats.outOfStock > 0 },
     { type: "low_stock"    as AlertTypeFilter, title: "Low Stock",    value: stats.lowStock,   sub: "Below minimum level",      Icon: AlertTriangle, iconBg: "bg-orange-500", active: alertTypeFilter === "low_stock",    activeBorder: "border-orange-300 bg-orange-50/40", hoverBorder: "hover:border-orange-200", pulse: false },
@@ -465,7 +465,7 @@ export default function StockAlertsPage() {
   return (
     <div className="p-4 space-y-3">
 
-      {/* ── Compact header ─────────────────────────────────────────────────── */}
+      {/* â"€â"€ Compact header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0 relative">
@@ -479,7 +479,7 @@ export default function StockAlertsPage() {
           <div>
             <h1 className="text-sm font-bold text-slate-900 leading-none">Stock Alerts</h1>
             <p className="text-[10px] text-slate-400 mt-0.5">
-              {activeAlertCount} active alert{activeAlertCount !== 1 ? "s" : ""} · {rules.filter((r) => r.alert_enabled).length} active rules
+              {activeAlertCount} active alert{activeAlertCount !== 1 ? "s" : ""} - {rules.filter((r) => r.alert_enabled).length} active rules
             </p>
           </div>
         </div>
@@ -488,7 +488,7 @@ export default function StockAlertsPage() {
         </Button>
       </div>
 
-      {/* ── 3 stat cards ──────────────────────────────────────────────────── */}
+      {/* â"€â"€ 3 stat cards â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-3 gap-2.5">
         {statCards.map((card) => (
           <button
@@ -517,7 +517,7 @@ export default function StockAlertsPage() {
         ))}
       </div>
 
-      {/* ── Tabs ──────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ActiveTab)}>
         <TabsList className="h-8 p-0.5 rounded-xl bg-slate-100">
           <TabsTrigger value="alerts" className="h-7 text-xs gap-1.5 px-3">
@@ -537,7 +537,7 @@ export default function StockAlertsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ── Tab 1: Alerts ─────────────────────────────────────────────── */}
+        {/* â"€â"€ Tab 1: Alerts â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
         <TabsContent value="alerts" className="mt-3 space-y-2.5">
           {/* Filter bar */}
           <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 flex flex-wrap items-center gap-2">
@@ -609,7 +609,7 @@ export default function StockAlertsPage() {
                               <p className="text-xs font-semibold text-slate-800">{log.product_name}</p>
                               <div className="flex items-center gap-1 mt-0.5">
                                 {log.product_type === "mobile_phone" ? <Smartphone className="w-2.5 h-2.5 text-blue-400" /> : <Package className="w-2.5 h-2.5 text-purple-400" />}
-                                <span className="text-[10px] text-slate-400">{log.brand}{log.category ? ` · ${log.category}` : ""}</span>
+                                <span className="text-[10px] text-slate-400">{log.brand}{log.category ? ` - ${log.category}` : ""}</span>
                               </div>
                             </div>
                           </div>
@@ -622,7 +622,7 @@ export default function StockAlertsPage() {
                         </TD>
                         <TD right className="text-slate-500">{log.minimum_stock_level}</TD>
                         <TD><AlertStatusBadge status={log.status} /></TD>
-                        <TD className="text-slate-400">{log.last_restocked ? formatDate(log.last_restocked) : "—"}</TD>
+                        <TD className="text-slate-400">{log.last_restocked ? formatDate(log.last_restocked) : "-"}</TD>
                         <TD right>
                           <div className="flex items-center justify-end gap-0.5">
                             {log.status === "active" && (
@@ -654,7 +654,7 @@ export default function StockAlertsPage() {
           </div>
         </TabsContent>
 
-        {/* ── Tab 2: Rules ───────────────────────────────────────────────── */}
+        {/* â"€â"€ Tab 2: Rules â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
         <TabsContent value="rules" className="mt-3 space-y-2.5">
           {/* Filter bar */}
           <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 flex items-center gap-2">
@@ -701,7 +701,7 @@ export default function StockAlertsPage() {
                           </div>
                         </TD>
                         <TD right className="font-bold text-slate-700">{rule.minimum_stock_level}</TD>
-                        <TD right className="text-slate-500">{rule.reorder_quantity ?? "—"}</TD>
+                        <TD right className="text-slate-500">{rule.reorder_quantity ?? "-"}</TD>
                         <TD className="text-slate-500">{rule.preferred_supplier_name ?? "Any"}</TD>
                         <TD>
                           <div className="flex items-center gap-1">
@@ -735,7 +735,7 @@ export default function StockAlertsPage() {
           </div>
         </TabsContent>
 
-        {/* ── Tab 3: History ─────────────────────────────────────────────── */}
+        {/* â"€â"€ Tab 3: History â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
         <TabsContent value="history" className="mt-3 space-y-2.5">
           {/* Filter bar */}
           <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 flex flex-wrap items-center gap-2">
@@ -819,12 +819,12 @@ export default function StockAlertsPage() {
                               <p className="text-xs font-medium text-slate-600">{log.acknowledged_by}</p>
                               {log.acknowledged_at && <p className="text-[10px] text-slate-400">{format(new Date(log.acknowledged_at), "dd MMM, hh:mm a")}</p>}
                             </div>
-                          ) : <span className="text-slate-300">—</span>}
+                          ) : <span className="text-slate-300">-</span>}
                         </TD>
                         <TD>
                           {log.resolved_at
                             ? <p className="text-xs text-emerald-600 font-medium">{format(new Date(log.resolved_at), "dd MMM yyyy")}</p>
-                            : <span className="text-slate-300">—</span>}
+                            : <span className="text-slate-300">-</span>}
                         </TD>
                       </TableRow>
                     ))
@@ -836,7 +836,7 @@ export default function StockAlertsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Dialogs ────────────────────────────────────────────────────────── */}
+      {/* â"€â"€ Dialogs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <RuleFormDialog
         open={showRuleDialog} editRule={editRule}
         onClose={() => { setShowRuleDialog(false); setEditRule(null) }}

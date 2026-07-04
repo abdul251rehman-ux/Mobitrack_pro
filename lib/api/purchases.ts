@@ -105,6 +105,7 @@ export async function createPurchase(
 
 export async function updatePurchaseStatus(id: string, data: Partial<Purchase>): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const updatePayload: Record<string, unknown> = {}
     if (data.paymentStatus !== undefined) updatePayload.payment_status = data.paymentStatus
     if (data.deliveryStatus !== undefined) updatePayload.delivery_status = data.deliveryStatus
@@ -116,6 +117,7 @@ export async function updatePurchaseStatus(id: string, data: Partial<Purchase>):
       .from('purchases')
       .update(updatePayload)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to update purchase: ${error.message}`)
   } catch (err) {

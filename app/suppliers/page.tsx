@@ -16,6 +16,7 @@ import { getPurchases } from "@/lib/api/purchases"
 import { Supplier, Purchase } from "@/data/types"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,21 +31,17 @@ import {
   DialogTitle, DialogDescription,
 } from "@/components/ui/dialog"
 import { formatCurrency } from "@/lib/utils"
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-const CITIES = [
-  "Lahore", "Karachi", "Islamabad", "Faisalabad",
-  "Rawalpindi", "Peshawar", "Multan",
-] as const
+import { CITIES } from "@/lib/constants"
+import { TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react"
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 const supplierSchema = z.object({
   companyName:   z.string().min(2, "Company name must be at least 2 characters"),
   contactPerson: z.string().min(2, "Contact person name required"),
   phone:         z.string().min(7, "Valid phone number required"),
-  email:         z.string().email("Valid email required"),
+  email:         z.string().email("Valid email").optional().or(z.literal("")),
   address:       z.string().min(5, "Address required"),
-  city:          z.enum(["Lahore","Karachi","Islamabad","Faisalabad","Rawalpindi","Peshawar","Multan"]),
+  city:          z.string().min(1, "City required"),
   notes:         z.string().optional(),
   status:        z.enum(["Active","Inactive"]),
 })
@@ -124,14 +121,14 @@ function SupplierCard({
             <div className="w-5 h-5 rounded bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center shrink-0">
               <Mail className="w-2.5 h-2.5 text-slate-500 group-hover:text-blue-600" />
             </div>
-            <span className="truncate">{supplier.email || "—"}</span>
+            <span className="truncate">{supplier.email || "-"}</span>
           </button>
         </div>
         <div className="flex items-center gap-1.5 px-1.5 py-1">
           <div className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center shrink-0">
             <MapPin className="w-2.5 h-2.5 text-slate-500" />
           </div>
-          <span className="text-xs text-slate-500 truncate">{supplier.city}{supplier.address ? ` — ${supplier.address}` : ""}</span>
+          <span className="text-xs text-slate-500 truncate">{supplier.city}{supplier.address ? ` - ${supplier.address}` : ""}</span>
         </div>
       </div>
 
@@ -144,7 +141,7 @@ function SupplierCard({
         <div>
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Outstanding</p>
           <p className={`text-sm font-bold ${supplier.outstandingBalance > 0 ? "text-red-600" : "text-slate-400"}`}>
-            {supplier.outstandingBalance > 0 ? formatCurrency(supplier.outstandingBalance) : "—"}
+            {supplier.outstandingBalance > 0 ? formatCurrency(supplier.outstandingBalance) : "-"}
           </p>
         </div>
       </div>
@@ -222,8 +219,24 @@ function SupplierFormDialog({
   const statusValue = watch("status")
   const cityValue   = watch("city")
 
+  // When editing a supplier whose city isn't in the preset list, treat as "Other"
+  const [customCity, setCustomCity] = useState("")
+  useEffect(() => {
+    if (editing?.city && !CITIES.slice(0, -1).includes(editing.city as any)) {
+      setValue("city", "Other")
+      setCustomCity(editing.city)
+    } else {
+      setCustomCity("")
+    }
+  }, [editing, setValue])
+
   const onSubmit = (data: SupplierForm) => {
-    onSave(data, editing?.id)
+    if (data.city === "Other" && !customCity.trim()) {
+      toast.error("Please enter a city name")
+      return
+    }
+    const finalCity = data.city === "Other" ? customCity.trim() : data.city
+    onSave({ ...data, city: finalCity }, editing?.id)
   }
 
   return (
@@ -256,7 +269,7 @@ function SupplierFormDialog({
               {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
             </div>
             <div className="space-y-1">
-              <Label className="text-xs" htmlFor="email">Email <span className="text-red-500">*</span></Label>
+              <Label className="text-xs" htmlFor="email">Email <span className="text-slate-400 text-[10px]">(optional)</span></Label>
               <Input id="email" type="email" placeholder="contact@company.pk" {...register("email")} className={`h-8 text-xs ${errors.email ? "border-red-400" : ""}`} />
               {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
             </div>
@@ -268,10 +281,23 @@ function SupplierFormDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">City <span className="text-red-500">*</span></Label>
-            <Select value={cityValue} onValueChange={(v) => setValue("city", v as SupplierForm["city"])}>
+            <Select value={cityValue} onValueChange={(v) => { setValue("city", v, { shouldValidate: true }); if (v !== "Other") setCustomCity("") }}>
               <SelectTrigger className={`h-8 text-xs ${errors.city ? "border-red-400" : ""}`}><SelectValue placeholder="Select city" /></SelectTrigger>
-              <SelectContent>{CITIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}</SelectContent>
+              <SelectContent className="max-h-60">
+                {CITIES.map((c) => (
+                  <SelectItem key={c} value={c} className={c === "Other" ? "font-medium text-blue-600 border-t border-slate-100 mt-1 pt-1" : ""}>{c}</SelectItem>
+                ))}
+              </SelectContent>
             </Select>
+            {cityValue === "Other" && (
+              <Input
+                placeholder="Enter city name..."
+                value={customCity}
+                onChange={e => setCustomCity(e.target.value)}
+                className={`h-8 text-xs mt-1 ${!customCity.trim() ? "border-amber-400" : ""}`}
+                autoFocus
+              />
+            )}
             {errors.city && <p className="text-xs text-red-500">{errors.city.message}</p>}
           </div>
           <div className="space-y-1">
@@ -281,7 +307,7 @@ function SupplierFormDialog({
           <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
             <div>
               <p className="text-xs font-medium text-slate-700">Account Status</p>
-              <p className="text-[10px] text-slate-400">{statusValue === "Active" ? "Active — can receive orders" : "Inactive"}</p>
+              <p className="text-[10px] text-slate-400">{statusValue === "Active" ? "Active - can receive orders" : "Inactive"}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-xs font-medium ${statusValue === "Active" ? "text-emerald-600" : "text-slate-400"}`}>{statusValue}</span>
@@ -420,7 +446,7 @@ export default function SuppliersPage() {
           companyName:        data.companyName,
           contactPerson:      data.contactPerson,
           phone:              data.phone,
-          email:              data.email,
+          email:              data.email || "",
           address:            data.address,
           city:               data.city,
           totalPurchases:     0,
@@ -460,17 +486,34 @@ export default function SuppliersPage() {
     )
   }
 
+  const supplierStats = useMemo(() => {
+    const active = supplierList.filter(s => s.status === "Active").length
+    const totalPurchases = supplierList.reduce((s, x) => s + x.totalPurchases, 0)
+    const totalOutstanding = supplierList.reduce((s, x) => s + x.outstandingBalance, 0)
+    return { active, totalPurchases, totalOutstanding }
+  }, [supplierList])
+
   return (
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-orange-600 flex items-center justify-center shrink-0">
+            <Building2 className="w-3.5 h-3.5 text-white" />
+          </div>
           <h1 className="text-base font-bold text-slate-900">Suppliers</h1>
           <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">{supplierList.length}</span>
         </div>
         <button onClick={handleAddClick} className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm">
           <Plus className="w-3.5 h-3.5" />Add Supplier
         </button>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <StatCard title="Active Suppliers" value={String(supplierStats.active)} icon={CheckCircle2} iconBg="bg-emerald-100" subtext={`${supplierList.length - supplierStats.active} inactive`} />
+        <StatCard title="Total Purchases" value={formatCurrency(supplierStats.totalPurchases)} icon={TrendingUp} iconBg="bg-blue-100" subtext="All time" />
+        <StatCard title="Outstanding Balance" value={formatCurrency(supplierStats.totalOutstanding)} icon={AlertCircle} iconBg="bg-red-100" subtext="Payable to suppliers" />
       </div>
 
       {/* Filter Bar */}

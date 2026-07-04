@@ -16,7 +16,7 @@ export default function PaymentsRedirect() {
           <Wallet className="w-6 h-6 text-blue-600" />
         </div>
         <p className="text-sm font-semibold text-slate-700">Payments have moved to Finance</p>
-        <p className="text-xs text-slate-400">Redirecting you now…</p>
+        <p className="text-xs text-slate-400">Redirecting you now...</p>
         <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
       </div>
     </div>
