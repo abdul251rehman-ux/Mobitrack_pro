@@ -942,7 +942,7 @@ function CatalogCombo({
                           <button type="button" onClick={() => handleEdit(item)} disabled={saving}
                             className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 px-1 shrink-0">Save</button>
                           <button type="button" onClick={() => { setEditingVal(null); setEditInput("") }}
-                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">âœ•</button>
+                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">x</button>
                         </>
                       ) : deletingVal === item ? (
                         <>
@@ -1066,6 +1066,30 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     loadSuppliers()
   }, [])
 
+  // Source type state
+  const [sourceType, setSourceType] = useState<SourceType>("purchased")
+  const [walkinName, setWalkinName] = useState("")
+  const [walkinPhone, setWalkinPhone] = useState("")
+  const [selectedCustomerId, setSelectedCustomerId] = useState("")
+  const [selectedCustomerName, setSelectedCustomerName] = useState("")
+  const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
+  useEffect(() => {
+    if (sourceType !== "customer_trade_in") return
+    if (localCustomers.length > 0) return
+    async function loadCustomers() {
+      try {
+        const tenantId = await getTenantId()
+        const { data } = await supabase
+          .from("customers")
+          .select("id, name, phone")
+          .eq("tenant_id", tenantId)
+          .order("name")
+        if (data) setLocalCustomers(data.map((r: any) => ({ id: r.id, name: r.name, phone: r.phone ?? "" } as any)))
+      } catch { /* non-fatal */ }
+    }
+    loadCustomers()
+  }, [sourceType])
+
   const toggleLock = (key: keyof LockState) =>
     setLocks(prev => ({ ...prev, [key]: !prev[key] }))
 
@@ -1110,7 +1134,9 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
   const validate = (): boolean => {
     let ok = true
-    if (!supplierId) { setSupplierErr(true); ok = false }
+    if (sourceType === "purchased" && !supplierId) { setSupplierErr(true); ok = false }
+    if (sourceType === "walk_in" && !walkinName.trim()) { toast.error("Enter walk-in seller name"); ok = false }
+    if (sourceType === "customer_trade_in" && !selectedCustomerId) { toast.error("Select a customer"); ok = false }
     if (!purchaseDate) { toast.error("Select a purchase date"); ok = false }
 
     const imeisSeen = new Set<string>()
@@ -1280,7 +1306,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
           account_id: accountId, amount: paid,
           reference_type: "Purchase", reference_number: poNumber,
-          description: `Used phones purchase ${poNumber} Ã¢â‚¬" ${supplierName}`,
+          description: `Used phones purchase ${poNumber} - ${supplierName}`,
         })
         const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", accountId).single()
         if (accRow) {
@@ -1329,7 +1355,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         created_at: row.created_at ?? new Date().toISOString(),
       } as UsedPhone))
 
-      toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added Ã¢â‚¬" ${poNumber}`)
+      toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added - ${poNumber}`)
       onSaved(saved)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to save - no phones were added")
@@ -1458,8 +1484,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     {row.brand || row.model ? (
                       <span className="text-sm font-semibold text-slate-800">
                         {[row.brand, row.model].filter(Boolean).join(" ")}
-                        {row.color && <span className="text-slate-400 font-normal"> &middot; {row.color}</span>}
-                        {row.storage && <span className="text-slate-400 font-normal"> &middot; {row.storage}</span>}
+                        {row.color && <span className="text-slate-400 font-normal"> · {row.color}</span>}
+                        {row.storage && <span className="text-slate-400 font-normal"> · {row.storage}</span>}
                       </span>
                     ) : (
                       <span className="text-sm text-slate-400 italic">Phone {idx + 1} - click to fill details</span>
@@ -1817,9 +1843,9 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           <select value={row.pta_status} onChange={e => updateRow(row.id, "pta_status", e.target.value as UsedPTAStatus)}
                             className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
                               locks.pta_status ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
-                            <option value="approved">âœ" OK</option>
-                            <option value="pending">? Pending</option>
-                            <option value="blocked">âœ- Blocked</option>
+                            <option value="approved">PTA Approved</option>
+                            <option value="pending">PTA Pending</option>
+                            <option value="blocked">PTA Blocked</option>
                           </select>
                         </div>
 
@@ -1915,7 +1941,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     {parseFloat(amountPaid) > 0 && (
                       <div className="flex justify-between text-slate-500">
                         <span>Amount paid</span>
-                        <span className="text-emerald-600 font-semibold">âˆ' {formatCurrency(parseFloat(amountPaid))}</span>
+                        <span className="text-emerald-600 font-semibold">- {formatCurrency(parseFloat(amountPaid))}</span>
                       </div>
                     )}
                     <div className={cn(
