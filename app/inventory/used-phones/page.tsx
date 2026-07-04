@@ -857,7 +857,7 @@ function CatalogCombo({
       {/* Dropdown panel */}
       {open && (
         <>
-          <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ minWidth: 260, width: "max-content", maxWidth: 360, left: 0 }}>
+          <div className="absolute mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ minWidth: 260, width: "max-content", maxWidth: 360, left: 0, zIndex: 9999 }}>
             {!managing ? (
               <>
                 {/* Option list - onWheel stops propagation so page doesn't scroll while hovering list */}
@@ -978,6 +978,7 @@ function CatalogCombo({
   )
 }
 
+
 function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOptions, ramOptions, suppliers, accounts,
   onAddBrand, onEditBrand, onDeleteBrand,
   onAddModel, onEditModel, onDeleteModel,
@@ -1024,6 +1025,46 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [saving, setSaving] = useState(false)
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
   const [dirty, setDirty] = useState(false)
+
+  // Re-fetch suppliers directly inside the dialog — parent prop may arrive empty
+  // if the page-level fetch hadn't finished when the user clicked Bulk Add
+  const [localSuppliers, setLocalSuppliers] = useState<Supplier[]>(suppliers)
+  const [suppliersLoading, setSuppliersLoading] = useState(suppliers.length === 0)
+  useEffect(() => {
+    if (suppliers.length > 0) { setSuppliersLoading(false); return }
+    async function loadSuppliers() {
+      try {
+        // getTenantId() also calls set_tenant_context RPC which is required for RLS
+        const tenantId = await getTenantId()
+        const { data, error } = await supabase
+          .from("suppliers")
+          .select("id, company_name, contact_person, phone, email, address, city, outstanding_balance")
+          .eq("tenant_id", tenantId)
+          .order("company_name")
+        if (!error && data) {
+          setLocalSuppliers(data.map((r: any) => ({
+            id: r.id,
+            companyName: r.company_name ?? "",
+            contactPerson: r.contact_person ?? "",
+            phone: r.phone ?? "",
+            email: r.email ?? "",
+            address: r.address ?? "",
+            city: r.city ?? "",
+            totalPurchases: 0,
+            outstandingBalance: r.outstanding_balance ?? 0,
+            rating: 0,
+            status: "Active",
+            createdAt: "",
+          })))
+        }
+      } catch (err) {
+        console.error("BulkAddDialog: failed to load suppliers", err)
+      } finally {
+        setSuppliersLoading(false)
+      }
+    }
+    loadSuppliers()
+  }, [])
 
   const toggleLock = (key: keyof LockState) =>
     setLocks(prev => ({ ...prev, [key]: !prev[key] }))
@@ -1101,7 +1142,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     setSaving(true)
     setSaveProgress({ done: 0, total: rows.length })
     const tenantId = await getTenantId()
-    const selectedSupplier = suppliers.find(s => s.id === supplierId)
+    const selectedSupplier = localSuppliers.find(s => s.id === supplierId)
     const supplierName = selectedSupplier?.companyName ?? ""
 
     // Pre-flight: check for IMEI duplicates already in DB
@@ -1342,7 +1383,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
 
           {/* â"€â"€ Purchase Order Header card â"€â"€ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-visible">
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Purchase Details</h2>
@@ -1359,11 +1400,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     Supplier <span className="text-red-500">*</span>
                   </label>
                   <CatalogCombo
-                    value={suppliers.find(s => s.id === supplierId)?.companyName ?? ""}
-                    onChange={v => { const s = suppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
-                    options={suppliers.map(s => s.companyName)}
-                    placeholder="Select or search supplier..."
+                    value={localSuppliers.find(s => s.id === supplierId)?.companyName ?? ""}
+                    onChange={v => { const s = localSuppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
+                    options={localSuppliers.map(s => s.companyName)}
+                    placeholder={suppliersLoading ? "Loading suppliers..." : "Select or search supplier..."}
                     error={supplierErr}
+                    disabled={suppliersLoading}
                   />
                   {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
                 </div>
@@ -2975,7 +3017,35 @@ export default function UsedPhonesPage() {
     fetchColors()
     fetchStorageOptions()
     fetchRamOptions()
-    getSuppliers().then(setSuppliers).catch(() => {})
+    // Suppliers: fall back to direct query if getSuppliers throws (e.g. RLS timing)
+    getSuppliers()
+      .then(setSuppliers)
+      .catch(async () => {
+        try {
+          const tenantId = await getTenantId()
+          const { data } = await supabase
+            .from("suppliers")
+            .select("id, company_name, contact_person, phone, email, address, city, outstanding_balance")
+            .eq("tenant_id", tenantId)
+            .order("company_name")
+          if (data) {
+            setSuppliers(data.map((r: any) => ({
+              id: r.id,
+              companyName: r.company_name ?? "",
+              contactPerson: r.contact_person ?? "",
+              phone: r.phone ?? "",
+              email: r.email ?? "",
+              address: r.address ?? "",
+              city: r.city ?? "",
+              totalPurchases: 0,
+              outstandingBalance: r.outstanding_balance ?? 0,
+              rating: 0,
+              status: "Active",
+              createdAt: "",
+            })))
+          }
+        } catch { /* non-fatal */ }
+      })
     getCustomers().then(setCustomers).catch(() => {})
     getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
   }, [])
