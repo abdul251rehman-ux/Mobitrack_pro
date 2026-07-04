@@ -1,7 +1,7 @@
 ﻿﻿"use client"
 
 import React, { useState, useMemo, useEffect } from "react"
-import { Plus, Eye, Printer, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet, BadgeCheck, Trash2 } from "lucide-react"
+import { Plus, Eye, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet, Trash2 } from "lucide-react"
 
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -11,10 +11,8 @@ import { useRouter } from "next/navigation"
 
 import { getSales } from "@/lib/api/sales"
 import { getTenant } from "@/lib/api/settings"
-import { getFinanceAccounts } from "@/lib/api/finance"
 import type { ShopInfo } from "@/lib/pdf/invoice"
 import { Sale } from "@/data/types"
-import type { FinanceAccount } from "@/lib/api/types"
 import { generateInvoicePDF } from "@/lib/pdf/invoice"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
@@ -91,98 +89,9 @@ export default function SalesPage() {
   // Universal search - matches invoice#, customer, IMEI, product name, color, price
   const [universalSearch, setUniversalSearch] = useState("")
 
-  // â"€â"€ Finance accounts for collect payment â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
-  useEffect(() => {
-    getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
-  }, [])
-
-  // â"€â"€ Collect Payment dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-  const [collectTarget, setCollectTarget] = useState<Sale | null>(null)
-  const [collectAccountId, setCollectAccountId] = useState("")
-  const [collectAmount, setCollectAmount] = useState("")
-  const [collectMethod, setCollectMethod] = useState("Cash")
-  const [collecting, setCollecting] = useState(false)
-
   // â"€â"€ Delete sale state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState(false)
-
-  function openCollect(sale: Sale) {
-    const outstanding = sale.total - sale.amountReceived
-    setCollectTarget(sale)
-    setCollectAmount(String(outstanding > 0 ? outstanding : ""))
-    const defaultAcc = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]
-    setCollectAccountId(defaultAcc?.id ?? "")
-    setCollectMethod("Cash")
-    setCollecting(false)
-  }
-
-  async function handleCollectPayment() {
-    if (!collectTarget || collecting) return
-    const amount = parseFloat(collectAmount)
-    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
-    if (!collectAccountId) { toast.error("Select a finance account"); return }
-    setCollecting(true)
-    try {
-      const tenantId = await getTenantId()
-      const today = todayPKT()
-      const outstanding = collectTarget.total - collectTarget.amountReceived
-      const newReceived = collectTarget.amountReceived + amount
-      const newStatus = newReceived >= collectTarget.total ? "Completed" : "Pending"
-
-      // Update sale amountReceived + status
-      await supabase.from("sales")
-        .update({ amount_received: newReceived, status: newStatus })
-        .eq("id", collectTarget.id)
-
-      // Payment record
-      await supabase.from("payments").insert({
-        tenant_id: tenantId, date: today, type: "Received",
-        entity_type: "Customer",
-        entity_id: collectTarget.customerId || null,
-        entity_name: collectTarget.customerName,
-        reference_type: "Sale",
-        reference_number: collectTarget.invoiceNumber,
-        amount, method: collectMethod, status: "Completed",
-        notes: `Udhaar collection for ${collectTarget.invoiceNumber}`,
-      })
-
-      // Finance transaction + update account balance
-      await supabase.from("finance_transactions").insert({
-        tenant_id: tenantId, date: today, type: "sale_receipt",
-        account_id: collectAccountId, amount,
-        reference_type: "Sale", reference_number: collectTarget.invoiceNumber,
-        description: `Udhaar collected - ${collectTarget.invoiceNumber} (${collectTarget.customerName})`,
-      })
-      const { data: accRow } = await supabase.from("finance_accounts")
-        .select("current_balance").eq("id", collectAccountId).single()
-      if (accRow) {
-        await supabase.from("finance_accounts")
-          .update({ current_balance: (accRow as any).current_balance + amount })
-          .eq("id", collectAccountId)
-      }
-
-      // Update local state - sale record and finance account balance
-      setSalesList(prev => prev.map(s => s.id === collectTarget.id
-        ? { ...s, amountReceived: newReceived, status: newStatus as any }
-        : s
-      ))
-      setFinanceAccounts(prev => prev.map(a =>
-        a.id === collectAccountId ? { ...a, currentBalance: a.currentBalance + amount } : a
-      ))
-      toast.success(
-        newStatus === "Completed"
-          ? `Payment collected - ${collectTarget.invoiceNumber} fully paid!`
-          : `${formatCurrency(amount)} collected - ${formatCurrency(collectTarget.total - newReceived)} still outstanding`
-      )
-      setCollectTarget(null)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to collect payment")
-    } finally {
-      setCollecting(false)
-    }
-  }
 
   // â"€â"€ Delete sale â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async function handleDeleteSale() {
@@ -558,31 +467,8 @@ export default function SalesPage() {
             >
               <Download className="w-4 h-4" />
             </Button>
-            {/* Print */}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-              onClick={async () => generateInvoicePDF(sale, shopInfo, "print")}
-              title="Print invoice"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
 
-            {/* Collect Payment - only for Pending (credit/udhaar) */}
-            {sale.status === "Pending" && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="h-8 w-8 text-amber-500 hover:text-emerald-600 hover:bg-emerald-50"
-                onClick={() => openCollect(sale)}
-                title={`Collect payment - ${formatCurrency(sale.total - sale.amountReceived)} outstanding`}
-              >
-                <BadgeCheck className="w-4 h-4" />
-              </Button>
-            )}
-
-            {/* Return/Refund - links to returns page with invoice pre-filled */}
+{/* Return/Refund - links to returns page with invoice pre-filled */}
             {sale.status === "Completed" && (
               <Link href={`/returns?invoice=${encodeURIComponent(sale.invoiceNumber)}`}>
                 <Button
@@ -933,26 +819,6 @@ export default function SalesPage() {
                     <Download className="w-3 h-3" />
                     PDF
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 h-8 text-xs gap-1.5 text-slate-600 border-slate-200 hover:bg-slate-50"
-                    onClick={async () => generateInvoicePDF(sale, shopInfo, "print")}
-                  >
-                    <Printer className="w-3 h-3" />
-                    Print
-                  </Button>
-                  {sale.status === "Pending" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-8 text-xs gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 font-semibold"
-                      onClick={() => openCollect(sale)}
-                    >
-                      <BadgeCheck className="w-3 h-3" />
-                      Collect
-                    </Button>
-                  )}
                   {sale.status === "Completed" && (
                     <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-red-500 border-red-200 hover:bg-red-50" asChild>
                       <Link href={`/returns?invoice=${encodeURIComponent(sale.invoiceNumber)}`}>
@@ -988,94 +854,6 @@ export default function SalesPage() {
 
       </>
       )}
-
-      {/* â"€â"€ Collect Payment (Udhaar) Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <Dialog open={!!collectTarget} onOpenChange={v => { if (!v) setCollectTarget(null) }}>
-        <DialogContent className="max-w-sm w-[95vw] p-5">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">Collect Payment</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              {collectTarget?.invoiceNumber} - {collectTarget?.customerName}
-            </DialogDescription>
-          </DialogHeader>
-
-          {collectTarget && (
-            <div className="space-y-4 py-1">
-              {/* Outstanding summary */}
-              <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 space-y-1.5">
-                <div className="flex justify-between text-sm">
-                  <span className="text-amber-700">Total Bill</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(collectTarget.total)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-amber-700">Already Paid</span>
-                  <span className="font-semibold text-emerald-700">{formatCurrency(collectTarget.amountReceived)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-bold border-t border-amber-200 pt-1.5">
-                  <span className="text-amber-800">Outstanding (Udhaar)</span>
-                  <span className="text-amber-800">{formatCurrency(collectTarget.total - collectTarget.amountReceived)}</span>
-                </div>
-              </div>
-
-              {/* Amount to collect */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Amount Collecting Now (Rs)</Label>
-                <Input
-                  type="number" onWheel={e => e.currentTarget.blur()}
-                  min={0}
-                  max={collectTarget.total - collectTarget.amountReceived}
-                  value={collectAmount}
-                  onChange={e => setCollectAmount(e.target.value)}
-                  className="h-9 text-sm font-semibold"
-                  autoFocus
-                />
-                {parseFloat(collectAmount) > 0 && (
-                  <p className="text-[11px] text-slate-500">
-                    Remaining after this:{" "}
-                    <span className={parseFloat(collectAmount) >= collectTarget.total - collectTarget.amountReceived ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
-                      {formatCurrency(Math.max(0, collectTarget.total - collectTarget.amountReceived - parseFloat(collectAmount)))}
-                    </span>
-                    {parseFloat(collectAmount) >= collectTarget.total - collectTarget.amountReceived && " - Fully Paid!"}
-                  </p>
-                )}
-              </div>
-
-              {/* Payment method */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Payment Method</Label>
-                <Select value={collectMethod} onValueChange={setCollectMethod}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Finance account */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Add to Account</Label>
-                <Select value={collectAccountId} onValueChange={setCollectAccountId}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select account..." /></SelectTrigger>
-                  <SelectContent>
-                    {financeAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setCollectTarget(null)}>Cancel</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={handleCollectPayment}
-              disabled={collecting || !collectAmount || parseFloat(collectAmount) <= 0}
-            >
-              {collecting ? "Saving..." : "Collect Payment"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* â"€â"€ Delete Sale Confirm â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Dialog open={!!deleteTarget} onOpenChange={v => { if (!v) setDeleteTarget(null) }}>

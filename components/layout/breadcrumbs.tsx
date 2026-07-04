@@ -41,7 +41,7 @@ export function Breadcrumbs() {
       {segments.map((segment, index) => {
         const href = "/" + segments.slice(0, index + 1).join("/")
         const isLast = index === segments.length - 1
-        const isId = segment.startsWith("cust-") || segment.startsWith("sup-")
+        const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment) || segment.startsWith("cust-") || segment.startsWith("sup-")
         const label = isId ? "Detail" : (routeLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1))
         // On mobile only show the last 2 segments to prevent overflow
         const isMobileHidden = !isLast && index < segments.length - 2

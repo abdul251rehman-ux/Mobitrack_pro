@@ -67,11 +67,16 @@ const purchaseColumns: ColumnDef<Purchase>[] = [
   {
     accessorKey: "poNumber",
     header: "PO #",
-    cell: ({ row }) => (
-      <span className="font-mono text-xs font-bold text-blue-600">
-        {row.getValue("poNumber")}
-      </span>
-    ),
+    cell: ({ row }) => {
+      const items = row.original.items
+      const qty   = items.reduce((sum, i) => sum + i.quantity, 0)
+      return (
+        <div>
+          <span className="font-mono text-xs font-bold text-blue-600 block">{row.getValue("poNumber")}</span>
+          <span className="text-[10px] text-slate-400">{items.length} line{items.length !== 1 ? "s" : ""} · {qty} units</span>
+        </div>
+      )
+    },
   },
   {
     accessorKey: "date",
@@ -79,20 +84,6 @@ const purchaseColumns: ColumnDef<Purchase>[] = [
     cell: ({ row }) => (
       <span className="text-xs text-slate-600">{formatDate(row.getValue("date"))}</span>
     ),
-  },
-  {
-    id: "items",
-    header: "Items",
-    cell: ({ row }) => {
-      const items = row.original.items
-      const qty   = items.reduce((sum, i) => sum + i.quantity, 0)
-      return (
-        <span className="text-xs text-slate-600">
-          {items.length}L{" "}
-          <span className="text-slate-400">({qty}u)</span>
-        </span>
-      )
-    },
   },
   {
     accessorKey: "total",
@@ -122,27 +113,14 @@ const purchaseColumns: ColumnDef<Purchase>[] = [
           {formatCurrency(balance)}
         </span>
       ) : (
-        <span className="text-xs text-slate-400">-</span>
+        <span className="text-xs text-slate-400">–</span>
       )
     },
   },
   {
     accessorKey: "paymentStatus",
-    header: "Payment",
+    header: "Status",
     cell: ({ row }) => <StatusBadge status={row.getValue("paymentStatus")} />,
-  },
-  {
-    accessorKey: "deliveryStatus",
-    header: "Delivery",
-    cell: ({ row }) => {
-      const status: string = row.getValue("deliveryStatus")
-      return (
-        <StatusBadge
-          status={status}
-          className={status === "Partial" ? "bg-blue-100 text-blue-700" : undefined}
-        />
-      )
-    },
   },
 ]
 

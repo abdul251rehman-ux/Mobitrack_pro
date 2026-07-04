@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Smartphone, Package, ShoppingCart, TrendingUp, Users, Truck, ShoppingBag,
   BarChart2, Settings, ChevronLeft, ChevronRight, LogOut, Layers, Tag, Award, ChevronDown, X, BookOpen, UserCheck, Building2, Bell, RefreshCw, Plus, Receipt,
-  RotateCcw, Wallet, ClipboardList, DollarSign, UserRound, Palette, HardDrive, Cpu,
+  RotateCcw, Wallet, ClipboardList, UserRound, Palette, HardDrive, Cpu,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/context/app-context"
@@ -71,7 +71,6 @@ const navSections: NavSection[] = [
     items: [
       { label: "Suppliers", icon: Truck, href: "/suppliers", permission: "suppliers.view" },
       { label: "Customers", icon: Users, href: "/customers", permission: "customers.view" },
-      { label: "Dealers", icon: Building2, href: "/shops", permission: "shops.view" },
       { label: "Persons", icon: UserRound, href: "/persons", permission: "ledger.view" },
     ],
   },
@@ -79,12 +78,12 @@ const navSections: NavSection[] = [
     section: "INSIGHTS",
     items: [
       { label: "Reports & Analytics", icon: BarChart2, href: "/reports", permission: "reports.view" },
-      { label: "Profit & Loss", icon: DollarSign, href: "/profit-loss", permission: "reports.view" },
     ],
   },
   {
     section: "SYSTEM",
     items: [
+      { label: "Staff", icon: UserCheck, href: "/staff", permission: "settings.general" },
       { label: "Audit Log", icon: ClipboardList, href: "/audit-log", permission: "audit-log.view" },
       { label: "Settings", icon: Settings, href: "/settings", permission: "settings.general" },
     ],

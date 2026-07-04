@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   Search, Trash2, Plus, Minus, ShoppingCart, Smartphone,
   User, UserPlus, ChevronLeft, Headphones, X, CheckCircle, AlertCircle,
-  Banknote, Wallet, Landmark, Check, Receipt, FileText, Printer, Eye, ChevronDown, AlertTriangle,
+  Banknote, Wallet, Landmark, Check, Receipt, FileText, Eye, ChevronDown, AlertTriangle,
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -475,11 +475,14 @@ export default function NewSalePage() {
   const [customerOutstanding, setCustomerOutstanding] = useState(0)
   useEffect(() => {
     if (!selectedCustomerId) { setCustomerOutstanding(0); return }
-    getTenantId().then(tenantId =>
-      supabase.from("sales").select("total, amount_received")
-        .eq("tenant_id", tenantId).eq("customer_id", selectedCustomerId).eq("status", "Pending")
-    ).then(({ data }) => {
-      setCustomerOutstanding((data ?? []).reduce((s: number, r: any) => s + Math.max(0, (r.total ?? 0) - (r.amount_received ?? 0)), 0))
+    getTenantId().then(async tenantId => {
+      const [{ data: salesData }, { data: paymentsData }] = await Promise.all([
+        supabase.from("sales").select("total").eq("tenant_id", tenantId).eq("customer_id", selectedCustomerId).neq("status", "Refunded"),
+        supabase.from("payments").select("amount").eq("tenant_id", tenantId).eq("entity_id", selectedCustomerId).eq("entity_type", "Customer").eq("type", "Received").eq("status", "Completed"),
+      ])
+      const totalBilled = (salesData ?? []).reduce((s: number, r: any) => s + (r.total ?? 0), 0)
+      const totalPaid   = (paymentsData ?? []).reduce((s: number, r: any) => s + (r.amount ?? 0), 0)
+      setCustomerOutstanding(Math.max(0, totalBilled - totalPaid))
     }).catch(() => {})
   }, [selectedCustomerId])
 
@@ -631,11 +634,15 @@ export default function NewSalePage() {
         if (creditLimit > 0) {
           const amountOnCredit = grandTotal - totalReceived
           if (amountOnCredit > 0) {
-            const { data: pendingSales, error: creditErr } = await supabase
-              .from("sales").select("total, amount_received")
-              .eq("tenant_id", tenantId).eq("customer_id", selectedCustomerId).eq("status", "Pending")
+            const [{ data: allSales, error: creditErr }, { data: allPmts }] = await Promise.all([
+              supabase.from("sales").select("total").eq("tenant_id", tenantId).eq("customer_id", selectedCustomerId).neq("status", "Refunded"),
+              supabase.from("payments").select("amount").eq("tenant_id", tenantId).eq("entity_id", selectedCustomerId).eq("entity_type", "Customer").eq("type", "Received").eq("status", "Completed"),
+            ])
             if (creditErr) { toast.error("Could not verify credit limit - please try again"); setSubmitting(false); return }
-            const currentOutstanding = (pendingSales ?? []).reduce((s: number, r: any) => s + Math.max(0, (r.total ?? 0) - (r.amount_received ?? 0)), 0)
+            const currentOutstanding = Math.max(0,
+              (allSales ?? []).reduce((s: number, r: any) => s + (r.total ?? 0), 0) -
+              (allPmts ?? []).reduce((s: number, r: any) => s + (r.amount ?? 0), 0)
+            )
             if (currentOutstanding + amountOnCredit > creditLimit) {
               toast.error(`Credit limit exceeded! ${selectedCustomer.name} already owes ${formatCurrency(currentOutstanding)}. Limit is ${formatCurrency(creditLimit)}.`)
               setSubmitting(false); return
@@ -838,12 +845,11 @@ export default function NewSalePage() {
               )}
             </div>
           </div>
-          <div className="w-full grid grid-cols-3 gap-2.5">
-            {(["save", "print", "preview"] as const).map((action) => {
+          <div className="w-full grid grid-cols-2 gap-2.5">
+            {(["save", "preview"] as const).map((action) => {
               const meta = {
-                save:    { label: "Save PDF", Icon: FileText,  hover: "hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700" },
-                print:   { label: "Print",    Icon: Printer,   hover: "hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700" },
-                preview: { label: "Preview",  Icon: Eye,       hover: "hover:bg-violet-50 hover:border-violet-300 hover:text-violet-700" },
+                save:    { label: "Save PDF", Icon: FileText, hover: "hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700" },
+                preview: { label: "Preview",  Icon: Eye,     hover: "hover:bg-violet-50 hover:border-violet-300 hover:text-violet-700" },
               }[action]
               return (
                 <button key={action}

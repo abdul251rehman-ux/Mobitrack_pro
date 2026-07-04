@@ -19,6 +19,8 @@ import type {
 } from "@/data/stock-alerts"
 import { getStockAlertRules, getStockAlertLogs } from "@/lib/api/inventory"
 import { getSuppliers } from "@/lib/api/suppliers"
+import { supabase } from "@/lib/supabase"
+import { getTenantId } from "@/lib/api/helpers"
 import type { Supplier } from "@/data/types"
 
 import { Button } from "@/components/ui/button"
@@ -31,11 +33,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { cn, formatDate } from "@/lib/utils"
 
-// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-const ACCESSORY_CATEGORIES = [
-  "Headphones/Earbuds", "Chargers & Cables", "Screen Protectors",
-  "Phone Cases", "Power Banks", "Speakers", "Smartwatches",
-]
 
 const ALERT_TYPE_META: Record<AlertType, { label: string; className: string; rowClass: string; icon: React.ElementType }> = {
   out_of_stock: { label: "Out of Stock", className: "bg-red-50 text-red-700 border-red-200",    rowClass: "hover:bg-red-50/30",    icon: AlertOctagon  },
@@ -126,21 +123,19 @@ const ruleSchema = z.object({
   reorder_quantity:       z.string().optional(),
   preferred_supplier_id:  z.string().optional(),
   notify_via_dashboard:   z.boolean(),
-  notify_via_email:       z.boolean(),
-  notify_via_sms:         z.boolean(),
 })
 type RuleFormData = z.infer<typeof ruleSchema>
 
 // â"€â"€â"€ Rule Form Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function RuleFormDialog({ open, editRule, onClose, onSave, suppliers }: {
+function RuleFormDialog({ open, editRule, onClose, onSave, suppliers, accessoryCategories }: {
   open: boolean; editRule: StockAlertRule | null
   onClose: () => void; onSave: (data: RuleFormData, rule: StockAlertRule | null) => void
-  suppliers: Supplier[]
+  suppliers: Supplier[]; accessoryCategories: string[]
 }) {
   const isEdit = editRule !== null
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<RuleFormData>({
     resolver: zodResolver(ruleSchema),
-    defaultValues: { product_type: "mobile_phone", minimum_stock_level: "5", notify_via_dashboard: true, notify_via_email: false, notify_via_sms: false },
+    defaultValues: { product_type: "mobile_phone", minimum_stock_level: "5", notify_via_dashboard: true },
   })
   const productType = watch("product_type")
 
@@ -152,12 +147,10 @@ function RuleFormDialog({ open, editRule, onClose, onSave, suppliers }: {
         reorder_quantity: editRule.reorder_quantity?.toString() ?? "",
         preferred_supplier_id: editRule.preferred_supplier_id ?? "",
         notify_via_dashboard: editRule.notify_via.includes("dashboard"),
-        notify_via_email:     editRule.notify_via.includes("email"),
-        notify_via_sms:       editRule.notify_via.includes("sms"),
       })
     } else {
       reset({ product_type: "mobile_phone", brand: "", model: "", category: "", minimum_stock_level: "5",
-        reorder_quantity: "", preferred_supplier_id: "", notify_via_dashboard: true, notify_via_email: false, notify_via_sms: false })
+        reorder_quantity: "", preferred_supplier_id: "", notify_via_dashboard: true })
     }
   }, [editRule, reset, open])
 
@@ -203,7 +196,7 @@ function RuleFormDialog({ open, editRule, onClose, onSave, suppliers }: {
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="All categories" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">All Categories</SelectItem>
-                  {ACCESSORY_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {accessoryCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -239,19 +232,11 @@ function RuleFormDialog({ open, editRule, onClose, onSave, suppliers }: {
           {/* Notify Via */}
           <div className="space-y-1.5">
             <Label className="text-xs">Notify Via *</Label>
-            <div className="flex items-center gap-4">
-              {(["notify_via_dashboard", "notify_via_email", "notify_via_sms"] as const).map((key) => {
-                const channel = key.replace("notify_via_", "") as NotifyChannel
-                const { icon: Icon, label } = CHANNEL_META[channel]
-                return (
-                  <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <Checkbox checked={!!watch(key)} onCheckedChange={(v) => setValue(key, !!v)} />
-                    <Icon className="w-3 h-3 text-slate-500" />
-                    <span className="text-xs text-slate-600">{label}</span>
-                  </label>
-                )
-              })}
-            </div>
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <Checkbox checked={!!watch("notify_via_dashboard")} onCheckedChange={(v) => setValue("notify_via_dashboard", !!v)} />
+              <Monitor className="w-3 h-3 text-slate-500" />
+              <span className="text-xs text-slate-600">Dashboard</span>
+            </label>
           </div>
 
           <DialogFooter className="gap-2 pt-1">
@@ -300,6 +285,7 @@ export default function StockAlertsPage() {
   const [rules, setRules] = useState<StockAlertRule[]>([])
   const [logs, setLogs] = useState<StockAlertLog[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [accessoryCategories, setAccessoryCategories] = useState<string[]>([])
 
   const [alertTypeFilter, setAlertTypeFilter] = useState<AlertTypeFilter>("all")
   const [alertStatusFilter, setAlertStatusFilter] = useState<AlertStatus | "active_only">("active_only")
@@ -317,14 +303,18 @@ export default function StockAlertsPage() {
 
   async function fetchData() {
     try {
-      const [rulesRes, logsRes, suppliersRes] = await Promise.all([
+      const tenantId = await getTenantId()
+      const [rulesRes, logsRes, suppliersRes, catsRes] = await Promise.all([
         getStockAlertRules().catch(() => [] as StockAlertRule[]),
         getStockAlertLogs().catch(() => [] as StockAlertLog[]),
         getSuppliers(),
+        supabase.from("accessories").select("category").eq("tenant_id", tenantId).not("category", "is", null),
       ])
       setRules(rulesRes as unknown as StockAlertRule[])
       setLogs(logsRes as unknown as StockAlertLog[])
       setSuppliers(suppliersRes)
+      const cats = [...new Set((catsRes.data ?? []).map((r: any) => r.category as string).filter(Boolean))].sort()
+      setAccessoryCategories(cats)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
@@ -391,11 +381,7 @@ export default function StockAlertsPage() {
   }, [router])
 
   const handleSaveRule = useCallback((data: RuleFormData, rule: StockAlertRule | null) => {
-    const notify_via: NotifyChannel[] = []
-    if (data.notify_via_dashboard) notify_via.push("dashboard")
-    if (data.notify_via_email)     notify_via.push("email")
-    if (data.notify_via_sms)       notify_via.push("sms")
-    if (notify_via.length === 0) { toast.error("Select at least one notification channel"); return }
+    const notify_via: NotifyChannel[] = ["dashboard"]
 
     const supplier = suppliers.find((s) => s.id === data.preferred_supplier_id)
     const now = new Date().toISOString()
@@ -840,7 +826,7 @@ export default function StockAlertsPage() {
       <RuleFormDialog
         open={showRuleDialog} editRule={editRule}
         onClose={() => { setShowRuleDialog(false); setEditRule(null) }}
-        onSave={handleSaveRule} suppliers={suppliers}
+        onSave={handleSaveRule} suppliers={suppliers} accessoryCategories={accessoryCategories}
       />
       <ConfirmDeleteDialog
         open={!!deleteRule} title="Delete Alert Rule"

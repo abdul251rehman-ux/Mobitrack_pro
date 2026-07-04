@@ -478,6 +478,13 @@ export default function SuppliersPage() {
     setDeleteTarget(null)
   }
 
+  const supplierStats = useMemo(() => {
+    const active = supplierList.filter(s => s.status === "Active").length
+    const totalPurchases = supplierList.reduce((s, x) => s + x.totalPurchases, 0)
+    const totalOutstanding = supplierList.reduce((s, x) => s + x.outstandingBalance, 0)
+    return { active, totalPurchases, totalOutstanding }
+  }, [supplierList])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -485,13 +492,6 @@ export default function SuppliersPage() {
       </div>
     )
   }
-
-  const supplierStats = useMemo(() => {
-    const active = supplierList.filter(s => s.status === "Active").length
-    const totalPurchases = supplierList.reduce((s, x) => s + x.totalPurchases, 0)
-    const totalOutstanding = supplierList.reduce((s, x) => s + x.outstandingBalance, 0)
-    return { active, totalPurchases, totalOutstanding }
-  }, [supplierList])
 
   return (
     <div className="space-y-3">
