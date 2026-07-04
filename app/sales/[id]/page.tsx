@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
-  ArrowLeft, Download, Printer, FileText, RotateCcw,
+  ArrowLeft, Download, FileText, RotateCcw,
   CheckCircle2, Clock, XCircle, Banknote, CreditCard,
   Smartphone, Building2, Wallet, Package, Tag, User,
   Phone, Calendar, Hash, ShoppingBag,
@@ -131,14 +131,6 @@ export default function SaleDetailPage() {
             onClick={() => generateInvoicePDF(sale, shopInfo, "save")}
           >
             <Download className="w-3.5 h-3.5" /> Download PDF
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs"
-            onClick={async () => generateInvoicePDF(sale, shopInfo, "print")}
-          >
-            <Printer className="w-3.5 h-3.5" /> Print
           </Button>
           <Button
             variant="outline"

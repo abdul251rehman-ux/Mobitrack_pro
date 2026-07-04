@@ -1693,16 +1693,14 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
           let catalogId: string
           if (existing) {
             catalogId = existing.id; origMobileStocks[catalogId] = existing.stock
-            // Do NOT update stock here - DB trigger (purchase_item_stock_increment) will add qty when purchase_items row is inserted
-            const payload: any = { purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType }
+            const payload: any = { purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, stock: existing.stock + qty }
             if (imageUrl) payload.image_url = imageUrl
             if (firstImei) payload.imei = firstImei
             const { error } = await supabase.from("mobiles").update(payload).eq("id", catalogId)
             if (error) throw new Error(`Failed to update ${row.brand} ${row.model} (${color}): ${error.message}`)
             updatedMobileIds.push(catalogId)
           } else {
-            // Create with stock: 0 - trigger will increment to qty after purchase_items insert
-            const { data: created, error } = await supabase.from("mobiles").insert({ tenant_id: tenantId, brand: row.brand, model: row.model.trim(), color, storage: row.storage, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, imei: firstImei, purchase_price: buy, selling_price: sell, stock: 0, supplier_id: selectedSupplierId, image_url: imageUrl, date_added: today }).select("id").single()
+            const { data: created, error } = await supabase.from("mobiles").insert({ tenant_id: tenantId, brand: row.brand, model: row.model.trim(), color, storage: row.storage, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, imei: firstImei, purchase_price: buy, selling_price: sell, stock: qty, supplier_id: selectedSupplierId, image_url: imageUrl, date_added: today }).select("id").single()
             if (error) throw new Error(`Failed to create ${row.brand} ${row.model} (${color}): ${error.message}`)
             catalogId = (created as any).id; createdMobileIds.push(catalogId)
           }
@@ -1766,8 +1764,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
         const { data: cur } = await supabase.from("accessories").select("stock").eq("id", item.catalogId).single()
         const curStock = cur?.stock ?? 0
         origAccessoryStocks[item.catalogId] = curStock
-        // Do NOT update stock here - DB trigger (purchase_item_stock_increment) will add qty when purchase_items row is inserted
-        const { error } = await supabase.from("accessories").update({ purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId }).eq("id", item.catalogId)
+        const { error } = await supabase.from("accessories").update({ purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId, stock: curStock + qty }).eq("id", item.catalogId)
         if (error) throw new Error(`Failed to update ${item.name}: ${error.message}`)
         updatedAccessoryIds.push(item.catalogId)
         purchaseItems.push({ productId: item.catalogId, productName: item.name, productType: "Accessory", quantity: qty, returnedQty: 0, unitCost: buy, total: buy * qty, imeis: [] })

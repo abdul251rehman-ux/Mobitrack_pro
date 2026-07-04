@@ -19,10 +19,9 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: "/expenses",       permission: "expenses.view" },
   { prefix: "/ledger",         permission: "ledger.view" },
   { prefix: "/suppliers",      permission: "suppliers.view" },
-  { prefix: "/shops",          permission: "shops.view" },
   { prefix: "/reports",        permission: "reports.view" },
-  { prefix: "/profit-loss",    permission: "reports.view" },
   { prefix: "/audit-log",      permission: "audit-log.view" },
+  { prefix: "/staff",          permission: "settings.general" },
   { prefix: "/settings",       permission: "settings.general" },
 ]
 

@@ -698,14 +698,14 @@ export default function PersonLedgerPage() {
         </>
       )}
 
-      {/* Side Drawer */}
+      {/* Transaction Detail Dialog */}
       {drawerEntry && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-[1px]" onClick={() => setDrawerEntry(null)} />
-          <div className="fixed top-0 right-0 h-full w-80 bg-white z-50 shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
-            <div className={`flex items-center justify-between px-4 py-3 border-b border-slate-100 ${drawerEntry.type === "gave" ? "bg-blue-50" : drawerEntry.type === "took" ? "bg-emerald-50" : "bg-slate-50"}`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${drawerEntry.type === "gave" ? "bg-blue-100" : drawerEntry.type === "took" ? "bg-emerald-100" : "bg-slate-200"}`}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDrawerEntry(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className={`flex items-center justify-between px-4 py-3 rounded-t-2xl ${drawerEntry.type === "gave" ? "bg-blue-50" : drawerEntry.type === "took" ? "bg-emerald-50" : "bg-slate-50"}`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${drawerEntry.type === "gave" ? "bg-blue-100" : drawerEntry.type === "took" ? "bg-emerald-100" : "bg-slate-200"}`}>
                   {drawerEntry.type === "gave"
                     ? <ArrowUpRight className="w-4 h-4 text-blue-600" />
                     : drawerEntry.type === "took"
@@ -713,101 +713,78 @@ export default function PersonLedgerPage() {
                     : <Wallet className="w-4 h-4 text-slate-500" />}
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-800">
+                  <p className="text-sm font-bold text-slate-800">
                     {drawerEntry.type === "gave" ? "Gave Money" : drawerEntry.type === "took" ? "Took Money" : "Opening Balance"}
                   </p>
-                  <p className="text-[10px] text-slate-400">{drawerEntry.reference}</p>
+                  {drawerEntry.personName && <p className="text-xs text-slate-500">{drawerEntry.personName}</p>}
                 </div>
               </div>
-              <button onClick={() => setDrawerEntry(null)} className="p-1 rounded-md hover:bg-white/60 transition-colors">
+              <button onClick={() => setDrawerEntry(null)} className="p-1.5 rounded-lg hover:bg-white/70 transition-colors">
                 <X className="w-4 h-4 text-slate-500" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2">
-                {drawerEntry.debit > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Gave (Dr)</span>
-                    <span className="text-base font-bold text-blue-600">{formatCurrency(drawerEntry.debit)}</span>
-                  </div>
-                )}
-                {drawerEntry.credit > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Took (Cr)</span>
-                    <span className="text-base font-bold text-emerald-600">{formatCurrency(drawerEntry.credit)}</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Running Balance</span>
-                  <span className={`text-sm font-bold ${drawerEntry.balance > 0 ? "text-amber-600" : drawerEntry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                    {formatCurrency(Math.abs(drawerEntry.balance))}
-                    <span className="text-xs ml-1">{drawerEntry.balance > 0 ? "Dr" : drawerEntry.balance < 0 ? "Cr" : ""}</span>
-                  </span>
+            {/* Amount */}
+            <div className="px-4 pt-4 pb-3 flex gap-3">
+              {drawerEntry.debit > 0 && (
+                <div className="flex-1 rounded-xl bg-blue-50 border border-blue-100 px-3 py-2.5 text-center">
+                  <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-0.5">Gave</p>
+                  <p className="text-lg font-bold text-blue-700">{formatCurrency(drawerEntry.debit)}</p>
                 </div>
-              </div>
-
-              <div className="space-y-0 rounded-xl border border-slate-100 overflow-hidden">
-                <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Date</p>
-                    <p className="text-xs font-medium text-slate-700 mt-0.5">{formatDate(drawerEntry.date)}</p>
-                  </div>
+              )}
+              {drawerEntry.credit > 0 && (
+                <div className="flex-1 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 text-center">
+                  <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide mb-0.5">Took</p>
+                  <p className="text-lg font-bold text-emerald-700">{formatCurrency(drawerEntry.credit)}</p>
                 </div>
-                <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
-                  <Hash className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Reference</p>
-                    <p className="text-xs font-mono text-slate-500 mt-0.5">{drawerEntry.reference}</p>
-                  </div>
-                </div>
-                {drawerEntry.personName && (
-                  <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
-                    <Eye className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Person</p>
-                      <p className="text-xs font-medium text-slate-700 mt-0.5">{drawerEntry.personName}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-start gap-3 px-3 py-2.5 bg-white">
-                  <AlignLeft className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Description</p>
-                    <p className="text-xs text-slate-700 mt-0.5 leading-relaxed">{drawerEntry.description}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Entry Type</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${drawerEntry.type === "gave" ? "bg-blue-100 text-blue-700" : drawerEntry.type === "took" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-                  {drawerEntry.type === "gave" ? "Gave (Dr)" : drawerEntry.type === "took" ? "Took (Cr)" : "Opening Balance"}
-                </span>
+              )}
+              <div className="flex-1 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Balance</p>
+                <p className={`text-lg font-bold ${drawerEntry.balance > 0 ? "text-amber-600" : drawerEntry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                  {formatCurrency(Math.abs(drawerEntry.balance))}
+                </p>
               </div>
             </div>
 
-            <div className="px-4 py-3 border-t border-slate-100 space-y-2">
+            {/* Details */}
+            <div className="px-4 pb-4 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Date</p>
+                  <p className="text-xs font-medium text-slate-700 mt-0.5">{formatDate(drawerEntry.date)}</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Reference</p>
+                  <p className="text-xs font-mono text-slate-500 mt-0.5 truncate">{drawerEntry.reference}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-3 py-2">
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Description</p>
+                <p className="text-xs text-slate-700 mt-0.5">{drawerEntry.description}</p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 pb-4 flex gap-2">
               {drawerEntry.txId && drawerEntry.type !== "opening" && (
                 <button
                   onClick={() => drawerEntry.txId && handleDeleteTx(drawerEntry.txId)}
                   disabled={deletingTxId === drawerEntry.txId}
-                  className="w-full h-8 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  className="flex-1 h-9 text-xs font-medium rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  {deletingTxId === drawerEntry.txId ? "Deleting..." : "Delete Transaction"}
+                  {deletingTxId === drawerEntry.txId ? "Deleting..." : "Delete"}
                 </button>
               )}
               <button
                 onClick={() => setDrawerEntry(null)}
-                className="w-full h-8 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                className="flex-1 h-9 text-xs font-medium rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Close
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
