@@ -1170,6 +1170,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     const tenantId = await getTenantId()
     const selectedSupplier = localSuppliers.find(s => s.id === supplierId)
     const supplierName = selectedSupplier?.companyName ?? ""
+    const resolvedSourceName =
+      sourceType === "purchased" ? supplierName :
+      sourceType === "walk_in" ? walkinName.trim() :
+      sourceType === "customer_trade_in" ? selectedCustomerName : ""
+    const resolvedSupplierId = sourceType === "purchased" ? supplierId : undefined
+    const resolvedCustomerId = sourceType === "customer_trade_in" ? selectedCustomerId : undefined
 
     // Pre-flight: check for IMEI duplicates already in DB
     const imeiList = rows.map(r => r.imei_number)
@@ -1232,8 +1238,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       brand: r.brand, model: r.model.trim(), color: r.color,
       storage: r.storage, ram: r.ram,
       imei_number: r.imei_number,
-      source_type: "purchased" as const,
-      source_customer_name: supplierName,
+      source_type: sourceType,
+      source_customer_name: resolvedSourceName,
+      source_customer_id: resolvedCustomerId ?? null,
+      source_phone: sourceType === "walk_in" ? walkinPhone.trim() || null : null,
+      supplier_id: resolvedSupplierId ?? null,
+      supplier_name: sourceType === "purchased" ? supplierName : null,
       purchased_date: purchaseDate,
       purchase_price: Number(r.purchase_price),
       selling_price: Number(r.selling_price),
@@ -1418,29 +1428,81 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 1</span>
             </div>
             <div className="px-5 py-4">
-              <div className="flex items-end gap-6">
+              <div className="flex items-end gap-4 flex-wrap">
 
-                {/* Supplier */}
-                <div className="w-72">
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Supplier <span className="text-red-500">*</span>
-                  </label>
-                  <CatalogCombo
-                    value={localSuppliers.find(s => s.id === supplierId)?.companyName ?? ""}
-                    onChange={v => { const s = localSuppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
-                    options={localSuppliers.map(s => s.companyName)}
-                    placeholder={suppliersLoading ? "Loading suppliers..." : "Select or search supplier..."}
-                    error={supplierErr}
-                    disabled={suppliersLoading}
-                  />
-                  {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
+                {/* Source Type */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Source <span className="text-red-500">*</span></label>
+                  <div className="flex gap-1.5">
+                    {([
+                      { val: "purchased",         label: "Supplier"   },
+                      { val: "customer_trade_in", label: "Customer"   },
+                      { val: "walk_in",           label: "Walk-in"    },
+                    ] as { val: SourceType; label: string }[]).map(opt => (
+                      <button key={opt.val} type="button"
+                        onClick={() => { setSourceType(opt.val); setSupplierId(""); setSupplierErr(false); setWalkinName(""); setWalkinPhone(""); setSelectedCustomerId(""); setSelectedCustomerName("") }}
+                        className={cn(
+                          "px-3 h-9 rounded-lg text-xs font-semibold border transition-colors",
+                          sourceType === opt.val
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
+                        )}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Supplier (when source = purchased) */}
+                {sourceType === "purchased" && (
+                  <div className="w-64">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Supplier <span className="text-red-500">*</span></label>
+                    <CatalogCombo
+                      value={localSuppliers.find(s => s.id === supplierId)?.companyName ?? ""}
+                      onChange={v => { const s = localSuppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
+                      options={localSuppliers.map(s => s.companyName)}
+                      placeholder={suppliersLoading ? "Loading..." : "Select supplier..."}
+                      error={supplierErr}
+                      disabled={suppliersLoading}
+                    />
+                    {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
+                  </div>
+                )}
+
+                {/* Customer (when source = customer_trade_in) */}
+                {sourceType === "customer_trade_in" && (
+                  <div className="w-64">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Customer <span className="text-red-500">*</span></label>
+                    <CatalogCombo
+                      value={selectedCustomerName}
+                      onChange={v => { setSelectedCustomerName(v); const c = localCustomers.find((x: any) => x.name === v); setSelectedCustomerId((c as any)?.id ?? "") }}
+                      options={localCustomers.map((c: any) => c.name)}
+                      placeholder="Select customer..."
+                    />
+                  </div>
+                )}
+
+                {/* Walk-in fields */}
+                {sourceType === "walk_in" && (
+                  <div className="flex gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Seller Name <span className="text-red-500">*</span></label>
+                      <input value={walkinName} onChange={e => setWalkinName(e.target.value)}
+                        placeholder="e.g. Muhammad Ali"
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-44" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone</label>
+                      <input value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)}
+                        placeholder="03001234567"
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-36" />
+                    </div>
+                  </div>
+                )}
 
                 {/* Date */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Purchase Date <span className="text-red-500">*</span>
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Purchase Date <span className="text-red-500">*</span></label>
                   <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)}
                     className={cn(
                       "h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors bg-white",
