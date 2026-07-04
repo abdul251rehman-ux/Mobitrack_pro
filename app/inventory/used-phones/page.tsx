@@ -857,7 +857,7 @@ function CatalogCombo({
       {/* Dropdown panel */}
       {open && (
         <>
-          <div className="absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ minWidth: 260, width: "max-content", maxWidth: 360, left: 0 }}>
+          <div className="absolute mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ minWidth: 260, width: "max-content", maxWidth: 360, left: 0, zIndex: 9999 }}>
             {!managing ? (
               <>
                 {/* Option list - onWheel stops propagation so page doesn't scroll while hovering list */}
@@ -942,7 +942,7 @@ function CatalogCombo({
                           <button type="button" onClick={() => handleEdit(item)} disabled={saving}
                             className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 px-1 shrink-0">Save</button>
                           <button type="button" onClick={() => { setEditingVal(null); setEditInput("") }}
-                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">âœ•</button>
+                            className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">x</button>
                         </>
                       ) : deletingVal === item ? (
                         <>
@@ -977,6 +977,7 @@ function CatalogCombo({
     </div>
   )
 }
+
 
 function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOptions, ramOptions, suppliers, accounts,
   onAddBrand, onEditBrand, onDeleteBrand,
@@ -1025,6 +1026,70 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
   const [dirty, setDirty] = useState(false)
 
+  // Re-fetch suppliers directly inside the dialog — parent prop may arrive empty
+  // if the page-level fetch hadn't finished when the user clicked Bulk Add
+  const [localSuppliers, setLocalSuppliers] = useState<Supplier[]>(suppliers)
+  const [suppliersLoading, setSuppliersLoading] = useState(suppliers.length === 0)
+  useEffect(() => {
+    if (suppliers.length > 0) { setSuppliersLoading(false); return }
+    async function loadSuppliers() {
+      try {
+        // getTenantId() also calls set_tenant_context RPC which is required for RLS
+        const tenantId = await getTenantId()
+        const { data, error } = await supabase
+          .from("suppliers")
+          .select("id, company_name, contact_person, phone, email, address, city, outstanding_balance")
+          .eq("tenant_id", tenantId)
+          .order("company_name")
+        if (!error && data) {
+          setLocalSuppliers(data.map((r: any) => ({
+            id: r.id,
+            companyName: r.company_name ?? "",
+            contactPerson: r.contact_person ?? "",
+            phone: r.phone ?? "",
+            email: r.email ?? "",
+            address: r.address ?? "",
+            city: r.city ?? "",
+            totalPurchases: 0,
+            outstandingBalance: r.outstanding_balance ?? 0,
+            rating: 0,
+            status: "Active",
+            createdAt: "",
+          })))
+        }
+      } catch (err) {
+        console.error("BulkAddDialog: failed to load suppliers", err)
+      } finally {
+        setSuppliersLoading(false)
+      }
+    }
+    loadSuppliers()
+  }, [])
+
+  // Source type state
+  const [sourceType, setSourceType] = useState<SourceType>("purchased")
+  const [walkinName, setWalkinName] = useState("")
+  const [walkinPhone, setWalkinPhone] = useState("")
+  const [selectedCustomerId, setSelectedCustomerId] = useState("")
+  const [selectedCustomerName, setSelectedCustomerName] = useState("")
+  const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
+  useEffect(() => {
+    if (sourceType !== "customer_trade_in") return
+    if (localCustomers.length > 0) return
+    async function loadCustomers() {
+      try {
+        const tenantId = await getTenantId()
+        const { data } = await supabase
+          .from("customers")
+          .select("id, name, phone")
+          .eq("tenant_id", tenantId)
+          .order("name")
+        if (data) setLocalCustomers(data.map((r: any) => ({ id: r.id, name: r.name, phone: r.phone ?? "" } as any)))
+      } catch { /* non-fatal */ }
+    }
+    loadCustomers()
+  }, [sourceType])
+
   const toggleLock = (key: keyof LockState) =>
     setLocks(prev => ({ ...prev, [key]: !prev[key] }))
 
@@ -1069,7 +1134,9 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
   const validate = (): boolean => {
     let ok = true
-    if (!supplierId) { setSupplierErr(true); ok = false }
+    if (sourceType === "purchased" && !supplierId) { setSupplierErr(true); ok = false }
+    if (sourceType === "walk_in" && !walkinName.trim()) { toast.error("Enter walk-in seller name"); ok = false }
+    if (sourceType === "customer_trade_in" && !selectedCustomerId) { toast.error("Select a customer"); ok = false }
     if (!purchaseDate) { toast.error("Select a purchase date"); ok = false }
 
     const imeisSeen = new Set<string>()
@@ -1101,8 +1168,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     setSaving(true)
     setSaveProgress({ done: 0, total: rows.length })
     const tenantId = await getTenantId()
-    const selectedSupplier = suppliers.find(s => s.id === supplierId)
+    const selectedSupplier = localSuppliers.find(s => s.id === supplierId)
     const supplierName = selectedSupplier?.companyName ?? ""
+    const resolvedSourceName =
+      sourceType === "purchased" ? supplierName :
+      sourceType === "walk_in" ? walkinName.trim() :
+      sourceType === "customer_trade_in" ? selectedCustomerName : ""
+    const resolvedSupplierId = sourceType === "purchased" ? supplierId : undefined
+    const resolvedCustomerId = sourceType === "customer_trade_in" ? selectedCustomerId : undefined
 
     // Pre-flight: check for IMEI duplicates already in DB
     const imeiList = rows.map(r => r.imei_number)
@@ -1165,8 +1238,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       brand: r.brand, model: r.model.trim(), color: r.color,
       storage: r.storage, ram: r.ram,
       imei_number: r.imei_number,
-      source_type: "purchased" as const,
-      source_customer_name: supplierName,
+      source_type: sourceType,
+      source_customer_name: resolvedSourceName,
+      source_customer_id: resolvedCustomerId ?? null,
+      source_phone: sourceType === "walk_in" ? walkinPhone.trim() || null : null,
+      supplier_id: resolvedSupplierId ?? null,
+      supplier_name: sourceType === "purchased" ? supplierName : null,
       purchased_date: purchaseDate,
       purchase_price: Number(r.purchase_price),
       selling_price: Number(r.selling_price),
@@ -1239,7 +1316,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
           account_id: accountId, amount: paid,
           reference_type: "Purchase", reference_number: poNumber,
-          description: `Used phones purchase ${poNumber} Ã¢â‚¬" ${supplierName}`,
+          description: `Used phones purchase ${poNumber} - ${supplierName}`,
         })
         const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", accountId).single()
         if (accRow) {
@@ -1288,7 +1365,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         created_at: row.created_at ?? new Date().toISOString(),
       } as UsedPhone))
 
-      toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added Ã¢â‚¬" ${poNumber}`)
+      toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added - ${poNumber}`)
       onSaved(saved)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to save - no phones were added")
@@ -1342,7 +1419,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
 
           {/* â"€â"€ Purchase Order Header card â"€â"€ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-visible">
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Purchase Details</h2>
@@ -1351,28 +1428,81 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 1</span>
             </div>
             <div className="px-5 py-4">
-              <div className="flex items-end gap-6">
+              <div className="flex items-end gap-4 flex-wrap">
 
-                {/* Supplier */}
-                <div className="w-72">
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Supplier <span className="text-red-500">*</span>
-                  </label>
-                  <CatalogCombo
-                    value={suppliers.find(s => s.id === supplierId)?.companyName ?? ""}
-                    onChange={v => { const s = suppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
-                    options={suppliers.map(s => s.companyName)}
-                    placeholder="Select or search supplier..."
-                    error={supplierErr}
-                  />
-                  {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
+                {/* Source Type */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Source <span className="text-red-500">*</span></label>
+                  <div className="flex gap-1.5">
+                    {([
+                      { val: "purchased",         label: "Supplier"   },
+                      { val: "customer_trade_in", label: "Customer"   },
+                      { val: "walk_in",           label: "Walk-in"    },
+                    ] as { val: SourceType; label: string }[]).map(opt => (
+                      <button key={opt.val} type="button"
+                        onClick={() => { setSourceType(opt.val); setSupplierId(""); setSupplierErr(false); setWalkinName(""); setWalkinPhone(""); setSelectedCustomerId(""); setSelectedCustomerName("") }}
+                        className={cn(
+                          "px-3 h-9 rounded-lg text-xs font-semibold border transition-colors",
+                          sourceType === opt.val
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
+                        )}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Supplier (when source = purchased) */}
+                {sourceType === "purchased" && (
+                  <div className="w-64">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Supplier <span className="text-red-500">*</span></label>
+                    <CatalogCombo
+                      value={localSuppliers.find(s => s.id === supplierId)?.companyName ?? ""}
+                      onChange={v => { const s = localSuppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
+                      options={localSuppliers.map(s => s.companyName)}
+                      placeholder={suppliersLoading ? "Loading..." : "Select supplier..."}
+                      error={supplierErr}
+                      disabled={suppliersLoading}
+                    />
+                    {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
+                  </div>
+                )}
+
+                {/* Customer (when source = customer_trade_in) */}
+                {sourceType === "customer_trade_in" && (
+                  <div className="w-64">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Customer <span className="text-red-500">*</span></label>
+                    <CatalogCombo
+                      value={selectedCustomerName}
+                      onChange={v => { setSelectedCustomerName(v); const c = localCustomers.find((x: any) => x.name === v); setSelectedCustomerId((c as any)?.id ?? "") }}
+                      options={localCustomers.map((c: any) => c.name)}
+                      placeholder="Select customer..."
+                    />
+                  </div>
+                )}
+
+                {/* Walk-in fields */}
+                {sourceType === "walk_in" && (
+                  <div className="flex gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Seller Name <span className="text-red-500">*</span></label>
+                      <input value={walkinName} onChange={e => setWalkinName(e.target.value)}
+                        placeholder="e.g. Muhammad Ali"
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-44" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone</label>
+                      <input value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)}
+                        placeholder="03001234567"
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-36" />
+                    </div>
+                  </div>
+                )}
 
                 {/* Date */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Purchase Date <span className="text-red-500">*</span>
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Purchase Date <span className="text-red-500">*</span></label>
                   <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)}
                     className={cn(
                       "h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors bg-white",
@@ -1416,8 +1546,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     {row.brand || row.model ? (
                       <span className="text-sm font-semibold text-slate-800">
                         {[row.brand, row.model].filter(Boolean).join(" ")}
-                        {row.color && <span className="text-slate-400 font-normal"> &middot; {row.color}</span>}
-                        {row.storage && <span className="text-slate-400 font-normal"> &middot; {row.storage}</span>}
+                        {row.color && <span className="text-slate-400 font-normal"> · {row.color}</span>}
+                        {row.storage && <span className="text-slate-400 font-normal"> · {row.storage}</span>}
                       </span>
                     ) : (
                       <span className="text-sm text-slate-400 italic">Phone {idx + 1} - click to fill details</span>
@@ -1775,9 +1905,9 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           <select value={row.pta_status} onChange={e => updateRow(row.id, "pta_status", e.target.value as UsedPTAStatus)}
                             className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
                               locks.pta_status ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
-                            <option value="approved">âœ" OK</option>
-                            <option value="pending">? Pending</option>
-                            <option value="blocked">âœ- Blocked</option>
+                            <option value="approved">PTA Approved</option>
+                            <option value="pending">PTA Pending</option>
+                            <option value="blocked">PTA Blocked</option>
                           </select>
                         </div>
 
@@ -1873,7 +2003,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     {parseFloat(amountPaid) > 0 && (
                       <div className="flex justify-between text-slate-500">
                         <span>Amount paid</span>
-                        <span className="text-emerald-600 font-semibold">âˆ' {formatCurrency(parseFloat(amountPaid))}</span>
+                        <span className="text-emerald-600 font-semibold">- {formatCurrency(parseFloat(amountPaid))}</span>
                       </div>
                     )}
                     <div className={cn(
@@ -2975,7 +3105,35 @@ export default function UsedPhonesPage() {
     fetchColors()
     fetchStorageOptions()
     fetchRamOptions()
-    getSuppliers().then(setSuppliers).catch(() => {})
+    // Suppliers: fall back to direct query if getSuppliers throws (e.g. RLS timing)
+    getSuppliers()
+      .then(setSuppliers)
+      .catch(async () => {
+        try {
+          const tenantId = await getTenantId()
+          const { data } = await supabase
+            .from("suppliers")
+            .select("id, company_name, contact_person, phone, email, address, city, outstanding_balance")
+            .eq("tenant_id", tenantId)
+            .order("company_name")
+          if (data) {
+            setSuppliers(data.map((r: any) => ({
+              id: r.id,
+              companyName: r.company_name ?? "",
+              contactPerson: r.contact_person ?? "",
+              phone: r.phone ?? "",
+              email: r.email ?? "",
+              address: r.address ?? "",
+              city: r.city ?? "",
+              totalPurchases: 0,
+              outstandingBalance: r.outstanding_balance ?? 0,
+              rating: 0,
+              status: "Active",
+              createdAt: "",
+            })))
+          }
+        } catch { /* non-fatal */ }
+      })
     getCustomers().then(setCustomers).catch(() => {})
     getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
   }, [])
