@@ -111,14 +111,14 @@ const RESOLUTION_CONFIG: Record<Resolution, {
   "Credit Note": {
     icon: <FileText className="w-4 h-4" />,
     label: "Credit Note",
-    description: "Deducted from what you owe the supplier",
+    description: "Reduces your balance with this supplier",
     selectedColor: "border-violet-500 bg-violet-50 text-violet-700",
     hoverColor: "border-slate-200 text-slate-600 hover:bg-slate-50",
   },
   "Ledger Credit": {
     icon: <BookOpen className="w-4 h-4" />,
     label: "Ledger Credit",
-    description: "Supplier owes you - settle on next purchase",
+    description: "Supplier needs to pay you — deduct on next purchase",
     selectedColor: "border-amber-500 bg-amber-50 text-amber-700",
     hoverColor: "border-slate-200 text-slate-600 hover:bg-slate-50",
   },
@@ -1041,7 +1041,7 @@ export default function PurchaseReturnsPage() {
                     <FileText className="w-3.5 h-3.5 text-violet-600 mt-0.5 shrink-0" />
                     <div className="text-xs text-violet-700">
                       <p className="font-semibold">No cash received</p>
-                      <p className="opacity-80 mt-0.5"><span className="font-semibold">{formatCurrency(newTotal)}</span> deducted from what you owe <span className="font-semibold">{newSupplierName}</span>. Use on next purchase.</p>
+                      <p className="opacity-80 mt-0.5"><span className="font-semibold">{formatCurrency(newTotal)}</span> will reduce your balance with <span className="font-semibold">{newSupplierName}</span>. Use on next purchase.</p>
                     </div>
                   </div>
                 )}
@@ -1051,7 +1051,7 @@ export default function PurchaseReturnsPage() {
                     <BookOpen className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
                     <div className="text-xs text-amber-700">
                       <p className="font-semibold">Recorded - settle later</p>
-                      <p className="opacity-80 mt-0.5"><span className="font-semibold">{newSupplierName}</span> owes you <span className="font-semibold">{formatCurrency(newTotal)}</span>. Deduct from next payment to them.</p>
+                      <p className="opacity-80 mt-0.5"><span className="font-semibold">{newSupplierName}</span> needs to pay you <span className="font-semibold">{formatCurrency(newTotal)}</span>. Deduct from next payment to them.</p>
                     </div>
                   </div>
                 )}

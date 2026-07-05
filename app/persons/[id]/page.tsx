@@ -229,14 +229,14 @@ export default function PersonDetailPage() {
         <div className={`bg-white rounded-xl border px-3 py-2.5 flex flex-col gap-1 ${isTheyOwe ? "border-amber-200" : "border-emerald-200"}`}>
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-              {isTheyOwe ? "They Owe Us" : "We Owe Them"}
+              {isTheyOwe ? "They Need to Pay Us" : "We Need to Pay Them"}
             </p>
             <Wallet className={`w-4 h-4 ${isTheyOwe ? "text-amber-500" : "text-emerald-500"}`} />
           </div>
           <p className={`text-base font-bold leading-tight ${isTheyOwe ? "text-amber-600" : "text-emerald-600"}`}>
             {formatCurrency(balance)}
           </p>
-          <p className="text-[10px] text-slate-400">{isTheyOwe ? "Dr - outstanding" : "Cr - you owe"}</p>
+          <p className="text-[10px] text-slate-400">{isTheyOwe ? "They need to pay us" : "We need to pay them"}</p>
         </div>
       </div>
 
@@ -246,8 +246,8 @@ export default function PersonDetailPage() {
           <AlertCircle className={`w-4 h-4 shrink-0 ${isTheyOwe ? "text-amber-500" : "text-emerald-500"}`} />
           <p className={`text-sm font-medium ${isTheyOwe ? "text-amber-700" : "text-emerald-700"}`}>
             {isTheyOwe
-              ? `${person.name} owes you ${formatCurrency(balance)}`
-              : `You owe ${person.name} ${formatCurrency(balance)}`}
+              ? `${person.name} needs to pay you ${formatCurrency(balance)}`
+              : `You need to pay ${person.name} ${formatCurrency(balance)}`}
           </p>
         </div>
       )}

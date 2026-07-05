@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn, formatCurrency, calculateMargin, getStockStatus } from "@/lib/utils"
+import { useLanguage } from "@/context/language-context"
 // categories and brands are fetched from database
 
 // ─── Zod Schema ──────────────────────────────────────────────────────────────
@@ -322,6 +323,7 @@ function AccessoryFormDialog({
   brands: string[]
   onAddBrand: (name: string) => Promise<boolean>
 }) {
+  const { language } = useLanguage()
   const isEditing = !!editingAccessory
   const [compatibleModels, setCompatibleModels] = useState<string[]>(
     editingAccessory?.compatibleModels ?? []
@@ -702,7 +704,7 @@ function AccessoryFormDialog({
             <div className="p-4 space-y-3">
               <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5">
                 <p className="text-[11px] text-blue-700 font-medium">
-                  Price and stock are set when you purchase this accessory from a supplier on the Purchase page.
+                  {language === "ur" ? "قیمت اور اسٹاک اس وقت سیٹ ہوتا ہے جب آپ یہ اکسیسری سپلائر سے خریدتے ہیں۔" : "Price and stock are set when you purchase this accessory from a supplier on the Purchase page."}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -717,7 +719,7 @@ function AccessoryFormDialog({
                   <FileText className="w-3 h-3" /> Description
                   <span className="text-slate-400 font-normal">(optional)</span>
                 </Label>
-                <Textarea id="description" placeholder="Brief description of this accessory..."
+                <Textarea id="description" placeholder={language === "ur" ? "اس سامان کے بارے میں لکھیں..." : "Brief description of this accessory..."}
                   rows={3} {...register("description")} className="bg-slate-50 text-sm resize-none" />
               </div>
             </div>
@@ -744,6 +746,7 @@ function AccessoryFormDialog({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AccessoriesPage() {
+  const { language } = useLanguage()
   const [accessoryList, setAccessoryList] = useState<Accessory[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [brands, setBrands] = useState<string[]>([])

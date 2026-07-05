@@ -16,6 +16,7 @@ import { getFinanceAccounts } from "@/lib/api/finance"
 import { Expense, ExpenseCategory, ExpenseType, ExpensePayment } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
+import { useLanguage } from "@/context/language-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -519,6 +520,7 @@ function DeleteDialog({ open, expense, onConfirm, onCancel }: {
 // â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function ExpensesPage() {
+  const { language } = useLanguage()
   const [list, setList] = useState<Expense[]>([])
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
   const [defaultAccountId, setDefaultAccountId] = useState("")
@@ -722,7 +724,7 @@ export default function ExpensesPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-base font-bold text-slate-900 tracking-tight">Expenses</h1>
-            <p className="text-xs text-slate-500">Track and manage all shop expenses - daily, monthly & yearly</p>
+            <p className="text-xs text-slate-500">{language === "ur" ? "دکان کے تمام اخراجات کا حساب رکھیں — روزانہ، مہینہ اور سال" : "Track and manage all shop expenses - daily, monthly & yearly"}</p>
           </div>
           <Button onClick={handleOpenAdd}
             className="bg-rose-600 hover:bg-rose-700 gap-1.5 h-8 text-xs px-3">

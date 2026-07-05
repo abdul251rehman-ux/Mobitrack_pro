@@ -276,94 +276,122 @@ function ViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Mobile Phone Details</DialogTitle>
-          <DialogDescription>Full information for this device</DialogDescription>
-        </DialogHeader>
-
-        <div className="rounded-xl bg-blue-600 p-6 flex items-center gap-4 text-white">
-          <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-            <Smartphone className="w-8 h-8 text-white" />
+      <DialogContent className="max-w-sm p-0 overflow-hidden">
+        {/* Compact header */}
+        <div className="bg-blue-600 px-4 py-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Smartphone className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <p className="text-white/70 text-sm">{m.brand}</p>
-            <h3 className="text-xl font-bold">{m.model}</h3>
-            <p className="text-white/70 text-sm mt-0.5">{m.color} - {m.storage} / {m.ram}</p>
+          <div className="min-w-0">
+            <p className="text-white/70 text-[11px]">{m.brand}</p>
+            <p className="text-white font-bold text-sm leading-tight">{m.model}</p>
+            <p className="text-white/60 text-[11px]">{m.color} · {m.storage} / {m.ram}</p>
+          </div>
+          <div className="ml-auto text-right shrink-0">
+            <p className="text-white/60 text-[10px]">Margin</p>
+            <p className="text-white font-bold text-sm">{margin.toFixed(1)}%</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">IMEI</p>
-            <div className="flex items-center gap-1">
-            <span className="font-mono text-slate-700 text-xs">{m.imei || "Not recorded"}</span>
-              <button onClick={handleCopyImei} className="text-slate-400 hover:text-slate-600">
-                <Copy className="w-3 h-3" />
-              </button>
+        {/* Body */}
+        <div className="px-4 py-3 space-y-2 text-xs">
+          {/* Prices row */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <p className="text-slate-400 mb-0.5">Buy Price</p>
+              <p className="font-semibold text-slate-800">{formatCurrency(m.purchasePrice)}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 mb-0.5">Sell Price</p>
+              <p className="font-bold text-slate-900">{formatCurrency(m.sellingPrice)}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 mb-0.5">Stock</p>
+              <div className="flex items-center gap-1">
+                <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", stockDotColor[stockStatus])} />
+                <span className="font-medium text-slate-700">{m.stock} units</span>
+              </div>
             </div>
           </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Condition</p>
-            <StatusBadge status={m.condition} />
-          </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Purchase Price</p>
-            <p className="font-semibold text-slate-700">{formatCurrency(m.purchasePrice)}</p>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Selling Price</p>
-            <p className="font-bold text-slate-900">{formatCurrency(m.sellingPrice)}</p>
-          </div>
-          <div className="rounded-lg bg-blue-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Margin</p>
-            <p className="font-bold text-blue-700">{margin.toFixed(1)}%</p>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Stock</p>
-            <div className="flex items-center gap-1.5">
-              <span className={cn("w-2 h-2 rounded-full", stockDotColor[stockStatus])} />
-              <span className="font-medium text-slate-700">{m.stock} units</span>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Details row */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <p className="text-slate-400 mb-0.5">Condition</p>
+              <StatusBadge status={m.condition} />
+            </div>
+            <div>
+              <p className="text-slate-400 mb-0.5">Type</p>
+              <p className={cn("font-semibold", m.deviceType === "iphone" ? "text-slate-800" : "text-green-700")}>
+                {m.deviceType === "iphone" ? "iPhone" : "Android"}
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-400 mb-0.5">Category</p>
+              <p className="font-medium text-slate-700 truncate">{m.category || "—"}</p>
             </div>
           </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Category</p>
-            <p className="font-medium text-slate-700">{m.category}</p>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Device Type</p>
-            <p className={cn("font-bold text-sm", m.deviceType === "iphone" ? "text-slate-900" : "text-green-700")}>
-              {m.deviceType === "iphone" ? " iPhone" : " Android"}
-            </p>
-          </div>
-          {m.batteryHealth != null && (
-            <div className="rounded-lg bg-slate-50 p-3">
-              <p className="text-slate-400 text-xs mb-1">Battery Health</p>
-              <p className="font-medium text-slate-700">{m.batteryHealth}%</p>
+
+          <div className="border-t border-slate-100" />
+
+          {/* IMEI + date */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-slate-400 mb-0.5">IMEI</p>
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-slate-700">{m.imei || "Not recorded"}</span>
+                {m.imei && (
+                  <button onClick={handleCopyImei} className="text-slate-400 hover:text-blue-600 shrink-0">
+                    <Copy className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
-          )}
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-slate-400 text-xs mb-1">Date Added</p>
-            <p className="font-medium text-slate-700">{format(new Date(m.dateAdded), "dd MMM yyyy")}</p>
+            <div>
+              <p className="text-slate-400 mb-0.5">Date Added</p>
+              <p className="font-medium text-slate-700">{format(new Date(m.dateAdded), "dd MMM yyyy")}</p>
+            </div>
           </div>
+
+          {/* Supplier */}
           {supplier && (
-            <div className="col-span-2 rounded-lg bg-slate-50 p-3">
-              <p className="text-slate-400 text-xs mb-1">Supplier</p>
-              <p className="font-medium text-slate-700">{supplier.companyName}</p>
-              <p className="text-xs text-slate-400">{supplier.contactPerson} - {supplier.phone}</p>
-            </div>
+            <>
+              <div className="border-t border-slate-100" />
+              <div>
+                <p className="text-slate-400 mb-0.5">Supplier</p>
+                <p className="font-medium text-slate-800">{supplier.companyName}</p>
+                <p className="text-slate-400">{supplier.phone}</p>
+              </div>
+            </>
           )}
-          {m.notes && (
-            <div className="col-span-2 rounded-lg bg-slate-50 p-3">
-              <p className="text-slate-400 text-xs mb-1">Notes</p>
-              <p className="text-slate-600 text-sm">{m.notes}</p>
-            </div>
+
+          {/* Battery + Notes */}
+          {(m.batteryHealth != null || m.notes) && (
+            <>
+              <div className="border-t border-slate-100" />
+              <div className="grid grid-cols-2 gap-2">
+                {m.batteryHealth != null && (
+                  <div>
+                    <p className="text-slate-400 mb-0.5">Battery</p>
+                    <p className="font-medium text-slate-700">{m.batteryHealth}%</p>
+                  </div>
+                )}
+                {m.notes && (
+                  <div className="col-span-2">
+                    <p className="text-slate-400 mb-0.5">Notes</p>
+                    <p className="text-slate-600">{m.notes}</p>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-        </DialogFooter>
+        <div className="px-4 pb-3">
+          <Button variant="outline" size="sm" className="w-full h-8 text-xs" onClick={() => onOpenChange(false)}>Close</Button>
+        </div>
       </DialogContent>
     </Dialog>
   )
@@ -2309,7 +2337,7 @@ export default function MobilesPage() {
       {/* Header */}
       <PageHeader
         title="Mobile Phones"
-        description="Catalog is built automatically from purchases - edit entries here"
+
         icon={<Smartphone />}
         iconBg="bg-blue-600"
         badge={

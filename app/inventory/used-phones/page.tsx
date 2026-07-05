@@ -30,9 +30,10 @@ import { getFinanceAccounts, createWithdrawal } from "@/lib/api/finance"
 import type { Supplier, Customer } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
+import { useLanguage } from "@/context/language-context"
 import { toast } from "sonner"
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Grade / Status Meta Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Grade / Status Meta ------------------------------------------------------
 
 const GRADE_META: Record<ConditionGrade, { bg: string; text: string; border: string; ring: string; label: string }> = {
   "A+": { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", ring: "ring-emerald-400", label: "A+" },
@@ -56,8 +57,10 @@ const STATUS_META: Record<PhoneStatus, { bg: string; text: string; label: string
 
 const PTA_META: Record<UsedPTAStatus, { bg: string; text: string; label: string }> = {
   approved: { bg: "bg-emerald-100", text: "text-emerald-700", label: "PTA Approved" },
+  non_pta:  { bg: "bg-red-100",     text: "text-red-700",     label: "Non-PTA"      },
+  jv:       { bg: "bg-violet-100",  text: "text-violet-700",  label: "JV"           },
   pending:  { bg: "bg-amber-100",   text: "text-amber-700",   label: "PTA Pending"  },
-  blocked:  { bg: "bg-red-100",     text: "text-red-700",     label: "PTA Blocked"  },
+  blocked:  { bg: "bg-slate-100",   text: "text-slate-600",   label: "PTA Blocked"  },
 }
 
 const SCREEN_LABEL: Record<ScreenCondition, string> = {
@@ -84,7 +87,7 @@ const SOURCE_LABEL: Record<SourceType, string> = {
 
 const PAGE_SIZE = 12
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Badge Components Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Badge Components --------------------------------------------------------Ã¢"â‚¬
 
 function GradeBadge({ grade, size = "sm" }: { grade: ConditionGrade; size?: "sm" | "lg" }) {
   const m = GRADE_META[grade]
@@ -122,7 +125,7 @@ function BatteryBar({ value }: { value?: number }) {
   )
 }
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Phone Card (Grid View) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Phone Card (Grid View) --------------------------------------------------Ã¢"â‚¬
 
 function PhoneCard({
   phone,
@@ -169,7 +172,7 @@ function PhoneCard({
         <div>
           <p className="text-xs text-slate-400 font-medium">{phone.brand}</p>
           <h3 className="text-sm font-semibold text-slate-900 leading-tight">{phone.model}</h3>
-          <p className="text-xs text-slate-400">{phone.storage} Ã‚- {phone.color}</p>
+          <p className="text-xs text-slate-400">{phone.storage} - {phone.color}</p>
         </div>
 
         {/* Battery */}
@@ -217,7 +220,7 @@ function PhoneCard({
   )
 }
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Phone Row (List View) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Phone Row (List View) ----------------------------------------------------
 
 function PhoneRow({ phone, onView, onEdit, onSell }: {
   phone: UsedPhone
@@ -235,7 +238,7 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
           <GradeBadge grade={phone.condition_grade} />
           <div>
             <p className="text-sm font-semibold text-slate-900">{phone.model}</p>
-            <p className="text-xs text-slate-400">{phone.brand} Ã‚- {phone.storage} Ã‚- {phone.color}</p>
+            <p className="text-xs text-slate-400">{phone.brand} · {phone.storage} · {phone.color}</p>
           </div>
         </div>
       </td>
@@ -282,7 +285,7 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
   )
 }
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Details Slide-Over Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Details Slide-Over ------------------------------------------------------Ã¢"â‚¬
 
 function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
   phone: UsedPhone
@@ -304,7 +307,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
             <GradeBadge grade={phone.condition_grade} size="lg" />
             <div>
               <h2 className="text-lg font-bold text-slate-900">{phone.model}</h2>
-              <p className="text-sm text-slate-500">{phone.brand} Ã‚- {phone.storage} Ã‚- {phone.color}</p>
+              <p className="text-sm text-slate-500">{phone.brand} · {phone.storage} · {phone.color}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
@@ -507,7 +510,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
   )
 }
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Mark as Sold Dialog Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Mark as Sold Dialog ------------------------------------------------------
 
 function MarkAsSoldDialog({ phone, onClose, onSold }: {
   phone: UsedPhone
@@ -531,7 +534,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
           <div className="p-6 border-b border-slate-100">
             <h2 className="text-lg font-bold text-slate-900">Mark as Sold</h2>
-            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model} Ã‚- Grade {phone.condition_grade}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model}  ·  Grade {phone.condition_grade}</p>
           </div>
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
@@ -545,7 +548,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (Ã¢-šÂ¨)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (Rs)</label>
               <input
                 type="number" onWheel={e => e.currentTarget.blur()}
                 value={finalPrice}
@@ -571,7 +574,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
   )
 }
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Trade-In Calculator Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Trade-In Calculator ------------------------------------------------------
 
 function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; brands: string[] }) {
   const [brand, setBrand] = useState("")
@@ -664,7 +667,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Market Price (New / Avg Used) Ã¢â‚¬" Ã¢-šÂ¨</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Market Price (New / Avg Used) — Rs</label>
               <input
                 type="number" onWheel={e => e.currentTarget.blur()}
                 value={marketPrice}
@@ -694,7 +697,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2">
-                  Formula: Market Ãƒ- {GRADE_MULTIPLIER[grade]} (grade) Ãƒ- battery factor. Prices rounded to nearest Ã¢-šÂ¨500.
+                  Formula: Market × {GRADE_MULTIPLIER[grade]} (grade) × battery factor. Prices rounded to nearest Rs500.
                 </p>
               </div>
             )}
@@ -714,7 +717,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
   )
 }
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Bulk Add Dialog Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Bulk Add Dialog ----------------------------------------------------------
 
 type BulkRow = {
   id: string
@@ -1011,6 +1014,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   onEditRam: (old: string, nw: string) => Promise<void>
   onDeleteRam: (v: string) => Promise<void>
 }) {
+  const { language } = useLanguage()
   const [supplierId, setSupplierId] = useState("")
   const [supplierErr, setSupplierErr] = useState(false)
   const [amountPaid, setAmountPaid] = useState("")
@@ -1070,6 +1074,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [sourceType, setSourceType] = useState<SourceType>("purchased")
   const [walkinName, setWalkinName] = useState("")
   const [walkinPhone, setWalkinPhone] = useState("")
+  const [walkinCnic, setWalkinCnic] = useState("")
   const [selectedCustomerId, setSelectedCustomerId] = useState("")
   const [selectedCustomerName, setSelectedCustomerName] = useState("")
   const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
@@ -1242,6 +1247,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       source_customer_name: resolvedSourceName,
       source_customer_id: resolvedCustomerId ?? null,
       source_phone: sourceType === "walk_in" ? walkinPhone.trim() || null : null,
+      source_cnic:  sourceType === "walk_in" ? walkinCnic.trim() || null : null,
       supplier_id: resolvedSupplierId ?? null,
       supplier_name: sourceType === "purchased" ? supplierName : null,
       purchased_date: purchaseDate,
@@ -1423,7 +1429,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Purchase Details</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Who did you buy from and when</p>
+                <p className="text-xs text-slate-400 mt-0.5">{language === "ur" ? "کس سے اور کب خریدا" : "Who did you buy from and when"}</p>
               </div>
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 1</span>
             </div>
@@ -1440,7 +1446,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       { val: "walk_in",           label: "Walk-in"    },
                     ] as { val: SourceType; label: string }[]).map(opt => (
                       <button key={opt.val} type="button"
-                        onClick={() => { setSourceType(opt.val); setSupplierId(""); setSupplierErr(false); setWalkinName(""); setWalkinPhone(""); setSelectedCustomerId(""); setSelectedCustomerName("") }}
+                        onClick={() => { setSourceType(opt.val); setSupplierId(""); setSupplierErr(false); setWalkinName(""); setWalkinPhone(""); setWalkinCnic(""); setSelectedCustomerId(""); setSelectedCustomerName("") }}
                         className={cn(
                           "px-3 h-9 rounded-lg text-xs font-semibold border transition-colors",
                           sourceType === opt.val
@@ -1484,7 +1490,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
                 {/* Walk-in fields */}
                 {sourceType === "walk_in" && (
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">Seller Name <span className="text-red-500">*</span></label>
                       <input value={walkinName} onChange={e => setWalkinName(e.target.value)}
@@ -1496,6 +1502,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       <input value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)}
                         placeholder="03001234567"
                         className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-36" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">CNIC <span className="text-slate-400 font-normal">(optional)</span></label>
+                      <input value={walkinCnic} onChange={e => setWalkinCnic(e.target.value.replace(/[^0-9-]/g, "").slice(0, 15))}
+                        placeholder="42101-1234567-1"
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-40" />
                     </div>
                   </div>
                 )}
@@ -1513,7 +1525,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                 {/* Lock hint */}
                 <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pb-1">
                   <Lock className="w-3 h-3 text-blue-400 shrink-0" />
-                  <span>Lock <Lock className="w-2.5 h-2.5 inline text-blue-400" /> any field on a phone card to copy it to the next</span>
+                  <span>{language === "ur" ? <>لاک <Lock className="w-2.5 h-2.5 inline text-blue-400" /> کریں کوئی بھی خانہ — اگلے فون میں خود کاپی ہو گا</> : <>Lock <Lock className="w-2.5 h-2.5 inline text-blue-400" /> any field on a phone card to copy it to the next</>}</span>
                 </div>
               </div>
             </div>
@@ -1906,8 +1918,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
                               locks.pta_status ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
                             <option value="approved">PTA Approved</option>
-                            <option value="pending">PTA Pending</option>
-                            <option value="blocked">PTA Blocked</option>
+                            <option value="non_pta">Non-PTA</option>
+                            {row.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
                           </select>
                         </div>
 
@@ -2057,7 +2069,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 }
 
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Add / Edit Dialog (5-step) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Add / Edit Dialog (5-step) ----------------------------------------------Ã¢"â‚¬
 
 type FormData = {
   brand: string; model: string; color: string; storage: string; ram: string
@@ -2467,13 +2479,13 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <input type="text" value={form.imei_number} onChange={e => set("imei_number", e.target.value.replace(/\D/g,"").slice(0,15))} placeholder="15-digit IMEI" maxLength={15} className={inputCls} />
                   <p className="text-xs text-slate-400 mt-1">{form.imei_number.length}/15 digits</p>
                 </Field>
-                {/* Ã¢"â‚¬Ã¢"â‚¬ Source Ã¢"â‚¬Ã¢"â‚¬ */}
+                {/* -- Source -- */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Where did this phone come from?<span className="text-red-500 ml-0.5">*</span></label>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {([
-                      { type: "walk_in"           as SourceType, label: "Walk-in Seller", icon: "Ã°Å¸Å¡Â¶", desc: "Person off the street" },
-                      { type: "customer_trade_in" as SourceType, label: "Our Customer",   icon: "Ã°Å¸-˜Â¤", desc: "Existing customer" },
+                      { type: "walk_in"           as SourceType, label: "Walk-in Seller", icon: "🚶", desc: "Person off the street" },
+                      { type: "customer_trade_in" as SourceType, label: "Our Customer",   icon: "🤝", desc: "Existing customer" },
                       { type: "purchased"         as SourceType, label: "Supplier",       icon: "Ã°Å¸ÂÂª", desc: "Wholesaler / dealer" },
                     ]).map(opt => (
                       <button
@@ -2534,7 +2546,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       >
                         <option value="">-- Select customer --</option>
                         {customers.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}{c.phone ? ` Ã‚- ${c.phone}` : ""}</option>
+                          <option key={c.id} value={c.id}>{c.name}{c.phone ? `  ·  ${c.phone}` : ""}</option>
                         ))}
                       </select>
                       {form.source_customer_id && (() => {
@@ -2542,7 +2554,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                         return c ? (
                           <div className="flex items-center gap-2 mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                             <span className="font-semibold">{c.name}</span>
-                            {c.phone && <span className="text-slate-500">Ã‚- {c.phone}</span>}
+                            {c.phone && <span className="text-slate-500"> ·  {c.phone}</span>}
                           </div>
                         ) : null
                       })()}
@@ -2574,7 +2586,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <Field label="Date Acquired">
                     <input type="date" value={form.purchased_date} onChange={e => set("purchased_date", e.target.value)} className={inputCls} />
                   </Field>
-                  <Field label="Purchase Price (Ã¢-šÂ¨)" required>
+                  <Field label="Purchase Price (Rs)" required>
                     <input type="number" onWheel={e => e.currentTarget.blur()} value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
@@ -2683,10 +2695,10 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
             {step === 2 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Refurbishment Cost (Ã¢-šÂ¨)">
+                  <Field label="Refurbishment Cost (Rs)">
                     <input type="number" onWheel={e => e.currentTarget.blur()} value={form.refurbishment_cost} onChange={e => set("refurbishment_cost", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
-                  <Field label="Selling Price (Ã¢-šÂ¨)" required>
+                  <Field label="Selling Price (Rs)" required>
                     <input type="number" onWheel={e => e.currentTarget.blur()} value={form.selling_price} onChange={e => set("selling_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
@@ -2711,8 +2723,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <Field label="PTA Status">
                     <select value={form.pta_status} onChange={e => set("pta_status", e.target.value as UsedPTAStatus)} className={selectCls}>
                       <option value="approved">PTA Approved</option>
-                      <option value="pending">PTA Pending</option>
-                      <option value="blocked">PTA Blocked</option>
+                      <option value="non_pta">Non-PTA</option>
+                      {form.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
                     </select>
                   </Field>
                   <Field label="Status">
@@ -2812,7 +2824,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Device</p>
                     {[
                       { l: "Brand/Model", v: `${form.brand} ${form.model}` },
-                      { l: "Color/Storage", v: `${form.color} Ã‚- ${form.storage}` },
+                      { l: "Color/Storage", v: `${form.color} · ${form.storage}` },
                       ...(form.brand.toLowerCase() !== "apple" ? [{ l: "RAM", v: form.ram }] : []),
                       { l: "IMEI", v: form.imei_number },
                       { l: "Source", v: SOURCE_LABEL[form.source_type] },
@@ -2909,7 +2921,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
   )
 }
 
-// Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬ Main Page Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+// --Ã¢"â‚¬ Main Page ----------------------------------------------------------------
 
 export default function UsedPhonesPage() {
   const [phones, setPhones] = useState<UsedPhone[]>([])
@@ -2934,7 +2946,7 @@ export default function UsedPhonesPage() {
   const [showCalculator, setShowCalculator] = useState(false)
   const [sellPhone, setSellPhone]         = useState<UsedPhone | null>(null)
 
-  // Ã¢"â‚¬Ã¢"â‚¬ Dynamic dropdown data Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+  // -- Dynamic dropdown data ------------------------------------------------Ã¢"â‚¬
   const [brands, setBrands] = useState<string[]>([])
   const [models, setModels] = useState<{ name: string; brandName: string; deviceType: "iphone" | "android"; dbId: string; table: "iphone_models" | "android_models" }[]>([])
   const [colors, setColors] = useState<string[]>([])
@@ -3086,7 +3098,7 @@ export default function UsedPhonesPage() {
     toast.success(`"${val}" deleted`)
   }
 
-  // Ã¢"â‚¬Ã¢"â‚¬ Fetch data from Supabase Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+  // -- Fetch data from Supabase ----------------------------------------------
   async function fetchPhones() {
     try {
       const data = await getUsedPhones()
@@ -3138,7 +3150,7 @@ export default function UsedPhonesPage() {
     getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
   }, [])
 
-  // Ã¢"â‚¬Ã¢"â‚¬ Stats Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+  // -- Stats ------------------------------------------------------------------
   const stats = useMemo(() => {
     const totalInvested = phones.reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
     const revenueSold   = phones.filter(p => p.status === "sold").reduce((s, p) => s + p.selling_price, 0)
@@ -3150,7 +3162,7 @@ export default function UsedPhonesPage() {
     return { total: phones.length, totalInvested, revenueSold, gradeCount, profitSold }
   }, [phones])
 
-  // Ã¢"â‚¬Ã¢"â‚¬ Filtered Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+  // -- Filtered --------------------------------------------------------------Ã¢"â‚¬
   const filtered = useMemo(() => {
     let res = [...phones]
     if (search)     res = res.filter(p => `${p.brand} ${p.model} ${p.color} ${p.imei_number}`.toLowerCase().includes(search.toLowerCase()))
@@ -3169,7 +3181,7 @@ export default function UsedPhonesPage() {
 
   const resetPage = () => setPage(1)
 
-  // Ã¢"â‚¬Ã¢"â‚¬ Handlers Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
+  // -- Handlers --------------------------------------------------------------Ã¢"â‚¬
   const handleView = (p: UsedPhone) => { setSelectedPhone(p); setShowDetails(true) }
   const handleEdit = (p: UsedPhone) => { setEditPhone(p); setShowAddDialog(true); setShowDetails(false) }
   const handleSell = (p: UsedPhone) => { setSellPhone(p); setShowDetails(false) }
@@ -3281,7 +3293,7 @@ export default function UsedPhonesPage() {
     )
   }
 
-  // Full-page bulk add Ã¢â‚¬" renders instead of the list page
+  // Full-page bulk add — renders instead of the list page
   if (showBulkDialog) {
     return (
       <BulkAddDialog
@@ -3319,7 +3331,7 @@ export default function UsedPhonesPage() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Used / Refurbished Phones</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{phones.length} phones Ã‚- {phones.filter(p => p.status === "in_stock").length} available</p>
+          <p className="text-slate-500 text-sm mt-0.5">{phones.length} phones  ·  {phones.filter(p => p.status === "in_stock").length} available</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
@@ -3337,7 +3349,7 @@ export default function UsedPhonesPage() {
         </div>
       </div>
 
-      {/* Stats Ã¢â‚¬" Row 1: Inventory summary + 6 grades */}
+      {/* Stats — Row 1: Inventory summary + 6 grades */}
       <div className="space-y-2">
         <div className="grid grid-cols-8 gap-2">
           {/* Inventory Summary */}
@@ -3368,7 +3380,7 @@ export default function UsedPhonesPage() {
             </div>
           </div>
 
-          {/* Grade breakdown Ã¢â‚¬" 6 cards */}
+          {/* Grade breakdown — 6 cards */}
           {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
             const m = GRADE_META[g]
             const count = stats.gradeCount[g]
@@ -3394,7 +3406,7 @@ export default function UsedPhonesPage() {
           })}
         </div>
 
-        {/* Row 2: Financial summary Ã¢â‚¬" 3 cards */}
+        {/* Row 2: Financial summary — 3 cards */}
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
             <div className="flex items-center justify-between mb-1.5">
@@ -3519,16 +3531,16 @@ export default function UsedPhonesPage() {
               >
                 <option value="">All PTA</option>
                 <option value="approved">PTA Approved</option>
-                <option value="pending">PTA Pending</option>
-                <option value="blocked">PTA Blocked</option>
+                <option value="non_pta">Non-PTA</option>
+                <option value="jv">JV (iPhone only)</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (Ã¢-šÂ¨)</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (Rs)</label>
               <input type="number" onWheel={e => e.currentTarget.blur()} value={minPrice} onChange={e => { setMinPrice(e.target.value); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (Ã¢-šÂ¨)</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (Rs)</label>
               <input type="number" onWheel={e => e.currentTarget.blur()} value={maxPrice} onChange={e => { setMaxPrice(e.target.value); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -3602,7 +3614,7 @@ export default function UsedPhonesPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-500">
-            Page {page} of {totalPages} Ã‚- {filtered.length} phones
+            Page {page} of {totalPages}  ·  {filtered.length} phones
           </p>
           <div className="flex items-center gap-1">
             <button

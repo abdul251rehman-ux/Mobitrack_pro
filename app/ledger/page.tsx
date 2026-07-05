@@ -31,7 +31,7 @@ const ledgers = [
     badgeIcon: Truck,
     badgeLabel: "Suppliers",
     title: "Supplier Ledger",
-    desc: "Track what you owe suppliers, purchase history and payments made to suppliers.",
+    desc: "Track payments due to suppliers, purchase history and payments made to suppliers.",
     hint: "Manage payables & dues",
   },
   {
