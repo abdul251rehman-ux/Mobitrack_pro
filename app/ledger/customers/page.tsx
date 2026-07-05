@@ -728,7 +728,7 @@ export default function CustomerLedgerPage() {
                 value={openingBalance}
                 onChange={e => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
                 className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0  (+ = due, - = advance)"
+                placeholder="0 (positive = customer needs to pay us, negative = advance paid)"
               />
             </div>
           </div>
@@ -770,7 +770,7 @@ export default function CustomerLedgerPage() {
               {formatCurrency(Math.abs(closingBalance))}
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">
-              {closingBalance > 0 ? "Dr — still owed" : closingBalance < 0 ? "Cr — advance/overpaid" : "Settled"}
+              {closingBalance > 0 ? "Customer still needs to pay" : closingBalance < 0 ? "Customer paid extra (advance)" : "Settled"}
             </p>
           </CardContent>
         </Card>

@@ -399,7 +399,7 @@ export default function CustomerDetailPage() {
               <StatMini
                 title="Outstanding"
                 value={outstandingBalance > 0 ? formatCurrency(outstandingBalance) : "Settled"}
-                sub={outstandingBalance > 0 ? "Customer owes" : "No balance due"}
+                sub={outstandingBalance > 0 ? "Customer needs to pay" : "No balance due"}
                 accent={outstandingBalance > 0 ? "border-red-200" : "border-emerald-200"}
                 valueColor={outstandingBalance > 0 ? "text-red-600" : "text-emerald-700"}
               />
@@ -549,7 +549,7 @@ export default function CustomerDetailPage() {
               <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-semibold text-red-700">Outstanding: {formatCurrency(outstandingBalance)}</p>
-                <p className="text-[10px] text-red-500 mt-0.5">Customer owes this amount</p>
+                <p className="text-[10px] text-red-500 mt-0.5">Customer needs to pay this amount</p>
               </div>
             </div>
           )}

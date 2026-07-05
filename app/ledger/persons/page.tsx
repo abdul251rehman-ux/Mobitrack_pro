@@ -409,7 +409,7 @@ export default function PersonLedgerPage() {
               {formatCurrency(Math.abs(closingBalance))}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
-              {closingBalance > 0 ? "They owe us (Dr)" : closingBalance < 0 ? "We owe them (Cr)" : "Settled"}
+              {closingBalance > 0 ? "They need to pay us" : closingBalance < 0 ? "We need to pay them" : "Settled"}
             </p>
           </CardContent>
         </Card>

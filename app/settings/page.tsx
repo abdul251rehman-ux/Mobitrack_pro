@@ -7,8 +7,9 @@ import { z } from "zod"
 import { toast } from "sonner"
 import {
   Building2, Mail, Phone, Upload, FileText, Users, Database,
-  Download, Shield, RotateCcw, Plus, Pencil, Power, Settings, Eye, EyeOff,
+  Download, Shield, RotateCcw, Plus, Pencil, Power, Settings, Eye, EyeOff, Languages,
 } from "lucide-react"
+import { useLanguage, type Language } from "@/context/language-context"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -101,6 +102,7 @@ function SectionCard({ title, description, children, className }: {
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const { language, setLanguage } = useLanguage()
 
   const shopForm = useForm<ShopForm>({
     resolver: zodResolver(shopSchema),
@@ -389,6 +391,52 @@ export default function SettingsPage() {
               )}
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/svg+xml" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoFile(f) }} />
+            </SectionCard>
+
+            {/* Language Toggle */}
+            <SectionCard
+              title={<span className="flex items-center gap-1.5"><Languages className="w-3.5 h-3.5 text-blue-600" />Language / زبان</span>}
+              description="Choose the interface language"
+            >
+              <div className="space-y-2">
+                {(["en", "ur"] as Language[]).map((lang) => {
+                  const meta = {
+                    en: { label: "English", sub: "Default language", flag: "🇬🇧" },
+                    ur: { label: "اردو", sub: "Urdu", flag: "🇵🇰" },
+                  }[lang]
+                  const active = language === lang
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setLanguage(lang)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 transition-all text-left ${
+                        active
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="text-xl leading-none">{meta.flag}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-semibold ${active ? "text-blue-700" : "text-slate-800"}`}>{meta.label}</p>
+                        <p className="text-[10px] text-slate-400">{meta.sub}</p>
+                      </div>
+                      {active && (
+                        <span className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+                <p className="text-[10px] text-slate-400 pt-1">
+                  {language === "ur"
+                    ? "زبان فوری طور پر تبدیل ہو جائے گی"
+                    : "Language changes apply instantly — no save needed"}
+                </p>
+              </div>
             </SectionCard>
           </div>
         </TabsContent>

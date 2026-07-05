@@ -25,6 +25,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
+import { useLanguage } from "@/context/language-context"
 
 // â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
@@ -700,18 +701,8 @@ function PhoneCard({
               <input
                 type="number" onWheel={e => e.currentTarget.blur()} min={1} value={row.qty}
                 onChange={e => onChange("qty", e.target.value)}
-                className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400 pr-14"
+                className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
               />
-              {parseInt(row.qty) > 1 && (
-                <button
-                  type="button"
-                  onClick={() => onSplitQty()}
-                  title="Split into separate cards (each unit gets its own color, storage, IMEI)"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-violet-600 text-white text-[9px] font-bold rounded hover:bg-violet-700 transition-colors leading-none"
-                >
-                  Split
-                </button>
-              )}
             </div>
           </Field>
           <Field label="Photo">
@@ -970,7 +961,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
 
           {/* Shipping + Tax */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Shipping (Rs)">
+            <Field label="Shipping (Rs) · کرایہ">
               <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={shipping} onChange={e => setShipping(e.target.value)} className="h-9 text-sm" placeholder="0" />
             </Field>
             <Field label="Tax / Other (Rs)">
@@ -1133,6 +1124,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
 export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
   open: boolean; onClose: () => void; onCreated?: () => void; editPurchaseId?: string | null
 }) {
+  const { language } = useLanguage()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [accessoryCatalog, setAccessoryCatalog] = useState<CatalogAccessory[]>([])
@@ -1996,7 +1988,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
               <section>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Supplier <span className="text-red-400">*</span></p>
                 <div className="relative">
-                  <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none z-10" />
+                  <Building2 className={cn("absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none z-10", selectedSupplier ? "text-emerald-500" : "text-amber-500")} />
                   <input
                     placeholder="Search supplier..."
                     value={supplierSearch}
@@ -2004,7 +1996,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                     onFocus={() => setDropOpen(true)}
                     className={cn(
                       "w-full h-8 rounded-lg border pl-8 pr-8 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400 transition-colors",
-                      selectedSupplier ? "border-emerald-400 bg-emerald-50/40" : "border-slate-200"
+                      selectedSupplier ? "border-emerald-400 bg-emerald-50/40" : "border-amber-400 bg-amber-50 placeholder:text-amber-500"
                     )}
                   />
                   {selectedSupplier && !dropOpen && (
@@ -2080,7 +2072,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                             min="0"
                             value={quickSupplierBalance}
                             onChange={e => setQuickSupplierBalance(e.target.value)}
-                            placeholder="Opening balance (what you already owe them)"
+                            placeholder="اس سپلائر کا پرانا بقایا (Rs)"
                             className="w-full h-7 rounded-md border border-slate-200 pl-7 pr-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
                           />
                         </div>
@@ -2178,9 +2170,9 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                 {mobileRows.length === 0 ? (
                   <button onClick={addRow}
                     className="w-full flex flex-col items-center justify-center gap-1.5 py-5 border border-dashed border-slate-200 text-slate-400 text-xs rounded-lg hover:border-violet-300 hover:text-violet-500 hover:bg-violet-50/30 transition-all">
-                    <Smartphone className="w-5 h-5 opacity-40" />
+                    <Smartphone className="w-5 h-5 opacity-60" />
                     <span className="font-medium">Add phones to this order</span>
-                    <span className="text-[10px] text-slate-300">Optional - skip if purchasing accessories only</span>
+                    <span className="text-[10px] text-slate-500">{language === "ur" ? "اختیاری — صرف اکسیسری خریدنے پر چھوڑ دیں" : "Optional - skip if purchasing accessories only"}</span>
                   </button>
                 ) : (
                   <>

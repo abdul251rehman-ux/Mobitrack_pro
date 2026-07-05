@@ -810,8 +810,6 @@ export default function PurchasesPage() {
         <DataTable
           columns={columns}
           data={filteredPurchases}
-          searchKey="supplierName"
-          searchPlaceholder="Search by supplier name..."
           toolbar={toolbar}
         />
       </div>

@@ -50,7 +50,7 @@ const navSections: NavSection[] = [
     items: [
       { label: "Sales", icon: ShoppingCart, href: "/sales", permission: "sales.view" },
       { label: "Purchases", icon: TrendingUp, href: "/purchases", permission: "purchases.view" },
-      { label: "Returns", icon: RotateCcw, href: "/returns", permission: "returns.view" },
+      { label: "Sale Returns", icon: RotateCcw, href: "/returns", permission: "returns.view" },
       { label: "Purchase Returns", icon: RefreshCw, href: "/purchase-returns", permission: "purchases.view" },
       { label: "Finance", icon: Wallet, href: "/finance", permission: "payments.view" },
       { label: "Expenses", icon: Receipt, href: "/expenses", permission: "expenses.view" },
@@ -165,24 +165,24 @@ function SidebarContent({
             {hasPermission("sales.create") && (
               <button
                 onClick={() => { router.push("/sales/new"); onNavClick?.() }}
-                title="New Sale"
+                title={"New Sale"}
                 className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-md shadow-blue-900/30"
               >
                 <Plus className="w-4 h-4 text-white" />
                 <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                  New Sale
+                  {"New Sale"}
                 </div>
               </button>
             )}
             {hasPermission("purchases.create") && (
               <button
                 onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
-                title="New Purchase"
+                title={"New Purchase"}
                 className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-95 transition-all"
               >
                 <ShoppingCart className="w-4 h-4 text-white" />
                 <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                  New Purchase
+                  {"New Purchase"}
                 </div>
               </button>
             )}
@@ -195,7 +195,7 @@ function SidebarContent({
                 className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md shadow-blue-900/30 group"
               >
                 <Plus className="w-3.5 h-3.5 text-white" />
-                <span className="text-white font-semibold text-xs tracking-wide">New Sale</span>
+                <span className="text-white font-semibold text-xs tracking-wide">{"New Sale"}</span>
               </button>
             )}
             {hasPermission("purchases.create") && (
@@ -204,7 +204,7 @@ function SidebarContent({
                 className="w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-[0.98] transition-all group"
               >
                 <ShoppingCart className="w-3.5 h-3.5 text-slate-300" />
-                <span className="text-slate-300 font-medium text-xs tracking-wide">New Purchase</span>
+                <span className="text-slate-300 font-medium text-xs tracking-wide">{"New Purchase"}</span>
               </button>
             )}
           </>

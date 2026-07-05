@@ -76,8 +76,10 @@ const TX_META: Record<string, { label: string; color: string; bg: string; border
   purchase_payment: { label: "Purchase Payment", color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
   expense:          { label: "Expense",          color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
   opening_balance:  { label: "Opening Balance",  color: "text-slate-700",   bg: "bg-slate-50",   border: "border-slate-200",   icon: <Wallet className="h-3 w-3" />        },
-  person_gave:      { label: "Gave to Person",   color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
-  person_took:      { label: "Took from Person", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
+  person_gave:        { label: "Gave to Person",   color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
+  person_took:        { label: "Took from Person", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
+  customer_payment:   { label: "Customer Payment", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
+  supplier_payment:   { label: "Supplier Payment", color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
 }
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card", "Cheque"]
@@ -90,7 +92,7 @@ const WALLET_NAMES = ["JazzCash", "EasyPaisa", "NayaPay", "SadaPay", "UPaisa", "
 const TODAY = todayPKT()
 
 function isInflow(type: string) {
-  return ["deposit", "transfer_in", "sale_receipt", "opening_balance", "person_took"].includes(type)
+  return ["deposit", "transfer_in", "sale_receipt", "opening_balance", "person_took", "customer_payment"].includes(type)
 }
 
 // â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€

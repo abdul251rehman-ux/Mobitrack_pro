@@ -30,6 +30,7 @@ import { getFinanceAccounts, createWithdrawal } from "@/lib/api/finance"
 import type { Supplier, Customer } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
+import { useLanguage } from "@/context/language-context"
 import { toast } from "sonner"
 
 // --Ã¢"â‚¬ Grade / Status Meta ------------------------------------------------------
@@ -56,8 +57,10 @@ const STATUS_META: Record<PhoneStatus, { bg: string; text: string; label: string
 
 const PTA_META: Record<UsedPTAStatus, { bg: string; text: string; label: string }> = {
   approved: { bg: "bg-emerald-100", text: "text-emerald-700", label: "PTA Approved" },
+  non_pta:  { bg: "bg-red-100",     text: "text-red-700",     label: "Non-PTA"      },
+  jv:       { bg: "bg-violet-100",  text: "text-violet-700",  label: "JV"           },
   pending:  { bg: "bg-amber-100",   text: "text-amber-700",   label: "PTA Pending"  },
-  blocked:  { bg: "bg-red-100",     text: "text-red-700",     label: "PTA Blocked"  },
+  blocked:  { bg: "bg-slate-100",   text: "text-slate-600",   label: "PTA Blocked"  },
 }
 
 const SCREEN_LABEL: Record<ScreenCondition, string> = {
@@ -1011,6 +1014,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   onEditRam: (old: string, nw: string) => Promise<void>
   onDeleteRam: (v: string) => Promise<void>
 }) {
+  const { language } = useLanguage()
   const [supplierId, setSupplierId] = useState("")
   const [supplierErr, setSupplierErr] = useState(false)
   const [amountPaid, setAmountPaid] = useState("")
@@ -1070,6 +1074,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [sourceType, setSourceType] = useState<SourceType>("purchased")
   const [walkinName, setWalkinName] = useState("")
   const [walkinPhone, setWalkinPhone] = useState("")
+  const [walkinCnic, setWalkinCnic] = useState("")
   const [selectedCustomerId, setSelectedCustomerId] = useState("")
   const [selectedCustomerName, setSelectedCustomerName] = useState("")
   const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
@@ -1242,6 +1247,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       source_customer_name: resolvedSourceName,
       source_customer_id: resolvedCustomerId ?? null,
       source_phone: sourceType === "walk_in" ? walkinPhone.trim() || null : null,
+      source_cnic:  sourceType === "walk_in" ? walkinCnic.trim() || null : null,
       supplier_id: resolvedSupplierId ?? null,
       supplier_name: sourceType === "purchased" ? supplierName : null,
       purchased_date: purchaseDate,
@@ -1423,7 +1429,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-800">Purchase Details</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Who did you buy from and when</p>
+                <p className="text-xs text-slate-400 mt-0.5">{language === "ur" ? "کس سے اور کب خریدا" : "Who did you buy from and when"}</p>
               </div>
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 1</span>
             </div>
@@ -1440,7 +1446,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       { val: "walk_in",           label: "Walk-in"    },
                     ] as { val: SourceType; label: string }[]).map(opt => (
                       <button key={opt.val} type="button"
-                        onClick={() => { setSourceType(opt.val); setSupplierId(""); setSupplierErr(false); setWalkinName(""); setWalkinPhone(""); setSelectedCustomerId(""); setSelectedCustomerName("") }}
+                        onClick={() => { setSourceType(opt.val); setSupplierId(""); setSupplierErr(false); setWalkinName(""); setWalkinPhone(""); setWalkinCnic(""); setSelectedCustomerId(""); setSelectedCustomerName("") }}
                         className={cn(
                           "px-3 h-9 rounded-lg text-xs font-semibold border transition-colors",
                           sourceType === opt.val
@@ -1484,7 +1490,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
                 {/* Walk-in fields */}
                 {sourceType === "walk_in" && (
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">Seller Name <span className="text-red-500">*</span></label>
                       <input value={walkinName} onChange={e => setWalkinName(e.target.value)}
@@ -1496,6 +1502,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       <input value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)}
                         placeholder="03001234567"
                         className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-36" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">CNIC <span className="text-slate-400 font-normal">(optional)</span></label>
+                      <input value={walkinCnic} onChange={e => setWalkinCnic(e.target.value.replace(/[^0-9-]/g, "").slice(0, 15))}
+                        placeholder="42101-1234567-1"
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-40" />
                     </div>
                   </div>
                 )}
@@ -1513,7 +1525,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                 {/* Lock hint */}
                 <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pb-1">
                   <Lock className="w-3 h-3 text-blue-400 shrink-0" />
-                  <span>Lock <Lock className="w-2.5 h-2.5 inline text-blue-400" /> any field on a phone card to copy it to the next</span>
+                  <span>{language === "ur" ? <>لاک <Lock className="w-2.5 h-2.5 inline text-blue-400" /> کریں کوئی بھی خانہ — اگلے فون میں خود کاپی ہو گا</> : <>Lock <Lock className="w-2.5 h-2.5 inline text-blue-400" /> any field on a phone card to copy it to the next</>}</span>
                 </div>
               </div>
             </div>
@@ -1906,8 +1918,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
                               locks.pta_status ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
                             <option value="approved">PTA Approved</option>
-                            <option value="pending">PTA Pending</option>
-                            <option value="blocked">PTA Blocked</option>
+                            <option value="non_pta">Non-PTA</option>
+                            {row.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
                           </select>
                         </div>
 
@@ -2711,8 +2723,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <Field label="PTA Status">
                     <select value={form.pta_status} onChange={e => set("pta_status", e.target.value as UsedPTAStatus)} className={selectCls}>
                       <option value="approved">PTA Approved</option>
-                      <option value="pending">PTA Pending</option>
-                      <option value="blocked">PTA Blocked</option>
+                      <option value="non_pta">Non-PTA</option>
+                      {form.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
                     </select>
                   </Field>
                   <Field label="Status">
@@ -3519,8 +3531,8 @@ export default function UsedPhonesPage() {
               >
                 <option value="">All PTA</option>
                 <option value="approved">PTA Approved</option>
-                <option value="pending">PTA Pending</option>
-                <option value="blocked">PTA Blocked</option>
+                <option value="non_pta">Non-PTA</option>
+                <option value="jv">JV (iPhone only)</option>
               </select>
             </div>
             <div>

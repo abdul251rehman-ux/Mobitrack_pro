@@ -4,6 +4,7 @@ import "./globals.css"
 import { AppProvider } from "@/context/app-context"
 import { CartProvider } from "@/context/cart-context"
 import { AuthProvider } from "@/context/auth-context"
+import { LanguageProvider } from "@/context/language-context"
 import { AuthGuard } from "@/components/layout/auth-guard"
 import { AppShell } from "@/components/layout/app-shell"
 import { Toaster } from "sonner"
@@ -30,16 +31,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body className={`${plusJakarta.variable} ${dmSans.variable} antialiased`}>
         <AuthProvider>
-          <AppProvider>
-            <CartProvider>
-              <AuthGuard>
-                <AppShell>
-                  {children}
-                </AppShell>
-              </AuthGuard>
-              <Toaster position="top-right" richColors closeButton />
-            </CartProvider>
-          </AppProvider>
+          <LanguageProvider>
+            <AppProvider>
+              <CartProvider>
+                <AuthGuard>
+                  <AppShell>
+                    {children}
+                  </AppShell>
+                </AuthGuard>
+                <Toaster position="top-right" richColors closeButton />
+              </CartProvider>
+            </AppProvider>
+          </LanguageProvider>
         </AuthProvider>
       </body>
     </html>

@@ -510,14 +510,14 @@ export default function SalesPage() {
         action={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportExcel}>
-              <Download className="w-3.5 h-3.5" /> Excel
+              <Download className="w-3.5 h-3.5" /> Export
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportPDF}>
               <FileText className="w-3.5 h-3.5" /> PDF
             </Button>
             <Link href="/sales/new">
               <Button className="gap-2">
-                <Plus className="w-4 h-4" /> Create New Sale
+                <Plus className="w-4 h-4" /> New Sale
               </Button>
             </Link>
           </div>
@@ -875,7 +875,7 @@ export default function SalesPage() {
               disabled={deleting}
             >
               <Trash2 className="w-3.5 h-3.5" />
-              {deleting ? "Deleting..." : "Delete Sale"}
+              {deleting ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

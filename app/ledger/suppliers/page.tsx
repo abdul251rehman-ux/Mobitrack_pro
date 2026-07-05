@@ -387,7 +387,7 @@ export default function SupplierLedgerPage() {
               <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Opening Balance (Rs)</label>
               <input type="number" onWheel={e => e.currentTarget.blur()} value={openingBalance} onChange={(e) => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
                 className="w-32 h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" />
-              <span className="text-[10px] text-slate-400">Positive = we owe supplier - Negative = advance paid</span>
+              <span className="text-[10px] text-slate-400">Positive = we need to pay them · Negative = we paid extra (advance)</span>
             </div>
           )}
         </CardContent>
@@ -402,7 +402,7 @@ export default function SupplierLedgerPage() {
               <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
             </div>
             <p className="text-lg font-bold text-slate-900 leading-none">{formatCurrency(totalCredit)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Amount we owe supplier</p>
+            <p className="text-[10px] text-slate-400 mt-1">Total we bought from supplier</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-emerald-500">
@@ -425,7 +425,7 @@ export default function SupplierLedgerPage() {
               {formatCurrency(Math.abs(closingBalance))}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
-              {closingBalance > 0 ? "Payable - we owe supplier" : closingBalance < 0 ? "Advance paid to supplier" : "Account settled"}
+              {closingBalance > 0 ? "We need to pay this supplier" : closingBalance < 0 ? "We paid extra (advance)" : "Account settled"}
             </p>
           </CardContent>
         </Card>

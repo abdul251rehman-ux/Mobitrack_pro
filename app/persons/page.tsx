@@ -285,7 +285,7 @@ export default function PersonsPage() {
                     className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="0"
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Positive = they owe us - Negative = we owe them</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Positive = they need to pay us · Negative = we need to pay them</p>
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Notes</label>
