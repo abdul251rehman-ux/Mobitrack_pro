@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Smartphone, Package, ShoppingCart, TrendingUp, Users, Truck, ShoppingBag,
   BarChart2, Settings, ChevronLeft, ChevronRight, LogOut, Layers, Tag, Award, ChevronDown, X, BookOpen, UserCheck, Building2, Bell, RefreshCw, Plus, Receipt,
-  RotateCcw, Wallet, ClipboardList, UserRound, Palette, HardDrive, Cpu,
+  RotateCcw, Wallet, ClipboardList, UserRound, Palette, HardDrive, Cpu, BadgePercent,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/context/app-context"
 import { useAuth } from "@/context/auth-context"
+import { useLanguage } from "@/context/language-context"
 import { cn } from "@/lib/utils"
 
 type SubItem = { label: string; icon: React.ElementType; href: string; permission?: string }
@@ -54,6 +55,7 @@ const navSections: NavSection[] = [
       { label: "Purchase Returns", icon: RefreshCw, href: "/purchase-returns", permission: "purchases.view" },
       { label: "Finance", icon: Wallet, href: "/finance", permission: "payments.view" },
       { label: "Expenses", icon: Receipt, href: "/expenses", permission: "expenses.view" },
+      { label: "Rebate", icon: BadgePercent, href: "/rebate", permission: "rebate.view" },
       {
         label: "Ledger",
         icon: BookOpen,
@@ -104,6 +106,27 @@ function SidebarContent({
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout, hasPermission } = useAuth()
+  const { language, t } = useLanguage()
+
+  function navLabel(label: string) {
+    if (language !== "ur") return label
+    const key = `nav.${label}` as any
+    try {
+      const urdu = t(key)
+      if (urdu && urdu !== label) return `${label} (${urdu})`
+    } catch {}
+    return label
+  }
+
+  function sectionLabel(section: string) {
+    if (language !== "ur") return section
+    const key = `nav.section.${section}` as any
+    try {
+      const urdu = t(key)
+      if (urdu && urdu !== section) return `${section} · ${urdu}`
+    } catch {}
+    return section
+  }
   const [openAccordion, setOpenAccordion] = useState<string | null>(
     pathname.startsWith("/catalog") ? "Catalog"
       : pathname.startsWith("/ledger") ? "Ledger"
@@ -130,7 +153,7 @@ function SidebarContent({
         "flex flex-col h-full transition-all duration-300",
         sidebarCollapsed ? "w-[60px]" : "w-[220px] max-w-[85vw]"
       )}
-      style={{ backgroundColor: "#0F172A" }}
+      style={{ backgroundColor: "#1A1B3D" }}
     >
       {/* Logo */}
       <div
@@ -139,7 +162,7 @@ function SidebarContent({
           sidebarCollapsed ? "justify-center px-2" : "px-3 gap-2.5"
         )}
       >
-        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-900/40">
+        <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-900/40">
           <Smartphone className="w-4 h-4 text-white" />
         </div>
         {!sidebarCollapsed && (
@@ -166,23 +189,23 @@ function SidebarContent({
               <button
                 onClick={() => { router.push("/sales/new"); onNavClick?.() }}
                 title={"New Sale"}
-                className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-md shadow-blue-900/30"
+                className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all shadow-md shadow-indigo-900/30"
               >
                 <Plus className="w-4 h-4 text-white" />
                 <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                  {"New Sale"}
+                  {navLabel("New Sale")}
                 </div>
               </button>
             )}
             {hasPermission("purchases.create") && (
               <button
                 onClick={() => { router.push("/purchases/new"); onNavClick?.() }}
-                title={"New Purchase"}
+                title={navLabel("New Purchase")}
                 className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-95 transition-all"
               >
                 <ShoppingCart className="w-4 h-4 text-white" />
                 <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                  {"New Purchase"}
+                  {navLabel("New Purchase")}
                 </div>
               </button>
             )}
@@ -192,10 +215,10 @@ function SidebarContent({
             {hasPermission("sales.create") && (
               <button
                 onClick={() => { router.push("/sales/new"); onNavClick?.() }}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md shadow-blue-900/30 group"
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] transition-all shadow-md shadow-indigo-900/30 group"
               >
                 <Plus className="w-3.5 h-3.5 text-white" />
-                <span className="text-white font-semibold text-xs tracking-wide">{"New Sale"}</span>
+                <span className="text-white font-semibold text-xs tracking-wide">{navLabel("New Sale")}</span>
               </button>
             )}
             {hasPermission("purchases.create") && (
@@ -204,7 +227,7 @@ function SidebarContent({
                 className="w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 active:scale-[0.98] transition-all group"
               >
                 <ShoppingCart className="w-3.5 h-3.5 text-slate-300" />
-                <span className="text-slate-300 font-medium text-xs tracking-wide">{"New Purchase"}</span>
+                <span className="text-slate-300 font-medium text-xs tracking-wide">{navLabel("New Purchase")}</span>
               </button>
             )}
           </>
@@ -220,7 +243,7 @@ function SidebarContent({
           <div key={section} className="mb-0.5">
             {!sidebarCollapsed && (
               <p className="text-slate-600 text-[9px] font-bold uppercase tracking-widest px-2 pt-3 pb-1">
-                {section}
+                {sectionLabel(section)}
               </p>
             )}
             {sidebarCollapsed && <div className="h-2.5" />}
@@ -241,18 +264,18 @@ function SidebarContent({
                       <Link
                         key={child.href}
                         href={child.href}
-                        title={child.label}
+                        title={navLabel(child.label)}
                         onClick={onNavClick}
                         className={cn(
                           "flex items-center justify-center rounded-md mb-px py-2 transition-all duration-150 group relative",
                           active
-                            ? "bg-blue-600 text-white shadow-sm shadow-blue-900/40"
+                            ? "bg-indigo-600 text-white shadow-sm shadow-indigo-900/40"
                             : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
                         )}
                       >
                         <ChildIcon className="flex-shrink-0 w-4 h-4" />
                         <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                          {child.label}
+                          {navLabel(child.label)}
                         </div>
                       </Link>
                     )
@@ -270,9 +293,9 @@ function SidebarContent({
                           : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
                       )}
                     >
-                      <Icon className={cn("flex-shrink-0 w-4 h-4", anyChildActive ? "text-blue-400" : "text-slate-500 group-hover:text-slate-300")} />
+                      <Icon className={cn("flex-shrink-0 w-4 h-4", anyChildActive ? "text-cyan-400" : "text-slate-500 group-hover:text-slate-300")} />
                       <span className={cn("text-[12px] font-medium flex-1 text-left truncate", anyChildActive ? "text-slate-200" : "text-slate-400 group-hover:text-slate-200")}>
-                        {item.label}
+                        {navLabel(item.label)}
                       </span>
                       <ChevronDown
                         className={cn(
@@ -295,15 +318,15 @@ function SidebarContent({
                               className={cn(
                                 "flex items-center gap-2 px-2 py-1.5 rounded-md transition-all duration-150 group",
                                 active
-                                  ? "bg-blue-600/20 text-blue-300"
+                                  ? "bg-cyan-600/20 text-cyan-300"
                                   : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
                               )}
                             >
-                              <ChildIcon className={cn("flex-shrink-0 w-3.5 h-3.5", active ? "text-blue-400" : "text-slate-600 group-hover:text-slate-400")} />
-                              <span className={cn("text-[11px] font-medium", active ? "text-blue-300" : "text-slate-500 group-hover:text-slate-200")}>
-                                {child.label}
+                              <ChildIcon className={cn("flex-shrink-0 w-3.5 h-3.5", active ? "text-cyan-400" : "text-slate-600 group-hover:text-slate-400")} />
+                              <span className={cn("text-[11px] font-medium", active ? "text-cyan-300" : "text-slate-500 group-hover:text-slate-200")}>
+                                {navLabel(child.label)}
                               </span>
-                              {active && <span className="ml-auto w-1 h-1 rounded-full bg-blue-400" />}
+                              {active && <span className="ml-auto w-1 h-1 rounded-full bg-cyan-400" />}
                             </Link>
                           )
                         })}
@@ -320,19 +343,19 @@ function SidebarContent({
                   key={item.href}
                   href={item.href}
                   onClick={onNavClick}
-                  title={sidebarCollapsed ? item.label : undefined}
+                  title={sidebarCollapsed ? navLabel(item.label) : undefined}
                   className={cn(
                     "flex items-center rounded-md mb-px transition-all duration-150 group relative",
                     sidebarCollapsed ? "justify-center w-full py-2" : "gap-2.5 px-2 py-1.5",
                     active
-                      ? "bg-blue-600 text-white shadow-sm shadow-blue-900/30"
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-900/30"
                       : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
                   )}
                 >
                   <Icon className={cn("flex-shrink-0 w-4 h-4", active ? "text-white" : "text-slate-500 group-hover:text-slate-300")} />
                   {!sidebarCollapsed && (
                     <span className={cn("text-[12px] font-medium truncate", active ? "text-white" : "text-slate-400 group-hover:text-slate-200")}>
-                      {item.label}
+                      {navLabel(item.label)}
                     </span>
                   )}
                   {active && !sidebarCollapsed && (
@@ -340,7 +363,7 @@ function SidebarContent({
                   )}
                   {sidebarCollapsed && (
                     <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-                      {item.label}
+                      {navLabel(item.label)}
                     </div>
                   )}
                 </Link>
@@ -355,7 +378,7 @@ function SidebarContent({
       <div className={cn("border-t border-white/[0.07] p-2 flex-shrink-0", sidebarCollapsed && "flex justify-center")}>
         {!sidebarCollapsed ? (
           <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors group">
-            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+            <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
               <span className="text-white text-[10px] font-bold">
                 {user ? user.name.split(" ").map(n => n[0]).join("").slice(0, 2) : "?"}
               </span>
@@ -366,16 +389,16 @@ function SidebarContent({
             </div>
             <button
               onClick={async () => { await logout(); router.push("/auth/login") }}
-              className="p-1.5 rounded-md hover:bg-red-500/20 transition-colors"
+              className="p-1.5 rounded-md hover:bg-rose-500/20 transition-colors"
               title="Logout"
             >
-              <LogOut className="w-3.5 h-3.5 text-slate-500 hover:text-red-400 transition-colors" />
+              <LogOut className="w-3.5 h-3.5 text-slate-500 hover:text-rose-400 transition-colors" />
             </button>
           </div>
         ) : (
           <button
             onClick={async () => { await logout(); router.push("/auth/login") }}
-            className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center cursor-pointer shadow-sm hover:bg-red-500 transition-colors"
+            className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center cursor-pointer shadow-sm hover:bg-rose-500 transition-colors"
             title="Logout"
           >
             <LogOut className="w-3.5 h-3.5 text-white" />
@@ -387,7 +410,7 @@ function SidebarContent({
       {showCollapseBtn && (
         <button
           onClick={toggleSidebar}
-          className="absolute -right-3 top-16 w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center hover:bg-blue-600 hover:border-blue-500 transition-all z-50 shadow-md"
+          className="absolute -right-3 top-16 w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-500 transition-all z-50 shadow-md"
         >
           {sidebarCollapsed
             ? <ChevronRight className="w-3 h-3 text-slate-400" />

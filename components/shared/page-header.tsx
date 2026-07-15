@@ -8,17 +8,17 @@ interface PageHeaderProps {
   action?: ReactNode
   badge?: ReactNode
   icon?: ReactNode
-  /** Tailwind bg class for the icon container e.g. "bg-blue-600" — defaults to bg-blue-600 */
+  /** Tailwind bg class for the icon container e.g. "bg-indigo-600" — defaults to bg-indigo-600 */
   iconBg?: string
 }
 
-export function PageHeader({ title, description, action, badge, icon, iconBg = "bg-blue-600" }: PageHeaderProps) {
+export function PageHeader({ title, description, action, badge, icon, iconBg = "bg-indigo-600" }: PageHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 pb-5 border-b border-slate-100">
       <div className="flex items-center gap-3 min-w-0">
         {icon && (
           <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm", iconBg)}>
-            <span className="text-white [&>svg]:w-4.5 [&>svg]:h-4.5 [&>*]:w-[18px] [&>*]:h-[18px]">
+            <span className="text-white [&>*]:w-[18px] [&>*]:h-[18px]">
               {icon}
             </span>
           </div>
