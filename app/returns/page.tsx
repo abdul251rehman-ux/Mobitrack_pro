@@ -72,18 +72,18 @@ const ITEM_CONDITIONS: ReturnItem["condition"][] = ["Good", "Damaged", "Defectiv
 
 const STATUS_COLORS: Record<ReturnStatus, string> = {
   Pending: "bg-amber-50 text-amber-700 border border-amber-200",
-  Approved: "bg-blue-50 text-blue-700 border border-blue-200",
+  Approved: "bg-indigo-50 text-indigo-700 border border-indigo-200",
   Completed: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  Rejected: "bg-red-50 text-red-700 border border-red-200",
+  Rejected: "bg-rose-50 text-rose-700 border border-rose-200",
   Exchanged: "bg-purple-50 text-purple-700 border border-purple-200",
 }
 
 const REASON_COLORS: Record<ReturnReason, string> = {
-  Defective: "bg-red-50 text-red-700 border border-red-200",
+  Defective: "bg-rose-50 text-rose-700 border border-rose-200",
   "Wrong Item": "bg-orange-50 text-orange-700 border border-orange-200",
   "Customer Changed Mind": "bg-slate-100 text-slate-600 border border-slate-200",
   "Not As Described": "bg-amber-50 text-amber-700 border border-amber-200",
-  "Duplicate Order": "bg-blue-50 text-blue-700 border border-blue-200",
+  "Duplicate Order": "bg-indigo-50 text-indigo-700 border border-indigo-200",
   "Damaged in Transit": "bg-rose-50 text-rose-700 border border-rose-200",
   "Warranty Claim": "bg-violet-50 text-violet-700 border border-violet-200",
   Other: "bg-slate-100 text-slate-500 border border-slate-200",
@@ -566,7 +566,7 @@ export default function ReturnsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     )
   }
@@ -581,7 +581,7 @@ export default function ReturnsPage() {
         iconBg="bg-amber-600"
         action={
           <Button
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs px-3"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 h-8 text-xs px-3"
             onClick={() => {
               resetForm()
               setShowCreate(true)
@@ -599,7 +599,7 @@ export default function ReturnsPage() {
           title="Total Returns"
           value={String(stats.total)}
           icon={RotateCcw}
-          iconBg="bg-blue-100"
+          iconBg="bg-indigo-100"
           subtext="All time returns"
         />
         <StatCard
@@ -620,7 +620,7 @@ export default function ReturnsPage() {
           title="Return Rate"
           value={`${stats.returnRate}%`}
           icon={Percent}
-          iconBg="bg-red-100"
+          iconBg="bg-rose-100"
           subtext={`${stats.total} of ${stats.totalSales} sales`}
         />
       </div>
@@ -685,7 +685,7 @@ export default function ReturnsPage() {
           </div>
 
           {/* Reset */}
-          <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs text-slate-600 hover:text-red-600 hover:border-red-300 self-end">
+          <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs text-slate-600 hover:text-rose-600 hover:border-rose-300 self-end">
             <RotateCcw className="w-3 h-3" />
             Reset
           </Button>
@@ -720,7 +720,7 @@ export default function ReturnsPage() {
               ) : (
                 filtered.map((ret) => (
                   <TableRow key={ret.id}>
-                    <TableCell className="px-3 py-2 text-xs font-semibold text-blue-600 whitespace-nowrap">{ret.returnNumber}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs font-semibold text-indigo-600 whitespace-nowrap">{ret.returnNumber}</TableCell>
                     <TableCell className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{formatDate(ret.date)}</TableCell>
                     <TableCell className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{ret.invoiceNumber}</TableCell>
                     <TableCell className="px-3 py-2">
@@ -745,7 +745,7 @@ export default function ReturnsPage() {
                     </TableCell>
                     <TableCell className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-0.5">
-                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50" onClick={() => setViewReturn(ret)} title="View">
+                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => setViewReturn(ret)} title="View">
                           <Eye className="w-3.5 h-3.5" />
                         </Button>
                         {ret.status === "Pending" && (
@@ -753,7 +753,7 @@ export default function ReturnsPage() {
                             <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => approveReturn(ret.id)} title="Approve">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={() => rejectReturn(ret.id)} title="Reject">
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => rejectReturn(ret.id)} title="Reject">
                               <XCircle className="w-3.5 h-3.5" />
                             </Button>
                           </>
@@ -852,7 +852,7 @@ export default function ReturnsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 w-6 p-0 text-slate-400 hover:text-red-500"
+                          className="h-6 w-6 p-0 text-slate-400 hover:text-rose-500"
                           onClick={() => removeItem(idx)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -972,7 +972,7 @@ export default function ReturnsPage() {
               </div>
             )}
             {newRefundType === "store_credit" && (
-              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs text-blue-700">
+              <div className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2.5 text-xs text-indigo-700">
                 Store Credit issued - no money leaves any account. Customer can use this credit on next purchase.
               </div>
             )}
@@ -1005,7 +1005,7 @@ export default function ReturnsPage() {
             <Button variant="outline" onClick={() => setShowCreate(false)}>
               Cancel
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleCreateReturn}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleCreateReturn}>
               <RotateCcw className="w-4 h-4 mr-2" />
               Submit Return
             </Button>
@@ -1117,7 +1117,7 @@ export default function ReturnsPage() {
                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                     : item.condition === "Damaged"
                                     ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                    : "bg-red-50 text-red-700 border border-red-200"
+                                    : "bg-rose-50 text-rose-700 border border-rose-200"
                                 }`}
                               >
                                 {item.condition}
@@ -1136,8 +1136,8 @@ export default function ReturnsPage() {
                   <div className="space-y-3">
                     {/* Created */}
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                        <Plus className="w-3 h-3 text-blue-600" />
+                      <div className="mt-0.5 w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                        <Plus className="w-3 h-3 text-indigo-600" />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-800">Return Created</p>
@@ -1148,8 +1148,8 @@ export default function ReturnsPage() {
                     {/* Status-specific steps */}
                     {(viewReturn.status === "Approved" || viewReturn.status === "Completed") && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                        <div className="mt-0.5 w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-3 h-3 text-indigo-600" />
                         </div>
                         <div>
                           <p className="text-sm font-medium text-slate-800">Approved</p>
@@ -1160,8 +1160,8 @@ export default function ReturnsPage() {
 
                     {viewReturn.status === "Rejected" && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 w-6 h-6 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                          <XCircle className="w-3 h-3 text-red-600" />
+                        <div className="mt-0.5 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                          <XCircle className="w-3 h-3 text-rose-600" />
                         </div>
                         <div>
                           <p className="text-sm font-medium text-slate-800">Rejected</p>
@@ -1231,7 +1231,7 @@ export default function ReturnsPage() {
                   <>
                     <Button
                       variant="outline"
-                      className="border-red-200 text-red-600 hover:bg-red-50"
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50"
                       onClick={() => {
                         rejectReturn(viewReturn.id)
                         setViewReturn(null)
@@ -1241,7 +1241,7 @@ export default function ReturnsPage() {
                       Reject
                     </Button>
                     <Button
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white"
                       onClick={() => {
                         approveReturn(viewReturn.id)
                         setViewReturn(null)

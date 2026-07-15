@@ -119,8 +119,8 @@ function PurchaseLockBtn({
       className={cn(
         "inline-flex items-center justify-center w-3.5 h-3.5 rounded border transition-all shrink-0",
         locked
-          ? "text-violet-600 bg-violet-100 border-violet-400 hover:bg-violet-200"
-          : "text-slate-400 bg-white border-slate-300 hover:border-violet-300 hover:text-violet-500 hover:bg-violet-50"
+          ? "text-indigo-600 bg-indigo-100 border-indigo-400 hover:bg-indigo-200"
+          : "text-slate-400 bg-white border-slate-300 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50"
       )}
     >
       {locked ? <Lock className="w-2 h-2" /> : <Unlock className="w-2 h-2" />}
@@ -136,7 +136,7 @@ function StepDot({ n, active, done, label }: { n: number; active: boolean; done:
       <div className={cn(
         "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all",
         done  ? "bg-white/30 border-white/50 text-white"
-              : active ? "bg-white border-white text-violet-600"
+              : active ? "bg-white border-white text-indigo-600"
               : "bg-white/10 border-white/20 text-white/40"
       )}>
         {done ? <Check className="w-3 h-3" /> : n}
@@ -152,7 +152,7 @@ function Field({ label, required, children, className }: { label: string; requir
   return (
     <div className={cn("space-y-0.5", className)}>
       <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
       </Label>
       {children}
     </div>
@@ -167,8 +167,8 @@ function Sel({ value, onChange, children, className, error }: { value: string; o
       value={value}
       onChange={e => onChange(e.target.value)}
       className={cn(
-        "w-full h-7 rounded-md border bg-white px-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-400 transition-colors appearance-none",
-        error ? "border-red-400 bg-red-50" : "border-slate-200 hover:border-slate-300",
+        "w-full h-7 rounded-md border bg-white px-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 transition-colors appearance-none",
+        error ? "border-rose-400 bg-rose-50" : "border-slate-200 hover:border-slate-300",
         className
       )}
     >
@@ -235,8 +235,8 @@ function CreatableCombobox({
   return (
     <div className={cn("relative", className)}>
       <div className={cn(
-        "flex items-center h-7 rounded-md border bg-white px-2 gap-1 transition-colors focus-within:ring-1 focus-within:ring-violet-400",
-        error ? "border-red-400 bg-red-50" : value ? "border-violet-300 bg-violet-50/30" : "border-slate-200",
+        "flex items-center h-7 rounded-md border bg-white px-2 gap-1 transition-colors focus-within:ring-1 focus-within:ring-indigo-400",
+        error ? "border-rose-400 bg-rose-50" : value ? "border-indigo-300 bg-indigo-50/30" : "border-slate-200",
       )}>
         <input
           ref={inputRef}
@@ -256,7 +256,7 @@ function CreatableCombobox({
           autoCapitalize="off"
         />
         {value && !open && (
-          <button type="button" onMouseDown={handleClear} className="text-slate-300 hover:text-red-400 shrink-0">
+          <button type="button" onMouseDown={handleClear} className="text-slate-300 hover:text-rose-400 shrink-0">
             <XIcon className="w-3 h-3" />
           </button>
         )}
@@ -282,11 +282,11 @@ function CreatableCombobox({
                 type="button"
                 onMouseDown={e => { e.preventDefault(); handleSelect(opt) }}
                 className={cn(
-                  "w-full text-left px-2.5 py-1.5 text-xs hover:bg-violet-50 flex items-center gap-2 transition-colors",
-                  opt === value && "bg-violet-50 text-violet-700 font-semibold"
+                  "w-full text-left px-2.5 py-1.5 text-xs hover:bg-indigo-50 flex items-center gap-2 transition-colors",
+                  opt === value && "bg-indigo-50 text-indigo-700 font-semibold"
                 )}
               >
-                {opt === value && <Check className="w-3 h-3 text-violet-600 shrink-0" />}
+                {opt === value && <Check className="w-3 h-3 text-indigo-600 shrink-0" />}
                 <span className="truncate">{opt}</span>
               </button>
             ))}
@@ -296,7 +296,7 @@ function CreatableCombobox({
               type="button"
               onMouseDown={e => { e.preventDefault(); handleAdd() }}
               disabled={adding}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-violet-600 font-semibold bg-violet-50 hover:bg-violet-100 border-t border-violet-100 transition-colors"
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-indigo-600 font-semibold bg-indigo-50 hover:bg-indigo-100 border-t border-indigo-100 transition-colors"
             >
               <Plus className="w-3 h-3" />
               {adding ? "Adding..." : `Add "${query.trim()}"`}
@@ -360,7 +360,7 @@ function QuickCatPopover({
         type="button"
         onClick={() => setOpen(true)}
         title={`Manage ${label}`}
-        className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold text-violet-500 hover:text-white hover:bg-violet-500 border border-violet-200 hover:border-violet-500 transition-all leading-none"
+        className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold text-indigo-500 hover:text-white hover:bg-indigo-500 border border-indigo-200 hover:border-indigo-500 transition-all leading-none"
       >
         <Plus className="w-2.5 h-2.5" />
         <span>Manage</span>
@@ -374,7 +374,7 @@ function QuickCatPopover({
       <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
       {/* Popover */}
       <div className="absolute z-50 left-0 top-5 w-52 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden">
-        <div className="flex items-center justify-between px-2.5 py-1.5 bg-violet-600">
+        <div className="flex items-center justify-between px-2.5 py-1.5 bg-indigo-600">
           <span className="text-[10px] font-bold text-white">Manage {label}</span>
           <div className="flex items-center gap-1">
             <a href={catalogHref} target="_blank" rel="noreferrer"
@@ -395,10 +395,10 @@ function QuickCatPopover({
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleAdd() }}
             placeholder={`Add ${label.toLowerCase()}...`}
-            className="flex-1 h-6 text-[11px] rounded border border-slate-200 px-2 focus:outline-none focus:ring-1 focus:ring-violet-400"
+            className="flex-1 h-6 text-[11px] rounded border border-slate-200 px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
           />
           <button type="button" onClick={handleAdd} disabled={!input.trim() || saving}
-            className="h-6 px-2 text-[10px] font-bold bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-40 transition-colors">
+            className="h-6 px-2 text-[10px] font-bold bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40 transition-colors">
             {saving ? "..." : "Add"}
           </button>
         </div>
@@ -417,7 +417,7 @@ function QuickCatPopover({
                     value={editInput}
                     onChange={e => setEditInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") handleEdit(item); if (e.key === "Escape") { setEditingVal(null); setEditInput("") } }}
-                    className="flex-1 h-5 text-[11px] rounded border border-violet-300 px-1.5 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                    className="flex-1 h-5 text-[11px] rounded border border-indigo-300 px-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   />
                   <button type="button" onClick={() => handleEdit(item)} disabled={saving}
                     className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 px-1">Save</button>
@@ -426,9 +426,9 @@ function QuickCatPopover({
                 </>
               ) : deletingVal === item ? (
                 <>
-                  <span className="flex-1 text-[11px] text-red-600 truncate">{item}</span>
+                  <span className="flex-1 text-[11px] text-rose-600 truncate">{item}</span>
                   <button type="button" onClick={() => handleDelete(item)} disabled={saving}
-                    className="text-[9px] font-bold text-red-600 hover:text-red-700 px-1">Delete?</button>
+                    className="text-[9px] font-bold text-rose-600 hover:text-rose-700 px-1">Delete?</button>
                   <button type="button" onClick={() => setDeletingVal(null)}
                     className="text-[9px] text-slate-400 hover:text-slate-600 px-0.5">No</button>
                 </>
@@ -437,11 +437,11 @@ function QuickCatPopover({
                   <span className="flex-1 text-[11px] text-slate-700 truncate">{item}</span>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button type="button" onClick={() => { setEditingVal(item); setEditInput(item) }}
-                      className="p-0.5 rounded hover:bg-blue-50 text-slate-300 hover:text-blue-500 transition-colors" title="Edit">
+                      className="p-0.5 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-500 transition-colors" title="Edit">
                       <Pencil className="w-2.5 h-2.5" />
                     </button>
                     <button type="button" onClick={() => setDeletingVal(item)}
-                      className="p-0.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors" title="Delete">
+                      className="p-0.5 rounded hover:bg-rose-50 text-slate-300 hover:text-rose-500 transition-colors" title="Delete">
                       <Trash2 className="w-2.5 h-2.5" />
                     </button>
                   </div>
@@ -515,11 +515,11 @@ function PhoneCard({
   return (
     <div className={cn(
       "rounded-lg border bg-white shadow-sm transition-all",
-      row.rowError ? "border-red-300 bg-red-50/20" : "border-slate-200 hover:border-violet-300"
+      row.rowError ? "border-rose-300 bg-rose-50/20" : "border-slate-200 hover:border-indigo-300"
     )}>
       {/* Card header */}
       <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-slate-100 bg-slate-50/60 rounded-t-lg">
-        <Smartphone className="w-3 h-3 text-violet-500 shrink-0" />
+        <Smartphone className="w-3 h-3 text-indigo-500 shrink-0" />
         <span className="text-[11px] font-bold text-slate-600">
           #{idx + 1}
           {row.brand && row.model && <span className="font-normal text-slate-400 ml-1">{row.brand} {row.model}</span>}
@@ -530,10 +530,10 @@ function PhoneCard({
           </span>
         )}
         <div className="flex items-center gap-0 ml-1">
-          <button onClick={onDuplicate} title="Duplicate" className="p-1 text-slate-300 hover:text-violet-500 transition-colors">
+          <button onClick={onDuplicate} title="Duplicate" className="p-1 text-slate-300 hover:text-indigo-500 transition-colors">
             <Copy className="w-3 h-3" />
           </button>
-          <button onClick={onRemove} className="p-1 text-slate-300 hover:text-red-500 transition-colors">
+          <button onClick={onRemove} className="p-1 text-slate-300 hover:text-rose-500 transition-colors">
             <XIcon className="w-3 h-3" />
           </button>
         </div>
@@ -547,7 +547,7 @@ function PhoneCard({
             <div className="flex items-center gap-1 relative">
               <PurchaseLockBtn locked={locks.brand} onToggle={() => onToggleLock("brand")} label="Brand" />
               <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                Brand<span className="text-red-500 ml-0.5">*</span>
+                Brand<span className="text-rose-500 ml-0.5">*</span>
               </Label>
               <QuickCatPopover
                 label="Brands" items={brands}
@@ -577,7 +577,7 @@ function PhoneCard({
           <div className="space-y-0.5">
             <div className="flex items-center gap-1 relative">
               <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                Model<span className="text-red-500 ml-0.5">*</span>
+                Model<span className="text-rose-500 ml-0.5">*</span>
               </Label>
               {row.brand ? (
                 <QuickCatPopover
@@ -672,15 +672,15 @@ function PhoneCard({
           <div className="space-y-0.5">
             <div className="flex items-center gap-1">
               <PurchaseLockBtn locked={locks.buyPrice} onToggle={() => onToggleLock("buyPrice")} label="Buy price" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Buy Rs<span className="text-red-500 ml-0.5">*</span></Label>
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Buy Rs<span className="text-rose-500 ml-0.5">*</span></Label>
             </div>
             <input
               type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0"
               value={row.buyPrice}
               onChange={e => onChange("buyPrice", e.target.value)}
               className={cn(
-                "w-full h-7 rounded-md border px-2 text-xs font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-violet-400",
-                !!row.rowError && (!row.buyPrice || parseFloat(row.buyPrice) <= 0) ? "border-red-400 bg-red-50" : "border-slate-200"
+                "w-full h-7 rounded-md border px-2 text-xs font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                !!row.rowError && (!row.buyPrice || parseFloat(row.buyPrice) <= 0) ? "border-rose-400 bg-rose-50" : "border-slate-200"
               )}
             />
           </div>
@@ -693,7 +693,7 @@ function PhoneCard({
               type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0"
               value={row.sellPrice}
               onChange={e => onChange("sellPrice", e.target.value)}
-              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
             />
           </div>
           <Field label="Qty">
@@ -701,7 +701,7 @@ function PhoneCard({
               <input
                 type="number" onWheel={e => e.currentTarget.blur()} min={1} value={row.qty}
                 onChange={e => onChange("qty", e.target.value)}
-                className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
               />
             </div>
           </Field>
@@ -712,13 +712,13 @@ function PhoneCard({
               <div className="relative w-7 h-7">
                 <img src={row.imagePreview} alt="" className="w-7 h-7 rounded object-cover border border-slate-200" />
                 <button onClick={() => onChange("imagePreview", null)}
-                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full flex items-center justify-center">
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white rounded-full flex items-center justify-center">
                   <XIcon className="w-2 h-2" />
                 </button>
               </div>
             ) : (
               <button onClick={() => imgRef.current?.click()}
-                className="h-7 w-full rounded-md border border-dashed border-slate-200 flex items-center justify-center text-slate-300 hover:border-violet-400 hover:text-violet-400 transition-colors">
+                className="h-7 w-full rounded-md border border-dashed border-slate-200 flex items-center justify-center text-slate-300 hover:border-indigo-400 hover:text-indigo-400 transition-colors">
                 <ImageIcon className="w-3 h-3" />
               </button>
             )}
@@ -727,7 +727,7 @@ function PhoneCard({
 
         {/* Row error */}
         {row.rowError && (
-          <div className="flex items-center gap-1 text-[10px] text-red-600 bg-red-50 rounded px-2 py-1 border border-red-200">
+          <div className="flex items-center gap-1 text-[10px] text-rose-600 bg-rose-50 rounded px-2 py-1 border border-rose-200">
             <AlertCircle className="w-3 h-3 shrink-0" />
             {row.rowError}
           </div>
@@ -740,7 +740,7 @@ function PhoneCard({
             onClick={() => onChange("expanded", !row.expanded)}
             className="w-full flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left rounded-t-md"
           >
-            <Fingerprint className="w-3 h-3 text-violet-400 shrink-0" />
+            <Fingerprint className="w-3 h-3 text-indigo-400 shrink-0" />
             <span className="text-[11px] font-semibold text-slate-600 flex-1">
               IMEI - Color{row.deviceType === "iphone" ? " - Battery" : ""}
             </span>
@@ -764,8 +764,8 @@ function PhoneCard({
                   <div key={ui} className={cn("px-2.5 py-1.5 space-y-1", isSoldLocked && "opacity-60")}>
                     {isSoldLocked && (
                       <div className="flex items-center gap-1 mb-0.5">
-                        <Lock className="w-2.5 h-2.5 text-red-500" />
-                        <span className="text-[9px] font-bold text-red-500 uppercase tracking-wide">Sold - cannot edit</span>
+                        <Lock className="w-2.5 h-2.5 text-rose-500" />
+                        <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wide">Sold - cannot edit</span>
                       </div>
                     )}
                     <div className="flex items-center gap-1.5">
@@ -784,14 +784,14 @@ function PhoneCard({
                           className={cn(
                             "w-full h-7 rounded-md border px-2 pr-10 text-xs font-mono bg-white focus:outline-none focus:ring-1",
                             isSoldLocked ? "border-slate-200 bg-slate-50 cursor-not-allowed text-slate-500"
-                            : isDuplicate ? "border-red-400 bg-red-50 focus:ring-red-400"
+                            : isDuplicate ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
                             : isOk ? "border-emerald-400 bg-emerald-50 focus:ring-emerald-400"
                             : unit.imei.length > 0 ? "border-amber-300 bg-amber-50/40 focus:ring-amber-300"
-                            : "border-slate-200 focus:ring-violet-400"
+                            : "border-slate-200 focus:ring-indigo-400"
                           )}
                         />
                         {isChecking && (
-                          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-violet-400 border-t-transparent rounded-full animate-spin pointer-events-none" />
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin pointer-events-none" />
                         )}
                         {!isChecking && unit.imei.length > 0 && unit.imei.length < 15 && (
                           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] text-amber-500 font-bold pointer-events-none">
@@ -802,7 +802,7 @@ function PhoneCard({
                           <Check className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-500 pointer-events-none" />
                         )}
                         {!isChecking && isDuplicate && (
-                          <AlertCircle className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-red-500 pointer-events-none" />
+                          <AlertCircle className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-rose-500 pointer-events-none" />
                         )}
                       </div>
                       {/* Color per unit */}
@@ -821,13 +821,13 @@ function PhoneCard({
                             readOnly={isSoldLocked}
                             onChange={isSoldLocked ? undefined : e => onUnit(ui, "batteryHealth", e.target.value)}
                             placeholder="%"
-                            className={cn("w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400", isSoldLocked && "bg-slate-50 cursor-not-allowed")}
+                            className={cn("w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", isSoldLocked && "bg-slate-50 cursor-not-allowed")}
                           />
                         </div>
                       )}
                     </div>
                     {isDuplicate && (
-                      <p className="text-[10px] text-red-600 font-semibold pl-5">
+                      <p className="text-[10px] text-rose-600 font-semibold pl-5">
                         {unit.imeiError === "duplicate_local"
                           ? "Already entered in this purchase"
                           : "This IMEI is already in stock - sold or returned it first"}
@@ -902,7 +902,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
         <DialogTitle className="sr-only">Review Purchase Order</DialogTitle>
 
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-5 pt-5 pb-4 rounded-t-2xl pr-12">
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-5 pt-5 pb-4 rounded-t-2xl pr-12">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
               <ShoppingCart className="w-5 h-5 text-white" />
@@ -927,8 +927,8 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
             <div className="divide-y divide-slate-100 max-h-40 overflow-y-auto">
               {mobileRows.map(r => (
                 <div key={r.uid} className="px-3 py-2.5 flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                    <Smartphone className="w-3.5 h-3.5 text-blue-600" />
+                  <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{r.brand} {r.model}</p>
@@ -987,9 +987,9 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                 <span className="text-slate-600">+ {formatCurrency(taxNum)}</span>
               </div>
             )}
-            <div className="flex justify-between px-3 py-3 bg-blue-50">
-              <span className="text-sm font-bold text-blue-700">Grand Total</span>
-              <span className="text-lg font-extrabold text-blue-700 tabular-nums">{formatCurrency(grandTotal)}</span>
+            <div className="flex justify-between px-3 py-3 bg-indigo-50">
+              <span className="text-sm font-bold text-indigo-700">Grand Total</span>
+              <span className="text-lg font-extrabold text-indigo-700 tabular-nums">{formatCurrency(grandTotal)}</span>
             </div>
           </div>
 
@@ -1018,8 +1018,8 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                 const sel = !!entry
                 const bad = insufficientMap[acc.id]
                 const type = acc.type ?? "cash"
-                const ring = { cash: sel ? "border-emerald-400 bg-emerald-50" : "border-slate-200", bank: sel ? "border-blue-400 bg-blue-50" : "border-slate-200", mobile_wallet: sel ? "border-violet-400 bg-violet-50" : "border-slate-200" }
-                const iconBg = { cash: sel ? "bg-emerald-200 text-emerald-700" : "bg-slate-100 text-slate-500", bank: sel ? "bg-blue-200 text-blue-700" : "bg-slate-100 text-slate-500", mobile_wallet: sel ? "bg-violet-200 text-violet-700" : "bg-slate-100 text-slate-500" }
+                const ring = { cash: sel ? "border-emerald-400 bg-emerald-50" : "border-slate-200", bank: sel ? "border-indigo-400 bg-indigo-50" : "border-slate-200", mobile_wallet: sel ? "border-indigo-400 bg-indigo-50" : "border-slate-200" }
+                const iconBg = { cash: sel ? "bg-emerald-200 text-emerald-700" : "bg-slate-100 text-slate-500", bank: sel ? "bg-indigo-200 text-indigo-700" : "bg-slate-100 text-slate-500", mobile_wallet: sel ? "bg-indigo-200 text-indigo-700" : "bg-slate-100 text-slate-500" }
                 return (
                   <div key={acc.id} className={cn("rounded-xl border transition-all", ring[type as keyof typeof ring] ?? ring.cash)}>
                     <button type="button" onClick={() => toggleAccount(acc.id)} className="w-full p-3 flex items-center gap-3 text-left">
@@ -1030,7 +1030,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                         <p className="text-xs font-bold text-slate-800 truncate">{acc.name}</p>
                         <p className="text-[11px] text-slate-500">Balance: <span className="font-semibold text-slate-700 tabular-nums">{formatCurrency(acc.currentBalance)}</span></p>
                       </div>
-                      <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors", sel ? "bg-blue-600 border-blue-600" : "border-slate-300")}>
+                      <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors", sel ? "bg-indigo-600 border-indigo-600" : "border-slate-300")}>
                         {sel && <Check className="w-3 h-3 text-white" />}
                       </div>
                     </button>
@@ -1042,14 +1042,14 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                               placeholder="Amount paid (Rs)"
                               value={entry?.amount ?? ""}
                               onChange={e => setAmount(acc.id, e.target.value)}
-                              className={cn("h-9 text-sm", bad && "border-red-400")}
+                              className={cn("h-9 text-sm", bad && "border-rose-400")}
                               autoFocus
                             />
-                            {bad && <p className="text-[10px] text-red-500 mt-0.5">Exceeds account balance of {formatCurrency(acc.currentBalance)}</p>}
+                            {bad && <p className="text-[10px] text-rose-500 mt-0.5">Exceeds account balance of {formatCurrency(acc.currentBalance)}</p>}
                           </div>
                           <button type="button"
                             onClick={() => setAmount(acc.id, String(Math.min(acc.currentBalance, Math.max(0, grandTotal - (totalPaid - (parseFloat(entry?.amount ?? "0") || 0))))))}
-                            className="self-start text-[10px] text-blue-600 font-semibold border border-blue-200 rounded-lg px-2.5 py-2.5 hover:bg-blue-50 whitespace-nowrap">
+                            className="self-start text-[10px] text-indigo-600 font-semibold border border-indigo-200 rounded-lg px-2.5 py-2.5 hover:bg-indigo-50 whitespace-nowrap">
                             Fill
                           </button>
                         </div>
@@ -1067,9 +1067,9 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                     <span className="font-bold text-slate-800 tabular-nums">{formatCurrency(totalPaid)}</span>
                   </div>
                   {overpaid > 0 ? (
-                    <div className="flex justify-between px-3 py-2 text-xs bg-blue-50">
-                      <span className="font-bold text-blue-700">Advance / Overpaid</span>
-                      <span className="font-extrabold text-blue-700 tabular-nums">+ {formatCurrency(overpaid)}</span>
+                    <div className="flex justify-between px-3 py-2 text-xs bg-indigo-50">
+                      <span className="font-bold text-indigo-700">Advance / Overpaid</span>
+                      <span className="font-extrabold text-indigo-700 tabular-nums">+ {formatCurrency(overpaid)}</span>
                     </div>
                   ) : balanceDue > 0 ? (
                     <div className="flex justify-between px-3 py-2 text-xs bg-amber-50">
@@ -1109,7 +1109,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
               confirmingRef.current = true
               onConfirm({ shipping: shippingNum, tax: taxNum, splits, dueDate: "", notes })
             }}
-            className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm gap-2 shadow-md">
+            className="w-full h-12 bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white font-bold text-sm gap-2 shadow-md">
             <ShoppingCart className="w-4 h-4" />
             {submitting ? "Recording..." : `Confirm Purchase - ${formatCurrency(grandTotal)}`}
           </Button>
@@ -1949,7 +1949,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
       <SheetContent side="right" className="w-full max-w-none md:max-w-[680px] p-0 flex flex-col">
 
         {/* â"€â"€ Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-        <div className="bg-gradient-to-r from-violet-600 to-indigo-700 px-4 pt-3 pb-3 shrink-0">
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 pt-3 pb-3 shrink-0">
           <div className="flex items-center gap-2.5 pr-8">
             <ShoppingBag className="w-4 h-4 text-white/80 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -1978,7 +1978,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
         <div className="flex-1 overflow-y-auto">
           {dataLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600" />
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
               <p className="text-xs text-slate-400">Loading...</p>
             </div>
           ) : (
@@ -1986,7 +1986,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
 
               {/* â•â• Step 1: Supplier â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               <section>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Supplier <span className="text-red-400">*</span></p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Supplier <span className="text-rose-400">*</span></p>
                 <div className="relative">
                   <Building2 className={cn("absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none z-10", selectedSupplier ? "text-emerald-500" : "text-amber-500")} />
                   <input
@@ -1995,7 +1995,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                     onChange={e => { setSupplierSearch(e.target.value); setDropOpen(true); if (!e.target.value) setSelectedSupplierId("") }}
                     onFocus={() => setDropOpen(true)}
                     className={cn(
-                      "w-full h-8 rounded-lg border pl-8 pr-8 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400 transition-colors",
+                      "w-full h-8 rounded-lg border pl-8 pr-8 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 transition-colors",
                       selectedSupplier ? "border-emerald-400 bg-emerald-50/40" : "border-amber-400 bg-amber-50 placeholder:text-amber-500"
                     )}
                   />
@@ -2003,7 +2003,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                     <>
                       <Check className="absolute right-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-500 pointer-events-none" />
                       <button onClick={() => { setSelectedSupplierId(""); setSupplierSearch("") }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400">
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-rose-400">
                         <XIcon className="w-3.5 h-3.5" />
                       </button>
                     </>
@@ -2017,18 +2017,18 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                             <div className="px-3 py-2 text-xs text-slate-400 text-center">No suppliers found</div>
                           ) : filteredSuppliers.map(s => (
                             <button key={s.id} type="button" disabled={s.status === "Inactive"}
-                              className={cn("w-full text-left px-3 py-2 text-xs hover:bg-violet-50 flex items-center gap-2 transition-colors", s.id === selectedSupplierId ? "bg-violet-50 text-violet-700 font-semibold" : "text-slate-700", s.status === "Inactive" && "opacity-40 cursor-not-allowed")}
+                              className={cn("w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-center gap-2 transition-colors", s.id === selectedSupplierId ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-700", s.status === "Inactive" && "opacity-40 cursor-not-allowed")}
                               onClick={() => { setSelectedSupplierId(s.id); setSupplierSearch(s.companyName); setDropOpen(false) }}>
                               <span className="truncate">{s.companyName}</span>
                               {s.city && <span className="text-slate-400 ml-auto shrink-0 text-[10px]">{s.city}</span>}
-                              {s.id === selectedSupplierId && <Check className="w-3 h-3 text-violet-600 shrink-0" />}
+                              {s.id === selectedSupplierId && <Check className="w-3 h-3 text-indigo-600 shrink-0" />}
                             </button>
                           ))}
                         </div>
                         {/* Quick-add new supplier from dropdown */}
                         <button type="button"
                           onClick={() => { setDropOpen(false); setShowQuickSupplier(true); setQuickSupplierName(supplierSearch) }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-violet-600 font-semibold bg-violet-50 hover:bg-violet-100 border-t border-violet-100 transition-colors">
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-indigo-600 font-semibold bg-indigo-50 hover:bg-indigo-100 border-t border-indigo-100 transition-colors">
                           <Plus className="w-3 h-3" />
                           {supplierSearch.trim() ? `Add "${supplierSearch.trim()}" as supplier` : "Add new supplier"}
                         </button>
@@ -2040,8 +2040,8 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
 
                 {/* Quick-add supplier form */}
                 {showQuickSupplier && (
-                  <div className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50/50 p-2.5 space-y-2">
-                    <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">New Supplier</p>
+                  <div className="mt-1.5 rounded-lg border border-indigo-200 bg-indigo-50/50 p-2.5 space-y-2">
+                    <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide">New Supplier</p>
                     <div className="grid grid-cols-3 gap-1.5">
                       <div className="col-span-3">
                         <input
@@ -2049,20 +2049,20 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                           value={quickSupplierName}
                           onChange={e => setQuickSupplierName(e.target.value)}
                           placeholder="Company / Shop name *"
-                          className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                          className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                         />
                       </div>
                       <input
                         value={quickSupplierPhone}
                         onChange={e => setQuickSupplierPhone(e.target.value)}
                         placeholder="Phone"
-                        className="h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                        className="h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                       />
                       <input
                         value={quickSupplierCity}
                         onChange={e => setQuickSupplierCity(e.target.value)}
                         placeholder="City"
-                        className="h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                        className="h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                       />
                       <div className="col-span-3">
                         <div className="relative">
@@ -2073,14 +2073,14 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                             value={quickSupplierBalance}
                             onChange={e => setQuickSupplierBalance(e.target.value)}
                             placeholder="اس سپلائر کا پرانا بقایا (Rs)"
-                            className="w-full h-7 rounded-md border border-slate-200 pl-7 pr-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                            className="w-full h-7 rounded-md border border-slate-200 pl-7 pr-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                           />
                         </div>
                       </div>
                     </div>
                     <div className="flex gap-1.5">
                       <button onClick={handleQuickAddSupplier} disabled={!quickSupplierName.trim() || savingSupplier}
-                        className="flex-1 h-7 rounded-md bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors">
+                        className="flex-1 h-7 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors">
                         {savingSupplier ? "Saving..." : "Save Supplier"}
                       </button>
                       <button onClick={() => { setShowQuickSupplier(false); setQuickSupplierName(""); setQuickSupplierPhone(""); setQuickSupplierCity(""); setQuickSupplierBalance("") }}
@@ -2099,33 +2099,33 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                     Phones
                     <span className="font-normal normal-case ml-1 text-slate-300">(optional)</span>
                   </p>
-                  {mobileRows.length > 0 && <span className="text-[10px] text-violet-600 font-bold">{mobileRows.length}</span>}
+                  {mobileRows.length > 0 && <span className="text-[10px] text-indigo-600 font-bold">{mobileRows.length}</span>}
 
                   {/* Add custom category */}
                   <div className="ml-auto">
                     {!showAddCategory ? (
                       <button onClick={() => setShowAddCategory(true)}
-                        className="text-[10px] text-slate-300 hover:text-violet-500 flex items-center gap-0.5 transition-colors">
+                        className="text-[10px] text-slate-300 hover:text-indigo-500 flex items-center gap-0.5 transition-colors">
                         <Settings2 className="w-3 h-3" /> + category
                       </button>
                     ) : (
                       <div className="flex items-center gap-1 flex-wrap justify-end">
                         {/* Device type selector */}
-                        <div className="flex rounded-md border border-violet-200 overflow-hidden text-[10px] font-semibold">
+                        <div className="flex rounded-md border border-indigo-200 overflow-hidden text-[10px] font-semibold">
                           <button
                             onClick={() => setAddCategoryTarget("iphone")}
-                            className={cn("px-2 py-0.5 transition-colors", addCategoryTarget === "iphone" ? "bg-violet-600 text-white" : "bg-white text-slate-500 hover:bg-violet-50")}>
+                            className={cn("px-2 py-0.5 transition-colors", addCategoryTarget === "iphone" ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-indigo-50")}>
                             iPhone
                           </button>
                           <button
                             onClick={() => setAddCategoryTarget("android")}
-                            className={cn("px-2 py-0.5 transition-colors", addCategoryTarget === "android" ? "bg-violet-600 text-white" : "bg-white text-slate-500 hover:bg-violet-50")}>
+                            className={cn("px-2 py-0.5 transition-colors", addCategoryTarget === "android" ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-indigo-50")}>
                             Android
                           </button>
                         </div>
                         <input autoFocus value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)}
                           placeholder="e.g. CPO" maxLength={20}
-                          className="border border-violet-300 rounded px-1.5 py-0.5 text-xs focus:outline-none w-20"
+                          className="border border-indigo-300 rounded px-1.5 py-0.5 text-xs focus:outline-none w-20"
                           onKeyDown={e => {
                             if (e.key === "Enter" && newCategoryInput.trim()) {
                               const v = newCategoryInput.trim()
@@ -2142,7 +2142,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                             else setExtraAndroidCategories(p => Array.from(new Set([...p, v])))
                           }
                           setNewCategoryInput(""); setShowAddCategory(false)
-                        }} className="px-1.5 py-0.5 bg-violet-600 text-white text-[10px] rounded hover:bg-violet-700">+</button>
+                        }} className="px-1.5 py-0.5 bg-indigo-600 text-white text-[10px] rounded hover:bg-indigo-700">+</button>
                         <button onClick={() => { setShowAddCategory(false); setNewCategoryInput("") }} className="text-slate-400 text-xs">âœ•</button>
                       </div>
                     )}
@@ -2153,15 +2153,15 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                 {(extraIphoneCategories.length > 0 || extraAndroidCategories.length > 0) && (
                   <div className="flex flex-wrap gap-1 mb-2">
                     {extraIphoneCategories.map(c => (
-                      <span key={`ip-${c}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-[9px] rounded-full">
+                      <span key={`ip-${c}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] rounded-full">
                         iPhone: {c}
-                        <button onClick={() => setExtraIphoneCategories(p => p.filter(x => x !== c))} className="text-blue-300 hover:text-red-500">âœ•</button>
+                        <button onClick={() => setExtraIphoneCategories(p => p.filter(x => x !== c))} className="text-indigo-300 hover:text-rose-500">âœ•</button>
                       </span>
                     ))}
                     {extraAndroidCategories.map(c => (
                       <span key={`an-${c}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] rounded-full">
                         Android: {c}
-                        <button onClick={() => setExtraAndroidCategories(p => p.filter(x => x !== c))} className="text-emerald-300 hover:text-red-500">âœ•</button>
+                        <button onClick={() => setExtraAndroidCategories(p => p.filter(x => x !== c))} className="text-emerald-300 hover:text-rose-500">âœ•</button>
                       </span>
                     ))}
                   </div>
@@ -2169,7 +2169,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
 
                 {mobileRows.length === 0 ? (
                   <button onClick={addRow}
-                    className="w-full flex flex-col items-center justify-center gap-1.5 py-5 border border-dashed border-slate-200 text-slate-400 text-xs rounded-lg hover:border-violet-300 hover:text-violet-500 hover:bg-violet-50/30 transition-all">
+                    className="w-full flex flex-col items-center justify-center gap-1.5 py-5 border border-dashed border-slate-200 text-slate-400 text-xs rounded-lg hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all">
                     <Smartphone className="w-5 h-5 opacity-60" />
                     <span className="font-medium">Add phones to this order</span>
                     <span className="text-[10px] text-slate-500">{language === "ur" ? "اختیاری — صرف اکسیسری خریدنے پر چھوڑ دیں" : "Optional - skip if purchasing accessories only"}</span>
@@ -2220,7 +2220,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                       ))}
                     </div>
                     <button onClick={addRow}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-violet-200 text-violet-500 text-xs font-medium rounded-lg hover:border-violet-400 hover:bg-violet-50/50 transition-all">
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-indigo-200 text-indigo-500 text-xs font-medium rounded-lg hover:border-indigo-400 hover:bg-indigo-50/50 transition-all">
                       <Plus className="w-3.5 h-3.5" />
                       Add Another Phone
                     </button>
@@ -2248,7 +2248,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                     <div className="relative mb-1.5">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                       <input placeholder="Search accessories..." value={accessorySearch} onChange={e => setAccessorySearch(e.target.value)}
-                        className="w-full h-7 rounded-md border border-slate-200 pl-7 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400" />
+                        className="w-full h-7 rounded-md border border-slate-200 pl-7 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                     </div>
                     <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
                       {filteredAccessories.map(a => {
@@ -2278,7 +2278,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <Headphones className="w-3 h-3 text-emerald-500 shrink-0" />
                           <p className="text-[11px] font-semibold text-slate-800 truncate flex-1">{item.name}</p>
-                          <button onClick={() => setAccessoryItems(p => p.filter(a => a.uid !== item.uid))} className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+                          <button onClick={() => setAccessoryItems(p => p.filter(a => a.uid !== item.uid))} className="text-slate-300 hover:text-rose-500 transition-colors shrink-0">
                             <XIcon className="w-3 h-3" />
                           </button>
                         </div>
@@ -2286,17 +2286,17 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                           <Field label="Buy Rs *">
                             <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={item.buyPrice}
                               onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, buyPrice: e.target.value } : a))}
-                              className={cn("w-full h-7 rounded-md border px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400", !item.buyPrice ? "border-amber-300" : "border-slate-200")} />
+                              className={cn("w-full h-7 rounded-md border px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", !item.buyPrice ? "border-amber-300" : "border-slate-200")} />
                           </Field>
                           <Field label="Sell Rs">
                             <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={item.sellPrice}
                               onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, sellPrice: e.target.value } : a))}
-                              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400" />
+                              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                           </Field>
                           <Field label="Qty">
                             <input type="number" onWheel={e => e.currentTarget.blur()} min={1} value={item.qty}
                               onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, qty: e.target.value } : a))}
-                              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400" />
+                              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                           </Field>
                         </div>
                       </div>
@@ -2317,7 +2317,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
             className={cn(
               "w-full h-9 font-bold text-sm gap-2 transition-all",
               selectedSupplierId && totalItems > 0
-                ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-md"
+                ? "bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white shadow-md"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed"
             )}
           >
