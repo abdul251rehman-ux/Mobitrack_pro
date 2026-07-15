@@ -1,5 +1,6 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useRef, useEffect } from "react"
 import Image from "next/image"
 import {
@@ -66,14 +67,14 @@ type AccessoryFormOutput = z.output<typeof accessorySchema>
 const stockDotColor: Record<string, string> = {
   "In Stock": "bg-emerald-500",
   "Low Stock": "bg-amber-500",
-  "Out of Stock": "bg-red-500",
+  "Out of Stock": "bg-rose-500",
 }
 
 // ─── Category Config ──────────────────────────────────────────────────────────
 
 const categoryConfig: Record<string, { icon: React.ElementType; iconBg: string; badge: string; headerGradient: string }> = {
   "Headphones/Earbuds": { icon: Headphones,      iconBg: "bg-violet-100 text-violet-600", badge: "bg-violet-50 text-violet-700 border-violet-200", headerGradient: "from-violet-500 to-purple-600"  },
-  "Speakers":           { icon: Volume2,          iconBg: "bg-blue-100 text-blue-600",    badge: "bg-blue-50 text-blue-700 border-blue-200",       headerGradient: "from-blue-500 to-blue-700"       },
+  "Speakers":           { icon: Volume2,          iconBg: "bg-indigo-100 text-indigo-600",    badge: "bg-indigo-50 text-indigo-700 border-indigo-200",       headerGradient: "from-indigo-500 to-indigo-700"       },
   "Chargers & Cables":  { icon: Zap,              iconBg: "bg-amber-100 text-amber-600",  badge: "bg-amber-50 text-amber-700 border-amber-200",    headerGradient: "from-amber-500 to-orange-500"    },
   "Cases & Covers":     { icon: Shield,           iconBg: "bg-green-100 text-green-600",  badge: "bg-green-50 text-green-700 border-green-200",    headerGradient: "from-green-500 to-emerald-600"   },
   "Screen Protectors":  { icon: Smartphone,       iconBg: "bg-cyan-100 text-cyan-600",    badge: "bg-cyan-50 text-cyan-700 border-cyan-200",       headerGradient: "from-cyan-500 to-teal-600"       },
@@ -86,15 +87,15 @@ const categoryConfig: Record<string, { icon: React.ElementType; iconBg: string; 
 
 function getMarginStyle(m: number) {
   if (m >= 40) return { badge: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: "text-emerald-500" }
-  if (m >= 25) return { badge: "bg-blue-50 text-blue-700 border-blue-200",         icon: "text-blue-500" }
+  if (m >= 25) return { badge: "bg-indigo-50 text-indigo-700 border-indigo-200",         icon: "text-indigo-500" }
   if (m >= 15) return { badge: "bg-amber-50 text-amber-700 border-amber-200",      icon: "text-amber-500" }
-  return              { badge: "bg-red-50 text-red-700 border-red-200",             icon: "text-red-500" }
+  return              { badge: "bg-rose-50 text-rose-700 border-rose-200",             icon: "text-rose-500" }
 }
 
 const stockPillStyle: Record<string, string> = {
   "In Stock":    "bg-emerald-50 text-emerald-700 border-emerald-200",
   "Low Stock":   "bg-amber-50 text-amber-700 border-amber-200",
-  "Out of Stock":"bg-red-50 text-red-700 border-red-200",
+  "Out of Stock":"bg-rose-50 text-rose-700 border-rose-200",
 }
 
 // ─── Accessory Card ───────────────────────────────────────────────────────────
@@ -213,7 +214,7 @@ function AccessoryCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              className="h-6 w-6 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
               onClick={() => onEdit(accessory)}
             >
               <Pencil className="w-3 h-3" />
@@ -221,7 +222,7 @@ function AccessoryCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              className="h-6 w-6 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
               onClick={() => onDelete(accessory)}
             >
               <Trash2 className="w-3 h-3" />
@@ -290,7 +291,7 @@ function TagInput({
               <button
                 type="button"
                 onClick={() => removeTag(tag)}
-                className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
+                className="text-slate-400 hover:text-rose-500 transition-colors ml-0.5"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -404,7 +405,7 @@ function AccessoryFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-visible p-0 gap-0" style={{ overflowY: "auto" }}>
+      <DialogContent className="w-[96vw] max-w-2xl max-h-[90vh] overflow-y-visible p-0 gap-0" style={{ overflowY: "auto" }}>
         <DialogTitle className="sr-only">
           {isEditing ? "Edit Accessory" : "Add New Accessory"}
         </DialogTitle>
@@ -413,7 +414,7 @@ function AccessoryFormDialog({
         <div className={cn(
           "px-5 pt-5 pb-4 pr-12 rounded-t-2xl",
           isEditing
-            ? "bg-linear-to-r from-blue-500 to-indigo-600"
+            ? "bg-linear-to-r from-indigo-500 to-indigo-600"
             : "bg-linear-to-r from-emerald-500 to-teal-600"
         )}>
           <div className="flex items-center gap-3">
@@ -438,23 +439,23 @@ function AccessoryFormDialog({
 
           {/* ── Section 1: Product Info ── */}
           <div className="rounded-xl border border-slate-200 overflow-visible">
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-100">
-              <Tag className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Product Info</span>
+            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+              <Tag className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Product Info</span>
             </div>
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="name" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Type className="w-3 h-3" /> Name <span className="text-red-500">*</span>
+                    <Type className="w-3 h-3" /> Name <span className="text-rose-500">*</span>
                   </Label>
                   <Input id="name" placeholder="e.g. Galaxy Buds2 Pro" {...register("name")}
-                    className={cn("bg-slate-50 h-9 text-sm", errors.name && "border-red-400")} />
-                  {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+                    className={cn("bg-slate-50 h-9 text-sm", errors.name && "border-rose-400")} />
+                  {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="brand" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Tag className="w-3 h-3" /> Brand <span className="text-red-500">*</span>
+                    <Tag className="w-3 h-3" /> Brand <span className="text-rose-500">*</span>
                   </Label>
                   {(() => {
                     const allBrands = Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort()
@@ -474,11 +475,11 @@ function AccessoryFormDialog({
                   <button
                     type="button"
                     onClick={() => { setShowNewBrand(true); setNewBrandName("") }}
-                    className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                    className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                   >
                     <Plus className="w-3 h-3" /> Add New Brand
                   </button>
-                  {errors.brand && <p className="text-xs text-red-500">{errors.brand.message}</p>}
+                  {errors.brand && <p className="text-xs text-rose-500">{errors.brand.message}</p>}
 
                   {/* Quick Add Brand Modal */}
                   <Dialog open={showNewBrand} onOpenChange={setShowNewBrand}>
@@ -488,7 +489,7 @@ function AccessoryFormDialog({
                       </DialogHeader>
                       <div className="space-y-3 py-1">
                         <div className="space-y-1">
-                          <Label className="text-xs">Brand Name <span className="text-red-500">*</span></Label>
+                          <Label className="text-xs">Brand Name <span className="text-rose-500">*</span></Label>
                           <Input
                             placeholder="e.g. Anker, Baseus, JBL"
                             value={newBrandName}
@@ -550,7 +551,7 @@ function AccessoryFormDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Layers className="w-3 h-3" /> Category <span className="text-red-500">*</span>
+                    <Layers className="w-3 h-3" /> Category <span className="text-rose-500">*</span>
                   </Label>
                   <SearchableSelect
                     value={watch("category") ?? ""}
@@ -565,11 +566,11 @@ function AccessoryFormDialog({
                   <button
                     type="button"
                     onClick={() => { setShowNewCategory(true); setNewCategoryName("") }}
-                    className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                    className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                   >
                     <Plus className="w-3 h-3" /> Add New Category
                   </button>
-                  {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
+                  {errors.category && <p className="text-xs text-rose-500">{errors.category.message}</p>}
 
                   {/* Quick Add Category Modal */}
                   <Dialog open={showNewCategory} onOpenChange={setShowNewCategory}>
@@ -579,7 +580,7 @@ function AccessoryFormDialog({
                       </DialogHeader>
                       <div className="space-y-3 py-1">
                         <div className="space-y-1">
-                          <Label className="text-xs">Category Name <span className="text-red-500">*</span></Label>
+                          <Label className="text-xs">Category Name <span className="text-rose-500">*</span></Label>
                           <Input
                             placeholder="e.g. Earphones, Cases, Chargers"
                             value={newCategoryName}
@@ -669,7 +670,7 @@ function AccessoryFormDialog({
                     <button
                       type="button"
                       onClick={removeImage}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 rounded-lg text-xs font-semibold text-white shadow hover:bg-red-600 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500 rounded-lg text-xs font-semibold text-white shadow hover:bg-rose-600 transition-colors"
                     >
                       <X className="w-3.5 h-3.5" /> Remove
                     </button>
@@ -702,8 +703,8 @@ function AccessoryFormDialog({
               <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Notes & Details</span>
             </div>
             <div className="p-4 space-y-3">
-              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5">
-                <p className="text-[11px] text-blue-700 font-medium">
+              <div className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2.5">
+                <p className="text-[11px] text-indigo-700 font-medium">
                   {language === "ur" ? "قیمت اور اسٹاک اس وقت سیٹ ہوتا ہے جب آپ یہ اکسیسری سپلائر سے خریدتے ہیں۔" : "Price and stock are set when you purchase this accessory from a supplier on the Purchase page."}
                 </p>
               </div>
@@ -732,7 +733,7 @@ function AccessoryFormDialog({
             </Button>
             <Button type="submit" disabled={isSubmitting}
               className={cn("w-full sm:w-auto sm:ml-auto",
-                isEditing ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700"
+                isEditing ? "bg-indigo-600 hover:bg-indigo-700" : "bg-emerald-600 hover:bg-emerald-700"
               )}>
               {isEditing ? "Save Changes" : "Add Accessory"}
             </Button>
@@ -745,7 +746,7 @@ function AccessoryFormDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function AccessoriesPage() {
+function AccessoriesPageInner() {
   const { language } = useLanguage()
   const [accessoryList, setAccessoryList] = useState<Accessory[]>([])
   const [categories, setCategories] = useState<string[]>([])
@@ -1063,7 +1064,7 @@ export default function AccessoriesPage() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="h-8 w-8 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                 onClick={() => handleEdit(accessory)}
               >
                 <Pencil className="w-3.5 h-3.5" />
@@ -1071,7 +1072,7 @@ export default function AccessoriesPage() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="h-8 w-8 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                 onClick={() => handleDeleteClick(accessory)}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1095,7 +1096,7 @@ export default function AccessoriesPage() {
       <div className="space-y-4 max-w-screen-2xl mx-auto">
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-sm text-slate-500">Loading accessories...</p>
           </div>
         </div>
@@ -1146,8 +1147,8 @@ export default function AccessoriesPage() {
           title="Inventory Value"
           value={formatCurrency(stats.inventoryValue)}
           icon={DollarSign}
-          iconBg="bg-blue-100"
-          gradient="from-blue-50 to-blue-100"
+          iconBg="bg-indigo-100"
+          gradient="from-indigo-50 to-indigo-100"
           subtext="at selling price"
         />
         <StatCard
@@ -1231,7 +1232,7 @@ export default function AccessoriesPage() {
               </SelectItem>
               <SelectItem value="out">
                 <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Out of Stock
+                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> Out of Stock
                 </span>
               </SelectItem>
             </SelectContent>
@@ -1259,9 +1260,9 @@ export default function AccessoriesPage() {
               </span>
             )}
             {categoryFilter !== "all" && (
-              <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-3 py-1 text-xs font-medium">
+              <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-3 py-1 text-xs font-medium">
                 {categoryFilter}
-                <button onClick={() => setCategoryFilter("all")} className="text-blue-400 hover:text-blue-700 transition-colors">
+                <button onClick={() => setCategoryFilter("all")} className="text-indigo-400 hover:text-indigo-700 transition-colors">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -1317,7 +1318,7 @@ export default function AccessoriesPage() {
               const accentColor =
                 stockStatus === "In Stock"    ? "bg-emerald-500" :
                 stockStatus === "Low Stock"   ? "bg-amber-400"   :
-                                               "bg-red-500"
+                                               "bg-rose-500"
               const catCfg = categoryConfig[accessory.category] ?? categoryConfig["Other"]
               const CatIcon = catCfg.icon
               return (
@@ -1335,7 +1336,7 @@ export default function AccessoriesPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 shrink-0 leading-snug">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 shrink-0 leading-snug">
                             {accessory.brand}
                           </span>
                           <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium border px-2 py-0.5 rounded-full shrink-0 leading-snug", catCfg.badge)}>
@@ -1372,8 +1373,8 @@ export default function AccessoriesPage() {
                       <div className="w-px h-8 bg-slate-200 shrink-0" />
                       {/* Sell */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Sell</p>
-                        <p className="text-sm font-bold text-blue-700 truncate">{formatCurrency(accessory.sellingPrice)}</p>
+                        <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider mb-0.5">Sell</p>
+                        <p className="text-sm font-bold text-indigo-700 truncate">{formatCurrency(accessory.sellingPrice)}</p>
                       </div>
                       {/* Divider */}
                       <div className="w-px h-8 bg-slate-200 shrink-0" />
@@ -1394,7 +1395,7 @@ export default function AccessoriesPage() {
                       </button>
                       <button
                         onClick={() => handleDeleteClick(accessory)}
-                        className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[11px] font-semibold text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-600 border border-slate-200 hover:border-red-200 transition-all"
+                        className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[11px] font-semibold text-slate-400 bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition-all"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Delete
                       </button>
@@ -1442,5 +1443,13 @@ export default function AccessoriesPage() {
         onConfirm={handleDeleteConfirm}
       />
     </div>
+  )
+}
+
+export default function AccessoriesPage() {
+  return (
+    <PermissionGate permission="products.view">
+      <AccessoriesPageInner />
+    </PermissionGate>
   )
 }

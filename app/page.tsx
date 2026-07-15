@@ -58,7 +58,7 @@ const BarTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="rounded-xl border border-slate-100 bg-white px-3 py-2 shadow-xl text-xs">
       <p className="font-semibold text-slate-700 mb-1 max-w-40 truncate">{label}</p>
-      <p className="font-bold text-blue-600">{payload[0].value} units sold</p>
+      <p className="font-bold text-indigo-600">{payload[0].value} units sold</p>
     </div>
   )
 }
@@ -312,7 +312,7 @@ export default function DashboardPage() {
     month: "This Month",
     lastMonth: "Last Month",
     year: "This Year",
-    range: dateFrom && dateTo ? `${dateFrom} -" ${dateTo}` : "Custom Range",
+    range: dateFrom && dateTo ? `${dateFrom} - ${dateTo}` : "Custom Range",
   }[period]
 
   const FILTER_OPTIONS: { value: Period; label: string; icon: React.ElementType; desc: string }[] = [
@@ -330,7 +330,7 @@ export default function DashboardPage() {
       <PageWrapper>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
             <p className="text-sm text-slate-500 font-medium">Loading dashboard...</p>
           </div>
         </div>
@@ -342,26 +342,26 @@ export default function DashboardPage() {
     <PageWrapper>
 
       {/* â"€â"€ Welcome Banner â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="relative overflow-hidden rounded-xl bg-linear-to-r from-blue-600 via-blue-700 to-indigo-700 px-5 py-3.5 mb-4 shadow-md shadow-blue-200/50">
+      <div className="relative overflow-hidden rounded-xl bg-linear-to-r from-indigo-600 via-indigo-700 to-indigo-700 px-5 py-3.5 mb-4 shadow-md shadow-indigo-200/50">
         <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/5" />
         <div className="absolute right-16 -bottom-10 w-24 h-24 rounded-full bg-white/5" />
         <div className="absolute right-6 top-2 w-12 h-12 rounded-full bg-white/8" />
         <div className="relative flex items-center justify-between">
           <div>
-            <p className="text-blue-200 text-xs font-medium">Welcome back,</p>
+            <p className="text-indigo-200 text-xs font-medium">Welcome back,</p>
             <h1 className="text-white text-lg sm:text-xl font-bold tracking-tight leading-tight">{user?.name || "User"}</h1>
-            <p className="text-blue-200 text-xs mt-0.5">{formatDate(TODAY)} - {shopName}</p>
+            <p className="text-indigo-200 text-xs mt-0.5">{formatDate(TODAY)} - {shopName}</p>
           </div>
           <div className="hidden md:flex items-center gap-4">
             <div className="text-right">
-              <p className="text-blue-200 text-[11px]">Today's Sales</p>
+              <p className="text-indigo-200 text-[11px]">Today's Sales</p>
               <p className="text-white text-lg font-bold leading-tight">
                 {formatCurrency(sales.filter(s => s.date === TODAY).reduce((s, x) => s + x.total, 0))}
               </p>
             </div>
             <div className="w-px h-8 bg-white/20" />
             <div className="text-right">
-              <p className="text-blue-200 text-[11px]">Transactions</p>
+              <p className="text-indigo-200 text-[11px]">Transactions</p>
               <p className="text-white text-lg font-bold leading-tight">
                 {sales.filter(s => s.date === TODAY).length}
               </p>
@@ -373,7 +373,7 @@ export default function DashboardPage() {
       {/* â"€â"€ Quick Actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
         {[
-          { href: "/sales/new",            icon: Plus,        label: "New Sale",     bg: "from-blue-500 to-blue-600",       shadow: "shadow-blue-200"   },
+          { href: "/sales/new",            icon: Plus,        label: "New Sale",     bg: "from-indigo-500 to-indigo-600",       shadow: "shadow-indigo-200"   },
           { href: "/purchases/new",        icon: ShoppingBag, label: "New Purchase", bg: "from-violet-500 to-violet-600",   shadow: "shadow-violet-200" },
           { href: "/products/mobiles",     icon: Smartphone,  label: "Add Mobile",   bg: "from-emerald-500 to-emerald-600", shadow: "shadow-emerald-200"},
           { href: "/products/accessories", icon: Package,     label: "Accessories",  bg: "from-amber-500 to-amber-600",     shadow: "shadow-amber-200"  },
@@ -401,9 +401,9 @@ export default function DashboardPage() {
           <div className="relative">
             <button
               onClick={() => setShowFilterMenu(v => !v)}
-              className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-blue-300 hover:shadow-md transition-all min-w-[130px]"
+              className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all min-w-[130px]"
             >
-              <Calendar className="w-3 h-3 text-blue-500 shrink-0" />
+              <Calendar className="w-3 h-3 text-indigo-500 shrink-0" />
               <span className="flex-1 text-left truncate">{periodLabel}</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform shrink-0 ${showFilterMenu ? "rotate-180" : ""}`} />
             </button>
@@ -416,19 +416,19 @@ export default function DashboardPage() {
                     key={opt.value}
                     onClick={() => { setPeriod(opt.value); if (opt.value !== "range") setShowFilterMenu(false) }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors ${
-                      period === opt.value ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-600 hover:bg-slate-50"
+                      period === opt.value ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    <opt.icon className={`w-3 h-3 ${period === opt.value ? "text-blue-500" : "text-slate-400"}`} />
+                    <opt.icon className={`w-3 h-3 ${period === opt.value ? "text-indigo-500" : "text-slate-400"}`} />
                     {opt.label}
                   </button>
                 ))}
                 {period === "range" && (
                   <div className="px-3 pb-2 pt-1 border-t border-slate-100 space-y-1.5">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                   </div>
                 )}
               </div>
@@ -462,18 +462,18 @@ export default function DashboardPage() {
                       onClick={() => { setPeriod(opt.value); if (opt.value !== "range") setShowFilterMenu(false) }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all ${
                         period === opt.value
-                          ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
                           : "bg-slate-50 text-slate-700 hover:bg-slate-100"
                       }`}
                     >
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                         period === opt.value ? "bg-white/20" : "bg-white shadow-sm"
                       }`}>
-                        <opt.icon className={`w-4 h-4 ${period === opt.value ? "text-white" : "text-blue-500"}`} />
+                        <opt.icon className={`w-4 h-4 ${period === opt.value ? "text-white" : "text-indigo-500"}`} />
                       </div>
                       <div className="flex-1 text-left">
                         <p className={`text-sm font-semibold leading-tight ${period === opt.value ? "text-white" : "text-slate-800"}`}>{opt.label}</p>
-                        <p className={`text-[10px] mt-0.5 ${period === opt.value ? "text-blue-100" : "text-slate-400"}`}>{opt.desc}</p>
+                        <p className={`text-[10px] mt-0.5 ${period === opt.value ? "text-indigo-100" : "text-slate-400"}`}>{opt.desc}</p>
                       </div>
                       {period === opt.value && <CheckCircle2 className="w-4 h-4 text-white shrink-0" />}
                     </button>
@@ -486,17 +486,17 @@ export default function DashboardPage() {
                       <div className="flex-1">
                         <label className="text-[10px] text-slate-500 font-medium block mb-1">From</label>
                         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       </div>
                       <div className="flex-1">
                         <label className="text-[10px] text-slate-500 font-medium block mb-1">To</label>
                         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       </div>
                     </div>
                     <button
                       onClick={() => setShowFilterMenu(false)}
-                      className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-semibold text-sm shadow-md shadow-blue-200 active:scale-95 transition-transform"
+                      className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm shadow-md shadow-indigo-200 active:scale-95 transition-transform"
                     >
                       Apply Range
                     </button>
@@ -515,8 +515,8 @@ export default function DashboardPage() {
             {
               label: "Sales Revenue", value: formatCurrency(periodRevenue),
               sub: `${filteredSales.length} transactions`,
-              icon: ShoppingCart, grad: "from-blue-500 to-blue-600",
-              shadow: "shadow-blue-200/60",
+              icon: ShoppingCart, grad: "from-indigo-500 to-indigo-600",
+              shadow: "shadow-indigo-200/60",
             },
             {
               label: "Purchases", value: formatCurrency(periodPurchases),
@@ -550,20 +550,20 @@ export default function DashboardPage() {
         {/* â"€â"€ DESKTOP: gradient cards with sparklines â"€â"€ */}
         <div className="hidden sm:grid sm:grid-cols-3 gap-3">
           {/* Sales Card */}
-          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-500 to-blue-700 p-4 shadow-md shadow-blue-200/50">
+          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 p-4 shadow-md shadow-indigo-200/50">
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-blue-200 text-xs font-medium">Sales Revenue</p>
-                  <p className="text-blue-100 text-[10px]">{periodLabel}</p>
+                  <p className="text-indigo-200 text-xs font-medium">Sales Revenue</p>
+                  <p className="text-indigo-100 text-[10px]">{periodLabel}</p>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
                   <ShoppingCart className="w-3.5 h-3.5 text-white" />
                 </div>
               </div>
               <p className="text-white text-xl font-bold tracking-tight leading-tight mb-0.5">{formatCurrency(periodRevenue)}</p>
-              <p className="text-blue-200 text-[11px]">{filteredSales.length} transactions</p>
+              <p className="text-indigo-200 text-[11px]">{filteredSales.length} transactions</p>
               <div className="mt-2 h-10">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={salesSparkData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
@@ -652,7 +652,7 @@ export default function DashboardPage() {
       {/* â"€â"€ Stat Counters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
         {([
-          { label: "Total Products",  value: totalProducts,       icon: Package,      color: "text-blue-600",    bg: "bg-blue-50",    border: "border-blue-100",    href: "/products/mobiles" },
+          { label: "Total Products",  value: totalProducts,       icon: Package,      color: "text-indigo-600",    bg: "bg-indigo-50",    border: "border-indigo-100",    href: "/products/mobiles" },
           { label: "Customers",       value: customers.length,    icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100",  href: "/customers"        },
           { label: "Suppliers",       value: suppliers.length,    icon: Truck,        color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100", href: "/suppliers"        },
           { label: "Total Sales",     value: totalSalesCount,     icon: ShoppingCart, color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-100",   href: "/sales"            },
@@ -682,7 +682,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />Revenue
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />Revenue
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />Profit
@@ -732,7 +732,7 @@ export default function DashboardPage() {
           <CardHeader className="px-4 py-3 border-b border-slate-50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-200">
+                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm shadow-indigo-200">
                   <ShoppingCart className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div>
@@ -740,7 +740,7 @@ export default function DashboardPage() {
                   <p className="text-[10px] text-slate-400">Latest transactions</p>
                 </div>
               </div>
-              <Link href="/sales" className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
+              <Link href="/sales" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -751,7 +751,7 @@ export default function DashboardPage() {
               {recentSales.map(sale => (
                 <div key={sale.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50/70 transition-colors gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="font-mono text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">{sale.invoiceNumber}</span>
+                    <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded shrink-0">{sale.invoiceNumber}</span>
                     <div className="min-w-0">
                       <p className="font-semibold text-slate-800 text-xs truncate">{sale.customerName}</p>
                       <p className="text-[10px] text-slate-400">{formatDate(sale.date)}</p>
@@ -779,7 +779,7 @@ export default function DashboardPage() {
                   {recentSales.map(sale => (
                     <tr key={sale.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="px-4 py-2 whitespace-nowrap">
-                        <span className="font-mono text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{sale.invoiceNumber}</span>
+                        <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{sale.invoiceNumber}</span>
                       </td>
                       <td className="px-3 py-2">
                         <p className="font-semibold text-slate-800 text-xs truncate max-w-28">{sale.customerName}</p>
@@ -812,7 +812,7 @@ export default function DashboardPage() {
                   <p className="text-[10px] text-slate-400">Latest purchase orders</p>
                 </div>
               </div>
-              <Link href="/purchases" className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
+              <Link href="/purchases" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -883,7 +883,7 @@ export default function DashboardPage() {
                 <CardTitle className="text-sm font-bold text-slate-800">Top Selling Products</CardTitle>
                 <p className="text-[11px] text-slate-400">By units sold - all time</p>
               </div>
-              <Link href="/products/mobiles" className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
+              <Link href="/products/mobiles" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -955,8 +955,8 @@ export default function DashboardPage() {
             ) : (
               lowStockItems.map(item => (
                 <div key={item.id} className="flex items-center gap-2.5 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 hover:bg-amber-50/40 transition-colors">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${item.stock === 0 ? "bg-red-100" : "bg-amber-100"}`}>
-                    <Package className={`w-3.5 h-3.5 ${item.stock === 0 ? "text-red-600" : "text-amber-600"}`} />
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${item.stock === 0 ? "bg-rose-100" : "bg-amber-100"}`}>
+                    <Package className={`w-3.5 h-3.5 ${item.stock === 0 ? "text-rose-600" : "text-amber-600"}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>
@@ -964,7 +964,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="shrink-0 text-right">
                     {item.stock === 0 ? (
-                      <span className="text-[10px] font-bold text-white bg-red-500 px-2 py-0.5 rounded-full">OUT</span>
+                      <span className="text-[10px] font-bold text-white bg-rose-500 px-2 py-0.5 rounded-full">OUT</span>
                     ) : (
                       <span className="text-sm font-bold text-amber-600">{item.stock} <span className="text-[10px] text-slate-400 font-normal">left</span></span>
                     )}

@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useRef, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -66,7 +67,7 @@ type InvoiceForm = z.infer<typeof invoiceSchema>
 type UserForm    = z.infer<typeof userSchema>
 
 // â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-const avatarPalette = ["bg-blue-600", "bg-blue-500", "bg-blue-700", "bg-slate-600", "bg-blue-800", "bg-slate-700"]
+const avatarPalette = ["bg-indigo-600", "bg-indigo-500", "bg-indigo-700", "bg-slate-600", "bg-indigo-800", "bg-slate-700"]
 
 function UserAvatar({ name, id }: { name: string; id: string }) {
   const idx      = parseInt(id.replace(/\D/g, ""), 10) % avatarPalette.length
@@ -80,7 +81,7 @@ function UserAvatar({ name, id }: { name: string; id: string }) {
 
 const roleBadgeCls: Record<UserRole, string> = {
   Admin:   "bg-slate-800 text-white",
-  Manager: "bg-blue-50 text-blue-700 border border-blue-200",
+  Manager: "bg-indigo-50 text-indigo-700 border border-indigo-200",
   Cashier: "bg-slate-50 text-slate-600 border border-slate-200",
 }
 
@@ -99,14 +100,14 @@ function SectionCard({ title, description, children, className }: {
 }
 
 // â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-export default function SettingsPage() {
+function SettingsPageInner() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { language, setLanguage } = useLanguage()
 
   const shopForm = useForm<ShopForm>({
     resolver: zodResolver(shopSchema),
-    defaultValues: { shopName: "MobiTrack Pro", address: "123 Main Market, Liberty", city: "Lahore", phone: "+92 42 35761234", email: "info@mobitrackpro.com", ntn: "1234567-8", currency: "â‚¨" },
+    defaultValues: { shopName: "MobiTrack Pro", address: "123 Main Market, Liberty", city: "Lahore", phone: "+92 42 35761234", email: "info@mobitrackpro.com", ntn: "1234567-8", currency: "Rs" },
   })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -149,7 +150,7 @@ export default function SettingsPage() {
     async function load() {
       try {
         const [tenant, settings, profiles] = await Promise.all([getTenant(), getTenantSettings(), getProfiles()])
-        shopForm.reset({ shopName: tenant.name || "MobiTrack Pro", address: tenant.address || "", city: tenant.city || "Lahore", phone: tenant.phone || "", email: tenant.email || "", ntn: "1234567-8", currency: tenant.currency || "â‚¨" })
+        shopForm.reset({ shopName: tenant.name || "MobiTrack Pro", address: tenant.address || "", city: tenant.city || "Lahore", phone: tenant.phone || "", email: tenant.email || "", ntn: "1234567-8", currency: tenant.currency || "Rs" })
         if (tenant.logo) setLogoPreview(tenant.logo)
         taxForm.reset({ taxName: "GST", taxRate: settings.taxRate ?? 17 })
         setTaxEnabled(settings.taxEnabled ?? true)
@@ -258,7 +259,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -268,7 +269,7 @@ export default function SettingsPage() {
 
       {/* â"€â"€ Compact header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
           <Settings className="w-4 h-4 text-white" />
         </div>
         <div>
@@ -279,12 +280,12 @@ export default function SettingsPage() {
 
       {/* â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Tabs defaultValue="shop" className="space-y-3">
-        <TabsList className="h-8 p-0.5 rounded-xl bg-slate-100">
-          <TabsTrigger value="shop"    className="h-7 text-xs gap-1.5 px-3"><Building2 className="w-3 h-3" />Shop Profile</TabsTrigger>
-          <TabsTrigger value="tax"     className="h-7 text-xs gap-1.5 px-3"><Shield className="w-3 h-3" />Tax Config</TabsTrigger>
-          <TabsTrigger value="invoice" className="h-7 text-xs gap-1.5 px-3"><FileText className="w-3 h-3" />Invoice</TabsTrigger>
-          <TabsTrigger value="users"   className="h-7 text-xs gap-1.5 px-3"><Users className="w-3 h-3" />Users</TabsTrigger>
-          <TabsTrigger value="data"    className="h-7 text-xs gap-1.5 px-3"><Database className="w-3 h-3" />Data</TabsTrigger>
+        <TabsList className="h-auto flex-wrap p-0.5 rounded-xl bg-slate-100">
+          <TabsTrigger value="shop"    className="h-7 text-xs gap-1 px-2 sm:px-3"><Building2 className="w-3 h-3" /><span className="hidden sm:inline">Shop Profile</span><span className="sm:hidden">Shop</span></TabsTrigger>
+          <TabsTrigger value="tax"     className="h-7 text-xs gap-1 px-2 sm:px-3"><Shield className="w-3 h-3" /><span className="hidden sm:inline">Tax Config</span><span className="sm:hidden">Tax</span></TabsTrigger>
+          <TabsTrigger value="invoice" className="h-7 text-xs gap-1 px-2 sm:px-3"><FileText className="w-3 h-3" /><span className="hidden sm:inline">Invoice</span><span className="sm:hidden">Invoice</span></TabsTrigger>
+          <TabsTrigger value="users"   className="h-7 text-xs gap-1 px-2 sm:px-3"><Users className="w-3 h-3" /><span className="hidden sm:inline">Users</span><span className="sm:hidden">Users</span></TabsTrigger>
+          <TabsTrigger value="data"    className="h-7 text-xs gap-1 px-2 sm:px-3"><Database className="w-3 h-3" /><span className="hidden sm:inline">Data</span><span className="sm:hidden">Data</span></TabsTrigger>
         </TabsList>
 
         {/* â•â•â•â• TAB 1 - SHOP PROFILE â•â•â•â• */}
@@ -293,15 +294,15 @@ export default function SettingsPage() {
             {/* Shop Details */}
             <div className="lg:col-span-2">
               <SectionCard
-                title={<span className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-blue-600" />Shop Details</span>}
+                title={<span className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-indigo-600" />Shop Details</span>}
                 description="Basic information about your business"
               >
                 <form onSubmit={shopForm.handleSubmit(onShopSubmit)} className="space-y-2.5">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Shop Name</Label>
                       <Input placeholder="Your shop name" {...shopForm.register("shopName")} className="h-8 text-xs" />
-                      {shopForm.formState.errors.shopName && <p className="text-[10px] text-red-500">{shopForm.formState.errors.shopName.message}</p>}
+                      {shopForm.formState.errors.shopName && <p className="text-[10px] text-rose-500">{shopForm.formState.errors.shopName.message}</p>}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">City</Label>
@@ -309,7 +310,7 @@ export default function SettingsPage() {
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select city" /></SelectTrigger>
                         <SelectContent className="max-h-60">
                           {["Lahore","Karachi","Islamabad","Rawalpindi","Faisalabad","Peshawar","Multan","Quetta","Sialkot","Gujranwala","Bahawalpur","Sargodha","Sukkur","Larkana","Sheikhupura","Rahim Yar Khan","Jhang","Dera Ghazi Khan","Gujrat","Mirpur","Hyderabad","Abbottabad","Mardan","Kasur","Dera Ismail Khan","Okara","Mingora","Nawabshah","Chiniot","Sahiwal","Muzaffarabad","Turbat","Wah Cantt","Attock","Jhelum","Mandi Bahauddin","Hafizabad","Narowal","Muzaffargarh","Layyah","Mianwali","Bhakkar","Toba Tek Singh","Pakpattan","Vehari","Other"].map((c) => (
-                            <SelectItem key={c} value={c} className={c === "Other" ? "font-medium text-blue-600 border-t border-slate-100 mt-1 pt-1" : ""}>{c}</SelectItem>
+                            <SelectItem key={c} value={c} className={c === "Other" ? "font-medium text-indigo-600 border-t border-slate-100 mt-1 pt-1" : ""}>{c}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -327,32 +328,32 @@ export default function SettingsPage() {
                   <div className="space-y-1">
                     <Label className="text-xs">Address</Label>
                     <Input placeholder="Street address" {...shopForm.register("address")} className="h-8 text-xs" />
-                    {shopForm.formState.errors.address && <p className="text-[10px] text-red-500">{shopForm.formState.errors.address.message}</p>}
+                    {shopForm.formState.errors.address && <p className="text-[10px] text-rose-500">{shopForm.formState.errors.address.message}</p>}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs flex items-center gap-1"><Phone className="w-3 h-3 text-slate-400" />Phone</Label>
                       <Input placeholder="+92 42 35761234" {...shopForm.register("phone")} className="h-8 text-xs" />
-                      {shopForm.formState.errors.phone && <p className="text-[10px] text-red-500">{shopForm.formState.errors.phone.message}</p>}
+                      {shopForm.formState.errors.phone && <p className="text-[10px] text-rose-500">{shopForm.formState.errors.phone.message}</p>}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" />Email</Label>
                       <Input type="email" placeholder="info@yourshop.com" {...shopForm.register("email")} className="h-8 text-xs" />
-                      {shopForm.formState.errors.email && <p className="text-[10px] text-red-500">{shopForm.formState.errors.email.message}</p>}
+                      {shopForm.formState.errors.email && <p className="text-[10px] text-rose-500">{shopForm.formState.errors.email.message}</p>}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Tax Reg # NTN</Label>
                       <Input placeholder="1234567-8" {...shopForm.register("ntn")} className="h-8 text-xs" />
-                      {shopForm.formState.errors.ntn && <p className="text-[10px] text-red-500">{shopForm.formState.errors.ntn.message}</p>}
+                      {shopForm.formState.errors.ntn && <p className="text-[10px] text-rose-500">{shopForm.formState.errors.ntn.message}</p>}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Currency Symbol</Label>
-                      <Input placeholder="â‚¨" maxLength={5} {...shopForm.register("currency")} className="h-8 text-xs" />
-                      {shopForm.formState.errors.currency && <p className="text-[10px] text-red-500">{shopForm.formState.errors.currency.message}</p>}
+                      <Input placeholder="Rs" maxLength={5} {...shopForm.register("currency")} className="h-8 text-xs" />
+                      {shopForm.formState.errors.currency && <p className="text-[10px] text-rose-500">{shopForm.formState.errors.currency.message}</p>}
                     </div>
                   </div>
 
@@ -378,10 +379,10 @@ export default function SettingsPage() {
                   onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleLogoFile(f) }}
-                  className={`w-full rounded-xl border-2 border-dashed transition-colors p-5 flex flex-col items-center gap-2 cursor-pointer ${isDragging ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/50"}`}
+                  className={`w-full rounded-xl border-2 border-dashed transition-colors p-5 flex flex-col items-center gap-2 cursor-pointer ${isDragging ? "border-indigo-400 bg-indigo-50" : "border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/50"}`}
                 >
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Upload className="w-4 h-4 text-blue-600" />
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <Upload className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-medium text-slate-700">Drag & drop or click to upload</p>
@@ -395,7 +396,7 @@ export default function SettingsPage() {
 
             {/* Language Toggle */}
             <SectionCard
-              title={<span className="flex items-center gap-1.5"><Languages className="w-3.5 h-3.5 text-blue-600" />Language / زبان</span>}
+              title={<span className="flex items-center gap-1.5"><Languages className="w-3.5 h-3.5 text-indigo-600" />Language / زبان</span>}
               description="Choose the interface language"
             >
               <div className="space-y-2">
@@ -412,17 +413,17 @@ export default function SettingsPage() {
                       onClick={() => setLanguage(lang)}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 transition-all text-left ${
                         active
-                          ? "border-blue-500 bg-blue-50"
+                          ? "border-indigo-500 bg-indigo-50"
                           : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                       }`}
                     >
                       <span className="text-xl leading-none">{meta.flag}</span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-semibold ${active ? "text-blue-700" : "text-slate-800"}`}>{meta.label}</p>
+                        <p className={`text-xs font-semibold ${active ? "text-indigo-700" : "text-slate-800"}`}>{meta.label}</p>
                         <p className="text-[10px] text-slate-400">{meta.sub}</p>
                       </div>
                       {active && (
-                        <span className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                        <span className="w-4 h-4 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
                           <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
@@ -452,7 +453,7 @@ export default function SettingsPage() {
               <div className="space-y-1">
                 <Label className="text-xs">Tax Name</Label>
                 <Input placeholder="e.g. GST, VAT" {...taxForm.register("taxName")} className="h-8 text-xs" />
-                {taxForm.formState.errors.taxName && <p className="text-[10px] text-red-500">{taxForm.formState.errors.taxName.message}</p>}
+                {taxForm.formState.errors.taxName && <p className="text-[10px] text-rose-500">{taxForm.formState.errors.taxName.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Tax Rate (%)</Label>
@@ -466,7 +467,7 @@ export default function SettingsPage() {
                   <p className="text-xs font-medium text-slate-800">Enable Tax</p>
                   <p className="text-[10px] text-slate-400">Apply tax to all new transactions</p>
                 </div>
-                <Switch checked={taxEnabled} onCheckedChange={setTaxEnabled} className="data-[state=checked]:bg-blue-600" />
+                <Switch checked={taxEnabled} onCheckedChange={setTaxEnabled} className="data-[state=checked]:bg-indigo-600" />
               </div>
               <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs min-w-[120px]">
                 {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving...</> : "Save Tax Settings"}
@@ -478,7 +479,7 @@ export default function SettingsPage() {
         {/* â•â•â•â• TAB 3 - INVOICE â•â•â•â• */}
         <TabsContent value="invoice" className="mt-3">
           <SectionCard
-            title={<span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-blue-600" />Invoice Settings</span>}
+            title={<span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-indigo-600" />Invoice Settings</span>}
             description="Customize how your invoices look and are numbered"
             className="max-w-lg"
           >
@@ -487,7 +488,7 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Invoice Prefix</Label>
                   <Input placeholder="INV" {...invoiceForm.register("prefix")} className="h-8 text-xs" />
-                  {invoiceForm.formState.errors.prefix && <p className="text-[10px] text-red-500">{invoiceForm.formState.errors.prefix.message}</p>}
+                  {invoiceForm.formState.errors.prefix && <p className="text-[10px] text-rose-500">{invoiceForm.formState.errors.prefix.message}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Next Invoice Number</Label>
@@ -507,7 +508,7 @@ export default function SettingsPage() {
                   <p className="text-xs font-medium text-slate-800">Show logo on invoice</p>
                   <p className="text-[10px] text-slate-400">Logo appears at the top of every invoice</p>
                 </div>
-                <Switch checked={showLogoOnInvoice} onCheckedChange={setShowLogoOnInvoice} className="data-[state=checked]:bg-blue-600" />
+                <Switch checked={showLogoOnInvoice} onCheckedChange={setShowLogoOnInvoice} className="data-[state=checked]:bg-indigo-600" />
               </div>
               <Button type="submit" size="sm" disabled={saving} className="h-8 text-xs min-w-[140px]">
                 {saving ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Saving...</> : "Save Invoice Settings"}
@@ -559,9 +560,9 @@ export default function SettingsPage() {
                       </td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${
-                          user.status === "Active" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-50 text-slate-500 border-slate-200"
+                          user.status === "Active" ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-500 border-slate-200"
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${user.status === "Active" ? "bg-blue-500" : "bg-slate-400"}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${user.status === "Active" ? "bg-indigo-500" : "bg-slate-400"}`} />
                           {user.status}
                         </span>
                       </td>
@@ -572,7 +573,7 @@ export default function SettingsPage() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => setToggleTarget(user)} title={user.status === "Active" ? "Deactivate" : "Activate"} className="p-1 rounded-md hover:bg-slate-100 transition-colors">
-                            <Power className={`w-3.5 h-3.5 ${user.status === "Active" ? "text-red-400 hover:text-red-600" : "text-emerald-500 hover:text-emerald-600"}`} />
+                            <Power className={`w-3.5 h-3.5 ${user.status === "Active" ? "text-rose-400 hover:text-rose-600" : "text-emerald-500 hover:text-emerald-600"}`} />
                           </button>
                         </div>
                       </td>
@@ -585,7 +586,7 @@ export default function SettingsPage() {
 
           {/* Add/Edit User Dialog */}
           <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-            <DialogContent className="max-w-sm">
+            <DialogContent className="w-[96vw] max-w-sm">
               <DialogHeader>
                 <DialogTitle className="text-sm font-bold">{editUser ? "Edit User" : "Add New User"}</DialogTitle>
               </DialogHeader>
@@ -593,12 +594,12 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Full Name</Label>
                   <Input placeholder="e.g. Ahmed Khan" {...userForm.register("name")} className="h-8 text-xs" />
-                  {userForm.formState.errors.name && <p className="text-[10px] text-red-500">{userForm.formState.errors.name.message}</p>}
+                  {userForm.formState.errors.name && <p className="text-[10px] text-rose-500">{userForm.formState.errors.name.message}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Email</Label>
                   <Input type="email" placeholder="user@mobitrack.com" {...userForm.register("email")} className="h-8 text-xs" />
-                  {userForm.formState.errors.email && <p className="text-[10px] text-red-500">{userForm.formState.errors.email.message}</p>}
+                  {userForm.formState.errors.email && <p className="text-[10px] text-rose-500">{userForm.formState.errors.email.message}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
@@ -631,7 +632,7 @@ export default function SettingsPage() {
                         {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    {userForm.formState.errors.password && <p className="text-[10px] text-red-500">{userForm.formState.errors.password.message}</p>}
+                    {userForm.formState.errors.password && <p className="text-[10px] text-rose-500">{userForm.formState.errors.password.message}</p>}
                   </div>
                 </div>
                 <div className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
@@ -639,7 +640,7 @@ export default function SettingsPage() {
                     <p className="text-xs font-medium text-slate-800">Active Status</p>
                     <p className="text-[10px] text-slate-400">User can log in and use the system</p>
                   </div>
-                  <Switch checked={userForm.watch("status")} onCheckedChange={(v) => userForm.setValue("status", v)} className="data-[state=checked]:bg-blue-600" />
+                  <Switch checked={userForm.watch("status")} onCheckedChange={(v) => userForm.setValue("status", v)} className="data-[state=checked]:bg-indigo-600" />
                 </div>
                 <DialogFooter className="gap-2">
                   <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setUserDialogOpen(false)}>Cancel</Button>
@@ -673,8 +674,8 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 px-3 py-2 shadow-sm">
-              <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
-                <Shield className="w-3.5 h-3.5 text-blue-600" />
+              <div className="w-6 h-6 rounded-md bg-indigo-50 flex items-center justify-center">
+                <Shield className="w-3.5 h-3.5 text-indigo-600" />
               </div>
               <div>
                 <p className="text-[10px] text-slate-400">Last Backup</p>
@@ -686,29 +687,29 @@ export default function SettingsPage() {
           {/* Action cards */}
           <div className="grid grid-cols-3 gap-2.5">
             {/* Export */}
-            <div className="bg-white rounded-xl border border-blue-200 p-3 flex flex-col gap-2 bg-linear-to-br from-blue-50 to-white">
-              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Download className="w-3.5 h-3.5 text-blue-600" />
+            <div className="bg-white rounded-xl border border-indigo-200 p-3 flex flex-col gap-2 bg-linear-to-br from-indigo-50 to-white">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <Download className="w-3.5 h-3.5 text-indigo-600" />
               </div>
               <div>
-                <p className="text-xs font-bold text-blue-900">Export All Data</p>
-                <p className="text-[10px] text-blue-700/70 mt-0.5">Download a complete CSV backup of all inventory, sales, customers, and transactions.</p>
+                <p className="text-xs font-bold text-indigo-900">Export All Data</p>
+                <p className="text-[10px] text-indigo-700/70 mt-0.5">Download a complete CSV backup of all inventory, sales, customers, and transactions.</p>
               </div>
-              <Button onClick={() => toast.success("Export started")} size="sm" className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700 mt-auto">
+              <Button onClick={() => toast.success("Export started")} size="sm" className="h-7 text-xs gap-1 bg-indigo-600 hover:bg-indigo-700 mt-auto">
                 <Download className="w-3 h-3" />Export CSV
               </Button>
             </div>
 
             {/* Import */}
             <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-col gap-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                <Upload className="w-3.5 h-3.5 text-blue-600" />
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <Upload className="w-3.5 h-3.5 text-indigo-600" />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-800">Import Data</p>
                 <p className="text-[10px] text-slate-500 mt-0.5">Upload a CSV file to bulk import products, customers, or transactions.</p>
               </div>
-              <Button onClick={() => importFileRef.current?.click()} size="sm" className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700 mt-auto">
+              <Button onClick={() => importFileRef.current?.click()} size="sm" className="h-7 text-xs gap-1 bg-indigo-600 hover:bg-indigo-700 mt-auto">
                 <Upload className="w-3 h-3" />Upload File
               </Button>
               <input ref={importFileRef} type="file" accept=".csv" className="hidden"
@@ -716,13 +717,13 @@ export default function SettingsPage() {
             </div>
 
             {/* Reset */}
-            <div className="bg-white rounded-xl border border-red-200 p-3 flex flex-col gap-2 bg-linear-to-br from-red-50 to-white">
-              <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center">
-                <RotateCcw className="w-3.5 h-3.5 text-red-600" />
+            <div className="bg-white rounded-xl border border-rose-200 p-3 flex flex-col gap-2 bg-linear-to-br from-rose-50 to-white">
+              <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center">
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
               </div>
               <div>
-                <p className="text-xs font-bold text-red-900">Reset Demo Data</p>
-                <p className="text-[10px] text-red-700/70 mt-0.5">Restore all data to factory defaults. This is irreversible.</p>
+                <p className="text-xs font-bold text-rose-900">Reset Demo Data</p>
+                <p className="text-[10px] text-rose-700/70 mt-0.5">Restore all data to factory defaults. This is irreversible.</p>
               </div>
               <Button variant="destructive" size="sm" className="h-7 text-xs gap-1 mt-auto" onClick={() => setResetDialogOpen(true)}>
                 <RotateCcw className="w-3 h-3" />Reset to Defaults
@@ -742,3 +743,13 @@ export default function SettingsPage() {
     </div>
   )
 }
+
+
+export default function SettingsPage() {
+  return (
+    <PermissionGate permission="settings.general">
+      <SettingsPageInner />
+    </PermissionGate>
+  )
+}
+

@@ -1,5 +1,6 @@
 ﻿﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
@@ -78,7 +79,7 @@ function getMobileStockStatus(stock: number): "In Stock" | "Out of Stock" {
 const stockDotColor: Record<string, string> = {
   "In Stock": "bg-emerald-500",
   "Low Stock": "bg-amber-500",
-  "Out of Stock": "bg-red-500",
+  "Out of Stock": "bg-rose-500",
 }
 
 // â"€â"€â"€ Stock badge config â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -86,12 +87,12 @@ const stockDotColor: Record<string, string> = {
 const stockBadgeStyle: Record<string, string> = {
   "In Stock":     "bg-emerald-50 text-emerald-700 border border-emerald-200",
   "Low Stock":    "bg-amber-50 text-amber-700 border border-amber-200",
-  "Out of Stock": "bg-red-50 text-red-600 border border-red-200",
+  "Out of Stock": "bg-rose-50 text-rose-600 border border-rose-200",
 }
 const stockDotStyle: Record<string, string> = {
   "In Stock":     "bg-emerald-500",
   "Low Stock":    "bg-amber-500",
-  "Out of Stock": "bg-red-500",
+  "Out of Stock": "bg-rose-500",
 }
 
 // â"€â"€â"€ Mobile Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -120,10 +121,10 @@ function MobileCard({
   }
 
   return (
-    <Card className="relative overflow-hidden border border-slate-200/80 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/8 transition-all duration-200 hover:-translate-y-0.5 bg-white group rounded-xl">
+    <Card className="relative overflow-hidden border border-slate-200/80 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-900/8 transition-all duration-200 hover:-translate-y-0.5 bg-white group rounded-xl">
 
       {/* â"€â"€ Image / Hero section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="relative h-28 overflow-hidden bg-linear-to-br from-slate-50 via-blue-50/40 to-slate-100">
+      <div className="relative h-28 overflow-hidden bg-linear-to-br from-slate-50 via-indigo-50/40 to-slate-100">
         {mobile.image ? (
           <Image
             src={mobile.image}
@@ -134,7 +135,7 @@ function MobileCard({
           />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-600/30">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-600/30">
               <Smartphone className="w-5 h-5 text-white" />
             </div>
           </div>
@@ -183,8 +184,8 @@ function MobileCard({
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Buy</p>
               <p className="text-[11px] font-semibold text-slate-600 truncate">{formatCurrency(mobile.purchasePrice)}</p>
             </div>
-            <div className="rounded-lg bg-blue-600 px-2.5 py-1.5 shadow-sm shadow-blue-600/20">
-              <p className="text-[9px] font-bold text-blue-200 uppercase tracking-wider">Sell</p>
+            <div className="rounded-lg bg-indigo-600 px-2.5 py-1.5 shadow-sm shadow-indigo-600/20">
+              <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-wider">Sell</p>
               <p className="text-[11px] font-bold text-white truncate">{formatCurrency(mobile.sellingPrice)}</p>
             </div>
           </div>
@@ -216,7 +217,7 @@ function MobileCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-[11px] font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md gap-1 px-1"
+            className="h-7 text-[11px] font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md gap-1 px-1"
             onClick={() => onView(mobile)}
           >
             <Eye className="w-3 h-3" />
@@ -234,7 +235,7 @@ function MobileCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-[11px] font-medium text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md gap-1 px-1"
+            className="h-7 text-[11px] font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md gap-1 px-1"
             onClick={() => onDelete(mobile)}
           >
             <Trash2 className="w-3 h-3" />
@@ -278,7 +279,7 @@ function ViewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm p-0 overflow-hidden">
         {/* Compact header */}
-        <div className="bg-blue-600 px-4 py-3 flex items-center gap-3">
+        <div className="bg-indigo-600 px-4 py-3 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
             <Smartphone className="w-5 h-5 text-white" />
           </div>
@@ -343,7 +344,7 @@ function ViewDialog({
               <div className="flex items-center gap-1">
                 <span className="font-mono text-slate-700">{m.imei || "Not recorded"}</span>
                 {m.imei && (
-                  <button onClick={handleCopyImei} className="text-slate-400 hover:text-blue-600 shrink-0">
+                  <button onClick={handleCopyImei} className="text-slate-400 hover:text-indigo-600 shrink-0">
                     <Copy className="w-3 h-3" />
                   </button>
                 )}
@@ -660,11 +661,11 @@ function MobileFormDrawer({
 
   const marginBar = (m: number) => cn(
     "flex items-center justify-between rounded-lg px-4 py-2.5 border",
-    m >= 25 ? "bg-emerald-50 border-emerald-200" : m >= 15 ? "bg-blue-50 border-blue-200" :
-    m >= 0  ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200"
+    m >= 25 ? "bg-emerald-50 border-emerald-200" : m >= 15 ? "bg-indigo-50 border-indigo-200" :
+    m >= 0  ? "bg-amber-50 border-amber-200" : "bg-rose-50 border-rose-200"
   )
   const marginText = (m: number) => cn("text-lg font-bold",
-    m >= 25 ? "text-emerald-700" : m >= 15 ? "text-blue-700" : m >= 0 ? "text-amber-700" : "text-red-700"
+    m >= 25 ? "text-emerald-700" : m >= 15 ? "text-indigo-700" : m >= 0 ? "text-amber-700" : "text-rose-700"
   )
 
   const imgUploadArea = (
@@ -679,7 +680,7 @@ function MobileFormDrawer({
               <Upload className="w-3.5 h-3.5" /> Change
             </button>
             <button type="button" onClick={removeImage}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 rounded-lg text-xs font-semibold text-white shadow hover:bg-red-600">
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500 rounded-lg text-xs font-semibold text-white shadow hover:bg-rose-600">
               <XIcon className="w-3.5 h-3.5" /> Remove
             </button>
           </div>
@@ -719,7 +720,7 @@ function MobileFormDrawer({
         {/* â"€â"€ Header â"€â"€ */}
         <div className={cn(
           "shrink-0 px-6 py-4",
-          isEditing ? "bg-gradient-to-r from-blue-500 to-indigo-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"
+          isEditing ? "bg-gradient-to-r from-indigo-500 to-indigo-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"
         )}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -768,15 +769,15 @@ function MobileFormDrawer({
 
               {/* Device Identity */}
               <div className="rounded-xl border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-100">
-                  <Smartphone className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Device Identity</span>
+                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+                  <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Device Identity</span>
                 </div>
                 <div className="p-3 sm:p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Tag className="w-3 h-3" /> Brand <span className="text-red-500">*</span>
+                        <Tag className="w-3 h-3" /> Brand <span className="text-rose-500">*</span>
                       </Label>
                       {(() => {
                         const dbBrands = brands.filter(b => b !== "Apple")
@@ -800,17 +801,17 @@ function MobileFormDrawer({
                           />
                         )
                       })()}
-                      {errors.brand && <p className="text-xs text-red-500">{errors.brand.message}</p>}
+                      {errors.brand && <p className="text-xs text-rose-500">{errors.brand.message}</p>}
                     </div>
                     <div className={cn("space-y-1.5", showNewColor && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Palette className="w-3 h-3" /> Color <span className="text-red-500">*</span>
+                        <Palette className="w-3 h-3" /> Color <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewColor ? (
                         <>
                           <Select value={watch("color") ?? ""}
                             onValueChange={val => setValue("color", val, { shouldValidate: true })}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.color && "border-red-400")}>
+                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.color && "border-rose-400")}>
                               <SelectValue placeholder="Color" />
                             </SelectTrigger>
                             <SelectContent>
@@ -820,7 +821,7 @@ function MobileFormDrawer({
                           <button
                             type="button"
                             onClick={() => setShowNewColor(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                           >
                             <Plus className="w-3 h-3" /> Add New Color
                           </button>
@@ -832,7 +833,7 @@ function MobileFormDrawer({
                               placeholder="e.g. Midnight Blue"
                               value={newColorName}
                               onChange={e => setNewColorName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400"
                               autoFocus
                               onKeyDown={async (e) => {
                                 if (e.key === "Enter") {
@@ -852,7 +853,7 @@ function MobileFormDrawer({
                             <button
                               type="button"
                               disabled={!newColorName.trim() || addingColor}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => {
                                 if (!newColorName.trim()) return
                                 setAddingColor(true)
@@ -878,12 +879,12 @@ function MobileFormDrawer({
                           <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
                         </div>
                       )}
-                      {errors.color && <p className="text-xs text-red-500">{errors.color.message}</p>}
+                      {errors.color && <p className="text-xs text-rose-500">{errors.color.message}</p>}
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <Smartphone className="w-3 h-3" /> Model <span className="text-red-500">*</span>
+                      <Smartphone className="w-3 h-3" /> Model <span className="text-rose-500">*</span>
                     </Label>
                     {(() => {
                       const selectedBrand = watch("brand") ?? ""
@@ -906,7 +907,7 @@ function MobileFormDrawer({
                               />
                               {selectedBrand && (
                                 <button type="button" onClick={() => setShowNewAndroidModel(true)}
-                                  className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors">
+                                  className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors">
                                   <Plus className="w-3 h-3" /> Add New Model
                                 </button>
                               )}
@@ -918,7 +919,7 @@ function MobileFormDrawer({
                                   placeholder={`e.g. ${selectedBrand ? selectedBrand + " " : ""}Note 50 Pro`}
                                   value={newAndroidModelName}
                                   onChange={e => setNewAndroidModelName(e.target.value)}
-                                  className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                                  className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400"
                                   autoFocus
                                   onKeyDown={async (e) => {
                                     if (e.key === "Enter") {
@@ -938,7 +939,7 @@ function MobileFormDrawer({
                                 <button
                                   type="button"
                                   disabled={!newAndroidModelName.trim() || addingAndroidModel}
-                                  className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                                  className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                                   onClick={async () => {
                                     if (!newAndroidModelName.trim()) return
                                     setAddingAndroidModel(true)
@@ -965,18 +966,18 @@ function MobileFormDrawer({
                         </>
                       )
                     })()}
-                    {errors.model && <p className="text-xs text-red-500">{errors.model.message}</p>}
+                    {errors.model && <p className="text-xs text-rose-500">{errors.model.message}</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className={cn("space-y-1.5", showNewCondition && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Layers className="w-3 h-3" /> Condition <span className="text-red-500">*</span>
+                        <Layers className="w-3 h-3" /> Condition <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewCondition ? (
                         <>
                           <Select value={watch("condition") ?? ""}
                             onValueChange={val => setValue("condition", val, { shouldValidate: true })}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.condition && "border-red-400")}>
+                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.condition && "border-rose-400")}>
                               <SelectValue placeholder="Condition" />
                             </SelectTrigger>
                             <SelectContent>
@@ -984,7 +985,7 @@ function MobileFormDrawer({
                             </SelectContent>
                           </Select>
                           <button type="button" onClick={() => setShowNewCondition(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors">
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors">
                             <Plus className="w-3 h-3" /> Add New Condition
                           </button>
                         </>
@@ -992,10 +993,10 @@ function MobileFormDrawer({
                         <div className="space-y-1.5">
                           <div className="flex gap-1.5">
                             <input placeholder="e.g. Like New" value={newConditionName} onChange={e => setNewConditionName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400" autoFocus
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400" autoFocus
                               onKeyDown={async (e) => { if (e.key === "Enter") { e.preventDefault(); if (!newConditionName.trim()) return; setAddingCondition(true); const ok = await onAddCondition(newConditionName.trim()); setAddingCondition(false); if (ok) { setValue("condition", newConditionName.trim(), { shouldValidate: true }); setNewConditionName(""); setShowNewCondition(false); } } }} />
                             <button type="button" disabled={!newConditionName.trim() || addingCondition}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => { if (!newConditionName.trim()) return; setAddingCondition(true); const ok = await onAddCondition(newConditionName.trim()); setAddingCondition(false); if (ok) { setValue("condition", newConditionName.trim(), { shouldValidate: true }); setNewConditionName(""); setShowNewCondition(false); } }}>
                               {addingCondition ? "..." : "Save"}
                             </button>
@@ -1007,17 +1008,17 @@ function MobileFormDrawer({
                           <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
                         </div>
                       )}
-                      {errors.condition && <p className="text-xs text-red-500">{errors.condition.message}</p>}
+                      {errors.condition && <p className="text-xs text-rose-500">{errors.condition.message}</p>}
                     </div>
                     <div className={cn("space-y-1.5", showNewCategory && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Layers className="w-3 h-3" /> Category <span className="text-red-500">*</span>
+                        <Layers className="w-3 h-3" /> Category <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewCategory ? (
                         <>
                           <Select value={watch("category") ?? ""}
                             onValueChange={val => setValue("category", val, { shouldValidate: true })}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.category && "border-red-400")}>
+                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.category && "border-rose-400")}>
                               <SelectValue placeholder="Category" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1027,7 +1028,7 @@ function MobileFormDrawer({
                           <button
                             type="button"
                             onClick={() => setShowNewCategory(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                           >
                             <Plus className="w-3 h-3" /> Add New Category
                           </button>
@@ -1039,7 +1040,7 @@ function MobileFormDrawer({
                               placeholder="e.g. Gaming"
                               value={newCategoryName}
                               onChange={e => setNewCategoryName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400"
                               autoFocus
                               onKeyDown={async (e) => {
                                 if (e.key === "Enter") {
@@ -1059,7 +1060,7 @@ function MobileFormDrawer({
                             <button
                               type="button"
                               disabled={!newCategoryName.trim() || addingCategory}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => {
                                 if (!newCategoryName.trim()) return
                                 setAddingCategory(true)
@@ -1085,7 +1086,7 @@ function MobileFormDrawer({
                           <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
                         </div>
                       )}
-                      {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
+                      {errors.category && <p className="text-xs text-rose-500">{errors.category.message}</p>}
                     </div>
                   </div>
                 </div>
@@ -1111,13 +1112,13 @@ function MobileFormDrawer({
                   <div className="grid grid-cols-2 gap-3">
                     <div className={cn("space-y-1.5", showNewStorage && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <HardDrive className="w-3 h-3" /> Storage <span className="text-red-500">*</span>
+                        <HardDrive className="w-3 h-3" /> Storage <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewStorage ? (
                         <>
                           <Select value={watch("storage") ?? ""}
                             onValueChange={val => setValue("storage", val, { shouldValidate: true })}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.storage && "border-red-400")}>
+                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.storage && "border-rose-400")}>
                               <SelectValue placeholder="Storage" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1127,7 +1128,7 @@ function MobileFormDrawer({
                           <button
                             type="button"
                             onClick={() => setShowNewStorage(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                           >
                             <Plus className="w-3 h-3" /> Add New Storage
                           </button>
@@ -1139,7 +1140,7 @@ function MobileFormDrawer({
                               placeholder="e.g. 256GB"
                               value={newStorageName}
                               onChange={e => setNewStorageName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400"
                               autoFocus
                               onKeyDown={async (e) => {
                                 if (e.key === "Enter") {
@@ -1159,7 +1160,7 @@ function MobileFormDrawer({
                             <button
                               type="button"
                               disabled={!newStorageName.trim() || addingStorage}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => {
                                 if (!newStorageName.trim()) return
                                 setAddingStorage(true)
@@ -1185,17 +1186,17 @@ function MobileFormDrawer({
                           <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
                         </div>
                       )}
-                      {errors.storage && <p className="text-xs text-red-500">{errors.storage.message}</p>}
+                      {errors.storage && <p className="text-xs text-rose-500">{errors.storage.message}</p>}
                     </div>
                     <div className={cn("space-y-1.5", showNewRam && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Cpu className="w-3 h-3" /> RAM <span className="text-red-500">*</span>
+                        <Cpu className="w-3 h-3" /> RAM <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewRam ? (
                         <>
                           <Select value={watch("ram") ?? ""}
                             onValueChange={val => setValue("ram", val, { shouldValidate: true })}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.ram && "border-red-400")}>
+                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", errors.ram && "border-rose-400")}>
                               <SelectValue placeholder="RAM" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1205,7 +1206,7 @@ function MobileFormDrawer({
                           <button
                             type="button"
                             onClick={() => setShowNewRam(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                           >
                             <Plus className="w-3 h-3" /> Add New RAM
                           </button>
@@ -1217,7 +1218,7 @@ function MobileFormDrawer({
                               placeholder="e.g. 16GB"
                               value={newRamName}
                               onChange={e => setNewRamName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400"
                               autoFocus
                               onKeyDown={async (e) => {
                                 if (e.key === "Enter") {
@@ -1237,7 +1238,7 @@ function MobileFormDrawer({
                             <button
                               type="button"
                               disabled={!newRamName.trim() || addingRam}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => {
                                 if (!newRamName.trim()) return
                                 setAddingRam(true)
@@ -1263,7 +1264,7 @@ function MobileFormDrawer({
                           <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
                         </div>
                       )}
-                      {errors.ram && <p className="text-xs text-red-500">{errors.ram.message}</p>}
+                      {errors.ram && <p className="text-xs text-rose-500">{errors.ram.message}</p>}
                     </div>
                   </div>
                 </div>
@@ -1299,7 +1300,7 @@ function MobileFormDrawer({
                 <div className="p-4 space-y-3">
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <Smartphone className="w-3 h-3" /> iPhone Model <span className="text-red-500">*</span>
+                      <Smartphone className="w-3 h-3" /> iPhone Model <span className="text-rose-500">*</span>
                     </Label>
                     {(() => {
                       const allIphoneModels = Array.from(new Set([...APPLE_MODELS, ...iphoneModels]));
@@ -1316,17 +1317,17 @@ function MobileFormDrawer({
                         />
                       )
                     })()}
-                    {ipErrors.model && <p className="text-xs text-red-500">{ipErrors.model}</p>}
+                    {ipErrors.model && <p className="text-xs text-rose-500">{ipErrors.model}</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className={cn("space-y-1.5", showNewIphoneColor && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Palette className="w-3 h-3" /> Color <span className="text-red-500">*</span>
+                        <Palette className="w-3 h-3" /> Color <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewIphoneColor ? (
                         <>
                           <Select value={ip.color} onValueChange={val => upIp("color", val)}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", ipErrors.color && "border-red-400")}>
+                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", ipErrors.color && "border-rose-400")}>
                               <SelectValue placeholder="Select color" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1336,7 +1337,7 @@ function MobileFormDrawer({
                           <button
                             type="button"
                             onClick={() => setShowNewIphoneColor(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                           >
                             <Plus className="w-3 h-3" /> Add New Color
                           </button>
@@ -1348,7 +1349,7 @@ function MobileFormDrawer({
                               placeholder="e.g. Desert Titanium"
                               value={newIphoneColorName}
                               onChange={e => setNewIphoneColorName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400"
                               autoFocus
                               onKeyDown={async (e) => {
                                 if (e.key === "Enter") {
@@ -1368,7 +1369,7 @@ function MobileFormDrawer({
                             <button
                               type="button"
                               disabled={!newIphoneColorName.trim() || addingIphoneColor}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => {
                                 if (!newIphoneColorName.trim()) return
                                 setAddingIphoneColor(true)
@@ -1394,16 +1395,16 @@ function MobileFormDrawer({
                           <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
                         </div>
                       )}
-                      {ipErrors.color && <p className="text-xs text-red-500">{ipErrors.color}</p>}
+                      {ipErrors.color && <p className="text-xs text-rose-500">{ipErrors.color}</p>}
                     </div>
                     <div className={cn("space-y-1.5", showNewStorage && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <HardDrive className="w-3 h-3" /> Storage <span className="text-red-500">*</span>
+                        <HardDrive className="w-3 h-3" /> Storage <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewStorage ? (
                         <>
                           <Select value={ip.storage} onValueChange={val => upIp("storage", val)}>
-                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", ipErrors.storage && "border-red-400")}>
+                            <SelectTrigger className={cn("bg-slate-50 h-9 text-sm", ipErrors.storage && "border-rose-400")}>
                               <SelectValue placeholder="Storage" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1413,7 +1414,7 @@ function MobileFormDrawer({
                           <button
                             type="button"
                             onClick={() => setShowNewStorage(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors"
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors"
                           >
                             <Plus className="w-3 h-3" /> Add New Storage
                           </button>
@@ -1425,7 +1426,7 @@ function MobileFormDrawer({
                               placeholder="e.g. 256GB"
                               value={newStorageName}
                               onChange={e => setNewStorageName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400"
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400"
                               autoFocus
                               onKeyDown={async (e) => {
                                 if (e.key === "Enter") {
@@ -1445,7 +1446,7 @@ function MobileFormDrawer({
                             <button
                               type="button"
                               disabled={!newStorageName.trim() || addingStorage}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => {
                                 if (!newStorageName.trim()) return
                                 setAddingStorage(true)
@@ -1471,11 +1472,11 @@ function MobileFormDrawer({
                           <p className="text-[10px] text-slate-400">Press Enter or click Save</p>
                         </div>
                       )}
-                      {ipErrors.storage && <p className="text-xs text-red-500">{ipErrors.storage}</p>}
+                      {ipErrors.storage && <p className="text-xs text-rose-500">{ipErrors.storage}</p>}
                     </div>
                     <div className={cn("space-y-1.5", showNewIphoneCondition && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Layers className="w-3 h-3" /> Condition <span className="text-red-500">*</span>
+                        <Layers className="w-3 h-3" /> Condition <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewIphoneCondition ? (
                         <>
@@ -1486,7 +1487,7 @@ function MobileFormDrawer({
                             </SelectContent>
                           </Select>
                           <button type="button" onClick={() => setShowNewIphoneCondition(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors">
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors">
                             <Plus className="w-3 h-3" /> Add New Condition
                           </button>
                         </>
@@ -1494,10 +1495,10 @@ function MobileFormDrawer({
                         <div className="space-y-1.5">
                           <div className="flex gap-1.5">
                             <input placeholder="e.g. Like New" value={newIphoneConditionName} onChange={e => setNewIphoneConditionName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400" autoFocus
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400" autoFocus
                               onKeyDown={async (e) => { if (e.key === "Enter") { e.preventDefault(); if (!newIphoneConditionName.trim()) return; setAddingIphoneCondition(true); const ok = await onAddCondition(newIphoneConditionName.trim()); setAddingIphoneCondition(false); if (ok) { upIp("condition", newIphoneConditionName.trim()); setNewIphoneConditionName(""); setShowNewIphoneCondition(false); } } }} />
                             <button type="button" disabled={!newIphoneConditionName.trim() || addingIphoneCondition}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => { if (!newIphoneConditionName.trim()) return; setAddingIphoneCondition(true); const ok = await onAddCondition(newIphoneConditionName.trim()); setAddingIphoneCondition(false); if (ok) { upIp("condition", newIphoneConditionName.trim()); setNewIphoneConditionName(""); setShowNewIphoneCondition(false); } }}>
                               {addingIphoneCondition ? "..." : "Save"}
                             </button>
@@ -1512,7 +1513,7 @@ function MobileFormDrawer({
                     </div>
                     <div className={cn("space-y-1.5", showNewIphoneCategory && "col-span-2")}>
                       <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <Layers className="w-3 h-3" /> Category <span className="text-red-500">*</span>
+                        <Layers className="w-3 h-3" /> Category <span className="text-rose-500">*</span>
                       </Label>
                       {!showNewIphoneCategory ? (
                         <>
@@ -1523,7 +1524,7 @@ function MobileFormDrawer({
                             </SelectContent>
                           </Select>
                           <button type="button" onClick={() => setShowNewIphoneCategory(true)}
-                            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1 transition-colors">
+                            className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1 transition-colors">
                             <Plus className="w-3 h-3" /> Add New Category
                           </button>
                         </>
@@ -1531,10 +1532,10 @@ function MobileFormDrawer({
                         <div className="space-y-1.5">
                           <div className="flex gap-1.5">
                             <input placeholder="e.g. Premium" value={newIphoneCategoryName} onChange={e => setNewIphoneCategoryName(e.target.value)}
-                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-400" autoFocus
+                              className="bg-slate-50 h-9 text-sm flex-1 min-w-0 rounded-md border border-slate-200 px-3 outline-none focus:border-indigo-400" autoFocus
                               onKeyDown={async (e) => { if (e.key === "Enter") { e.preventDefault(); if (!newIphoneCategoryName.trim()) return; setAddingIphoneCategory(true); const ok = await onAddMobileCategory(newIphoneCategoryName.trim()); setAddingIphoneCategory(false); if (ok) { upIp("category", newIphoneCategoryName.trim()); setNewIphoneCategoryName(""); setShowNewIphoneCategory(false); } } }} />
                             <button type="button" disabled={!newIphoneCategoryName.trim() || addingIphoneCategory}
-                              className="h-9 px-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
+                              className="h-9 px-3 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                               onClick={async () => { if (!newIphoneCategoryName.trim()) return; setAddingIphoneCategory(true); const ok = await onAddMobileCategory(newIphoneCategoryName.trim()); setAddingIphoneCategory(false); if (ok) { upIp("category", newIphoneCategoryName.trim()); setNewIphoneCategoryName(""); setShowNewIphoneCategory(false); } }}>
                               {addingIphoneCategory ? "..." : "Save"}
                             </button>
@@ -1563,9 +1564,9 @@ function MobileFormDrawer({
 
               {/* iPhone Specifics */}
               <div className="rounded-xl border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-100">
-                  <Cpu className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">iPhone Specifics</span>
+                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+                  <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">iPhone Specifics</span>
                 </div>
                 <div className="p-4 space-y-4">
 
@@ -1575,19 +1576,19 @@ function MobileFormDrawer({
                       <Label className="text-xs font-semibold text-slate-600">Battery Health</Label>
                       <span className={cn("text-sm font-black px-3 py-0.5 rounded-full",
                         parseInt(ip.batteryHealth) >= 85 ? "bg-emerald-100 text-emerald-700" :
-                        parseInt(ip.batteryHealth) >= 70 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                        parseInt(ip.batteryHealth) >= 70 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"
                       )}>{ip.batteryHealth || 0}%</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <input type="range" min={1} max={100} value={ip.batteryHealth || "100"}
-                        onChange={e => upIp("batteryHealth", e.target.value)} className="flex-1 accent-blue-600" />
+                        onChange={e => upIp("batteryHealth", e.target.value)} className="flex-1 accent-indigo-600" />
                       <Input type="number" onWheel={e => e.currentTarget.blur()} min={1} max={100} value={ip.batteryHealth}
                         onChange={e => upIp("batteryHealth", e.target.value)} className="w-20 h-8 text-sm text-center font-bold" />
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className={cn("h-full rounded-full transition-all",
                         parseInt(ip.batteryHealth) >= 85 ? "bg-emerald-500" :
-                        parseInt(ip.batteryHealth) >= 70 ? "bg-amber-500" : "bg-red-500"
+                        parseInt(ip.batteryHealth) >= 70 ? "bg-amber-500" : "bg-rose-500"
                       )} style={{ width: `${ip.batteryHealth || 0}%` }} />
                     </div>
                   </div>
@@ -1600,18 +1601,18 @@ function MobileFormDrawer({
                     <Input value={ip.imei}
                       onChange={e => upIp("imei", e.target.value.replace(/\D/g, "").slice(0, 15))}
                       placeholder="15-digit IMEI number" maxLength={15}
-                      className={cn("bg-slate-50 h-9 text-sm font-mono", ipErrors.imei && "border-red-400")} />
-                    {ipErrors.imei ? <p className="text-xs text-red-500">{ipErrors.imei}</p>
+                      className={cn("bg-slate-50 h-9 text-sm font-mono", ipErrors.imei && "border-rose-400")} />
+                    {ipErrors.imei ? <p className="text-xs text-rose-500">{ipErrors.imei}</p>
                       : <p className="text-[11px] text-slate-400">Settings â†' General â†' About â†' IMEI</p>}
                   </div>
 
                   {/* Face ID + iCloud toggles */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className={cn("flex items-center justify-between rounded-xl border-2 px-4 py-3 transition-colors",
-                      ip.faceIdWorking ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50")}>
+                      ip.faceIdWorking ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}>
                       <div>
                         <p className="text-xs font-bold text-slate-700">Face ID</p>
-                        <p className={cn("text-[10px] font-semibold", ip.faceIdWorking ? "text-emerald-600" : "text-red-500")}>
+                        <p className={cn("text-[10px] font-semibold", ip.faceIdWorking ? "text-emerald-600" : "text-rose-500")}>
                           {ip.faceIdWorking ? "Working" : "Not Working"}
                         </p>
                       </div>
@@ -1623,25 +1624,25 @@ function MobileFormDrawer({
                       </button>
                     </div>
                     <div className={cn("flex items-center justify-between rounded-xl border-2 px-4 py-3 transition-colors",
-                      ip.iCloudLocked ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50")}>
+                      ip.iCloudLocked ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50")}>
                       <div>
                         <p className="text-xs font-bold text-slate-700">iCloud Lock</p>
-                        <p className={cn("text-[10px] font-semibold", ip.iCloudLocked ? "text-red-500" : "text-emerald-600")}>
+                        <p className={cn("text-[10px] font-semibold", ip.iCloudLocked ? "text-rose-500" : "text-emerald-600")}>
                           {ip.iCloudLocked ? "Locked" : "Unlocked"}
                         </p>
                       </div>
                       <button type="button" onClick={() => upIp("iCloudLocked", !ip.iCloudLocked)}
                         className={cn("w-12 h-6 rounded-full transition-colors relative shrink-0",
-                          ip.iCloudLocked ? "bg-red-500" : "bg-emerald-500")}>
+                          ip.iCloudLocked ? "bg-rose-500" : "bg-emerald-500")}>
                         <span className={cn("absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all",
                           ip.iCloudLocked ? "right-0.5" : "left-0.5")} />
                       </button>
                     </div>
                   </div>
                   {ip.iCloudLocked && (
-                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
-                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                      <p className="text-xs text-red-600 font-medium">iCloud locked - cannot activate without original Apple ID. Price accordingly.</p>
+                    <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5">
+                      <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                      <p className="text-xs text-rose-600 font-medium">iCloud locked - cannot activate without original Apple ID. Price accordingly.</p>
                     </div>
                   )}
                 </div>
@@ -1672,7 +1673,7 @@ function MobileFormDrawer({
                 <span className="font-medium text-slate-800">{p.data.brand} {p.data.model}</span>
                 <span className="text-slate-400">{p.data.color} - {p.data.storage} - {p.data.condition}</span>
                 <button type="button" onClick={() => setStagedPhones(prev => prev.filter((_, j) => j !== i))}
-                  className="ml-2 text-slate-400 hover:text-red-500">âœ•</button>
+                  className="ml-2 text-slate-400 hover:text-rose-500">âœ•</button>
               </div>
             ))}
           </div>
@@ -1697,12 +1698,12 @@ function MobileFormDrawer({
           )}
           {deviceType === "android" ? (
             <Button type="submit" form="android-form" disabled={isSubmitting}
-              className={cn("ml-auto", isEditing ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700")}>
+              className={cn("ml-auto", isEditing ? "bg-indigo-600 hover:bg-indigo-700" : "bg-emerald-600 hover:bg-emerald-700")}>
               {isEditing ? "Save Changes" : stagedPhones.length > 0 ? `Save All (${stagedPhones.length + 1})` : "Add Android Phone"}
             </Button>
           ) : (
             <Button type="button" onClick={handleIPhoneSubmit}
-              className={cn("ml-auto", isEditing ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-800 hover:bg-slate-900")}>
+              className={cn("ml-auto", isEditing ? "bg-indigo-600 hover:bg-indigo-700" : "bg-slate-800 hover:bg-slate-900")}>
               {isEditing ? "Save Changes" : stagedPhones.length > 0 ? `Save All (${stagedPhones.length + 1})` : "Add iPhone"}
             </Button>
           )}
@@ -1714,7 +1715,7 @@ function MobileFormDrawer({
 
 // â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-export default function MobilesPage() {
+function MobilesPageInner() {
   const [mobileList, setMobileList] = useState<Mobile[]>([])
   const [supplierList, setSupplierList] = useState<Supplier[]>([])
   const [brands, setBrands] = useState<string[]>([])
@@ -2185,7 +2186,7 @@ export default function MobilesPage() {
         cell: ({ row }) => {
           const brand = row.original.brand
           return (
-            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700">
+            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-700">
               {brand}
             </span>
           )
@@ -2254,7 +2255,7 @@ export default function MobilesPage() {
         cell: ({ row }) => {
           const m = calculateMargin(row.original.purchasePrice, row.original.sellingPrice)
           return (
-            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-blue-700 bg-blue-50 rounded-full px-2 py-0.5">
+            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-indigo-700 bg-indigo-50 rounded-full px-2 py-0.5">
               <TrendingUp className="w-3 h-3" />
               {m.toFixed(1)}%
             </span>
@@ -2284,7 +2285,7 @@ export default function MobilesPage() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
                 onClick={() => handleView(mobile)}
               >
                 <Eye className="w-4 h-4" />
@@ -2292,7 +2293,7 @@ export default function MobilesPage() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
                 onClick={() => handleEdit(mobile)}
               >
                 <Pencil className="w-4 h-4" />
@@ -2300,7 +2301,7 @@ export default function MobilesPage() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-slate-400 hover:text-red-600 hover:bg-red-50"
+                className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                 onClick={() => handleDeleteClick(mobile)}
               >
                 <Trash2 className="w-4 h-4" />
@@ -2324,7 +2325,7 @@ export default function MobilesPage() {
       <div className="space-y-4 max-w-screen-2xl mx-auto">
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-sm text-slate-500">Loading mobiles...</p>
           </div>
         </div>
@@ -2339,7 +2340,7 @@ export default function MobilesPage() {
         title="Mobile Phones"
 
         icon={<Smartphone />}
-        iconBg="bg-blue-600"
+        iconBg="bg-indigo-600"
         badge={
           <Badge variant="secondary" className="text-sm px-3 py-1">
             {mobileList.length} devices
@@ -2361,15 +2362,15 @@ export default function MobilesPage() {
           title="Total Models"
           value={String(stats.total)}
           icon={Smartphone}
-          iconBg="bg-blue-100"
-          gradient="from-blue-50 to-blue-100"
+          iconBg="bg-indigo-100"
+          gradient="from-indigo-50 to-indigo-100"
           subtext="in inventory"
         />
         <StatCard
           title="Total Units"
           value={String(stats.totalStock)}
           icon={Package}
-          iconBg="bg-blue-100"
+          iconBg="bg-indigo-100"
           gradient="from-emerald-50 to-emerald-100"
           subtext="across all models"
         />
@@ -2377,7 +2378,7 @@ export default function MobilesPage() {
           title="Inventory Value"
           value={formatCurrency(stats.totalValue)}
           icon={DollarSign}
-          iconBg="bg-blue-100"
+          iconBg="bg-indigo-100"
           gradient="from-purple-50 to-purple-100"
           subtext="at selling price"
         />
@@ -2385,8 +2386,8 @@ export default function MobilesPage() {
           title="Out of Stock"
           value={String(stats.outOfStock)}
           icon={AlertTriangle}
-          iconBg="bg-red-100"
-          gradient="from-red-50 to-red-100"
+          iconBg="bg-rose-100"
+          gradient="from-rose-50 to-rose-100"
           subtext="models need restock"
         />
       </div>
@@ -2408,14 +2409,14 @@ export default function MobilesPage() {
           <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 flex-shrink-0">
             <button
               onClick={() => setView("grid")}
-              className={cn("p-1.5 rounded-md transition-colors", view === "grid" ? "bg-white shadow-sm text-blue-600" : "text-slate-400 hover:text-slate-600")}
+              className={cn("p-1.5 rounded-md transition-colors", view === "grid" ? "bg-white shadow-sm text-indigo-600" : "text-slate-400 hover:text-slate-600")}
               title="Grid view"
             >
               <Grid3X3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => setView("table")}
-              className={cn("p-1.5 rounded-md transition-colors", view === "table" ? "bg-white shadow-sm text-blue-600" : "text-slate-400 hover:text-slate-600")}
+              className={cn("p-1.5 rounded-md transition-colors", view === "table" ? "bg-white shadow-sm text-indigo-600" : "text-slate-400 hover:text-slate-600")}
               title="Table view"
             >
               <List className="w-4 h-4" />
@@ -2526,7 +2527,7 @@ export default function MobilesPage() {
                   const margin = calculateMargin(mobile.purchasePrice, mobile.sellingPrice)
                   const stockStatus = getMobileStockStatus(mobile.stock)
                   const accentColor =
-                    stockStatus === "In Stock" ? "bg-emerald-500" : "bg-red-500"
+                    stockStatus === "In Stock" ? "bg-emerald-500" : "bg-rose-500"
                   return (
                     <div
                       key={mobile.id}
@@ -2542,7 +2543,7 @@ export default function MobilesPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 shrink-0 leading-snug">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 shrink-0 leading-snug">
                                 {mobile.brand}
                               </span>
                               <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0 leading-snug">
@@ -2578,8 +2579,8 @@ export default function MobilesPage() {
                           <div className="w-px h-8 bg-slate-200 shrink-0" />
                           {/* Sell */}
                           <div className="flex-1 min-w-0">
-                            <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Sell</p>
-                            <p className="text-sm font-bold text-blue-700 truncate">{formatCurrency(mobile.sellingPrice)}</p>
+                            <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider mb-0.5">Sell</p>
+                            <p className="text-sm font-bold text-indigo-700 truncate">{formatCurrency(mobile.sellingPrice)}</p>
                           </div>
                           {/* Divider */}
                           <div className="w-px h-8 bg-slate-200 shrink-0" />
@@ -2594,7 +2595,7 @@ export default function MobilesPage() {
                                 navigator.clipboard.writeText(String(mobile.stock))
                                 toast.success("Stock copied")
                               }}
-                              className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors shrink-0"
+                              className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-indigo-100 text-slate-400 hover:text-indigo-600 transition-colors shrink-0"
                             >
                               <Copy className="w-3 h-3" />
                             </button>
@@ -2605,7 +2606,7 @@ export default function MobilesPage() {
                         <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                           <button
                             onClick={() => handleView(mobile)}
-                            className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[11px] font-semibold text-slate-600 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 hover:border-blue-200 transition-all"
+                            className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[11px] font-semibold text-slate-600 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 transition-all"
                           >
                             <Eye className="w-3.5 h-3.5" /> View
                           </button>
@@ -2617,7 +2618,7 @@ export default function MobilesPage() {
                           </button>
                           <button
                             onClick={() => handleDeleteClick(mobile)}
-                            className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[11px] font-semibold text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-600 border border-slate-200 hover:border-red-200 transition-all"
+                            className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[11px] font-semibold text-slate-400 bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition-all"
                           >
                             <Trash2 className="w-3.5 h-3.5" /> Delete
                           </button>
@@ -2701,3 +2702,13 @@ export default function MobilesPage() {
     </div>
   )
 }
+
+
+export default function MobilesPage() {
+  return (
+    <PermissionGate permission="products.view">
+      <MobilesPageInner />
+    </PermissionGate>
+  )
+}
+

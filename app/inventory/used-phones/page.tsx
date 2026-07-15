@@ -1,4 +1,5 @@
 ﻿﻿"use client"
+import { PermissionGate } from "@/components/shared/permission-gate"
 import React, { useState, useMemo, useRef, useEffect } from "react"
 import {
   Search, SlidersHorizontal, LayoutGrid, List, Plus, Calculator, Eye, Edit2,
@@ -41,7 +42,7 @@ const GRADE_META: Record<ConditionGrade, { bg: string; text: string; border: str
   "B+": { bg: "bg-lime-100",    text: "text-lime-700",    border: "border-lime-200",    ring: "ring-lime-400",    label: "B+" },
   "B":  { bg: "bg-amber-100",   text: "text-amber-700",   border: "border-amber-200",   ring: "ring-amber-400",   label: "B"  },
   "C":  { bg: "bg-orange-100",  text: "text-orange-700",  border: "border-orange-200",  ring: "ring-orange-400",  label: "C"  },
-  "D":  { bg: "bg-red-100",     text: "text-red-700",     border: "border-red-200",     ring: "ring-red-400",     label: "D"  },
+  "D":  { bg: "bg-rose-100",     text: "text-rose-700",     border: "border-rose-200",     ring: "ring-rose-400",     label: "D"  },
 }
 
 const GRADE_MULTIPLIER: Record<ConditionGrade, number> = {
@@ -52,12 +53,12 @@ const STATUS_META: Record<PhoneStatus, { bg: string; text: string; label: string
   in_stock:      { bg: "bg-green-100",  text: "text-green-700",  label: "In Stock"      },
   under_repair:  { bg: "bg-amber-100",  text: "text-amber-700",  label: "Under Repair"  },
   sold:          { bg: "bg-slate-100",  text: "text-slate-600",  label: "Sold"          },
-  listed_online: { bg: "bg-blue-100",   text: "text-blue-700",   label: "Listed Online" },
+  listed_online: { bg: "bg-indigo-100",   text: "text-indigo-700",   label: "Listed Online" },
 }
 
 const PTA_META: Record<UsedPTAStatus, { bg: string; text: string; label: string }> = {
   approved: { bg: "bg-emerald-100", text: "text-emerald-700", label: "PTA Approved" },
-  non_pta:  { bg: "bg-red-100",     text: "text-red-700",     label: "Non-PTA"      },
+  non_pta:  { bg: "bg-rose-100",     text: "text-rose-700",     label: "Non-PTA"      },
   jv:       { bg: "bg-violet-100",  text: "text-violet-700",  label: "JV"           },
   pending:  { bg: "bg-amber-100",   text: "text-amber-700",   label: "PTA Pending"  },
   blocked:  { bg: "bg-slate-100",   text: "text-slate-600",   label: "PTA Blocked"  },
@@ -114,7 +115,7 @@ function PtaBadge({ pta }: { pta: UsedPTAStatus }) {
 
 function BatteryBar({ value }: { value?: number }) {
   if (!value) return <span className="text-slate-400 text-xs">N/A</span>
-  const color = value >= 85 ? "bg-emerald-500" : value >= 70 ? "bg-amber-500" : "bg-red-500"
+  const color = value >= 85 ? "bg-emerald-500" : value >= 70 ? "bg-amber-500" : "bg-rose-500"
   return (
     <div className="flex items-center gap-1.5">
       <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -186,7 +187,7 @@ function PhoneCard({
           </div>
           <div className={cn(
             "text-xs font-semibold px-2 py-0.5 rounded-full",
-            profit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+            profit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
           )}>
             {profit >= 0 ? "+" : ""}{margin}%
           </div>
@@ -255,7 +256,7 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
         <p className="text-sm font-semibold text-slate-900">{formatCurrency(phone.selling_price)}</p>
         <p className={cn(
           "text-xs font-medium",
-          profit >= 0 ? "text-emerald-600" : "text-red-600"
+          profit >= 0 ? "text-emerald-600" : "text-rose-600"
         )}>
           {profit >= 0 ? "+" : ""}{formatCurrency(profit)} ({margin}%)
         </p>
@@ -336,9 +337,9 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
               <p className="text-sm font-bold text-slate-900">{formatCurrency(phone.selling_price)}</p>
               <p className="text-[10px] text-slate-400">Listed at</p>
             </div>
-            <div className={cn("rounded-xl p-3", profit >= 0 ? "bg-emerald-50" : "bg-red-50")}>
+            <div className={cn("rounded-xl p-3", profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
               <p className="text-xs text-slate-400 mb-1">Profit</p>
-              <p className={cn("text-sm font-bold", profit >= 0 ? "text-emerald-700" : "text-red-700")}>
+              <p className={cn("text-sm font-bold", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
                 {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
               </p>
               <p className="text-[10px] text-slate-400">{margin}% margin</p>
@@ -377,7 +378,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
                 {phone.functional_issues.map(id => {
                   const issue = FUNCTIONAL_ISSUES.find(f => f.id === id)
                   return issue ? (
-                    <span key={id} className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-full border border-red-100">
+                    <span key={id} className="text-xs px-2 py-1 bg-rose-50 text-rose-700 rounded-full border border-rose-100">
                       {issue.label}
                     </span>
                   ) : null
@@ -394,7 +395,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
                 {phone.accessories_included.map(id => {
                   const acc = ACCESSORIES_LIST.find(a => a.id === id)
                   return acc ? (
-                    <span key={id} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                    <span key={id} className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
                       {acc.label}
                     </span>
                   ) : null
@@ -422,8 +423,8 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
 
               {/* Source person / supplier details */}
               {(phone.source_type === "walk_in" || phone.source_type === "customer_trade_in") && (phone.source_customer_name || (phone as any).source_phone || (phone as any).source_cnic) && (
-                <div className="mt-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 space-y-1">
-                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">
+                <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wide">
                     {phone.source_type === "walk_in" ? "Seller Details" : "Customer Details"}
                   </p>
                   {phone.source_customer_name && (
@@ -544,7 +545,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
                 value={customerName}
                 onChange={e => setCustomerName(e.target.value)}
                 placeholder="Walk-In Customer"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div>
@@ -553,7 +554,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
                 type="number" onWheel={e => e.currentTarget.blur()}
                 value={finalPrice}
                 onChange={e => setFinalPrice(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 min={1}
                 required
               />
@@ -603,7 +604,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-blue-600" />
+              <Calculator className="w-5 h-5 text-indigo-600" />
               <h2 className="text-lg font-bold text-slate-900">Trade-In Calculator</h2>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
@@ -617,7 +618,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                 <select
                   value={brand}
                   onChange={e => setBrand(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Select brand</option>
                   {Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort().map(b => <option key={b} value={b}>{b}</option>)}
@@ -630,7 +631,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                   value={model}
                   onChange={e => setModel(e.target.value)}
                   placeholder="e.g. Galaxy A54"
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
@@ -662,7 +663,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                   value={battery}
                   onChange={e => setBattery(e.target.value)}
                   min={0} max={100}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
@@ -673,15 +674,15 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
                 value={marketPrice}
                 onChange={e => setMarketPrice(e.target.value)}
                 placeholder="e.g. 80000"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
               />
             </div>
 
             {/* Result */}
             {result && (
-              <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3">Suggested Prices</p>
+              <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+                <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Suggested Prices</p>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className="text-xs text-slate-500">Buy From Customer</p>
@@ -706,7 +707,7 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
               <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors">
                 Close
               </button>
-              <button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+              <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
                 <Calculator className="w-4 h-4" /> Calculate
               </button>
             </div>
@@ -811,10 +812,10 @@ function CatalogCombo({
       {/* Trigger */}
       <div className={cn(
         "flex items-center h-9 rounded-lg border bg-white transition-colors",
-        "focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500",
+        "focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500",
         disabled ? "opacity-50 pointer-events-none bg-slate-50"
-        : error ? "border-red-400 bg-red-50"
-        : locked ? "border-blue-400 bg-blue-50"
+        : error ? "border-rose-400 bg-rose-50"
+        : locked ? "border-indigo-400 bg-indigo-50"
         : "border-slate-300 hover:border-slate-400"
       )}>
         {/* Lock icon - left side, only when lockable */}
@@ -823,8 +824,8 @@ function CatalogCombo({
             title={locked ? "Locked - next card inherits this value" : "Click to lock for next card"}
             className={cn(
               "flex items-center justify-center w-7 h-full rounded-l-lg border-r shrink-0 transition-colors",
-              locked ? "border-blue-300 bg-blue-100 text-blue-600 hover:bg-blue-200"
-                     : "border-slate-200 text-slate-300 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-200"
+              locked ? "border-indigo-300 bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                     : "border-slate-200 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 hover:border-indigo-200"
             )}>
             {locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
           </button>
@@ -834,7 +835,7 @@ function CatalogCombo({
             <>
               <span className="text-sm text-slate-800 flex-1 truncate font-medium">{value}</span>
               <button type="button" onClick={() => { onChange(""); setQuery("") }}
-                className="text-slate-300 hover:text-red-400 shrink-0 p-0.5"><X className="w-3 h-3" /></button>
+                className="text-slate-300 hover:text-rose-400 shrink-0 p-0.5"><X className="w-3 h-3" /></button>
             </>
           ) : (
             <input ref={inputRef} value={open ? query : ""}
@@ -874,10 +875,10 @@ function CatalogCombo({
                       onClick={() => { onChange(opt); close() }}
                       className={cn(
                         "w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-slate-50",
-                        opt === value && "bg-blue-50 text-blue-700 font-semibold"
+                        opt === value && "bg-indigo-50 text-indigo-700 font-semibold"
                       )}>
                       {opt === value
-                        ? <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        ? <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                         : <span className="w-3.5 shrink-0" />}
                       <span className="truncate">{opt}</span>
                     </button>
@@ -890,16 +891,16 @@ function CatalogCombo({
                     {!addingNew ? (
                       <button type="button"
                         onClick={() => { setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 40) }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-colors">
-                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <Plus className="w-3 h-3 text-blue-600" />
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors">
+                        <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                          <Plus className="w-3 h-3 text-indigo-600" />
                         </div>
                         Add New {label ?? ""}
                       </button>
                     ) : (
-                      <div className="p-2.5 space-y-2 bg-blue-50">
+                      <div className="p-2.5 space-y-2 bg-indigo-50">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-blue-700">New {label ?? "item"}</span>
+                          <span className="text-xs font-semibold text-indigo-700">New {label ?? "item"}</span>
                           <button type="button" onClick={() => { setAddingNew(false); setNewName("") }}
                             className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
                         </div>
@@ -912,10 +913,10 @@ function CatalogCombo({
                             if (e.key === "Escape") { setAddingNew(false); setNewName("") }
                           }}
                           placeholder={`e.g. ${label === "Brand" ? "OnePlus" : label === "Color" ? "Midnight Blue" : label === "Storage" ? "256GB" : label === "RAM" ? "6GB" : "Name..."}`}
-                          className="w-full h-8 text-sm border border-blue-300 rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full h-8 text-sm border border-indigo-300 rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                         />
                         <button type="button" onClick={handleSaveNew} disabled={!newName.trim() || saving}
-                          className="w-full h-8 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                          className="w-full h-8 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors">
                           {saving ? "Adding..." : `Add ${newName.trim() ? `"${newName.trim()}"` : label ?? "item"}`}
                         </button>
                       </div>
@@ -941,7 +942,7 @@ function CatalogCombo({
                         <>
                           <input autoFocus value={editInput} onChange={e => setEditInput(e.target.value)}
                             onKeyDown={e => { if (e.key === "Enter") handleEdit(item); if (e.key === "Escape") { setEditingVal(null); setEditInput("") } }}
-                            className="flex-1 h-6 text-xs rounded-md border border-blue-300 px-2 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                            className="flex-1 h-6 text-xs rounded-md border border-indigo-300 px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                           <button type="button" onClick={() => handleEdit(item)} disabled={saving}
                             className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 px-1 shrink-0">Save</button>
                           <button type="button" onClick={() => { setEditingVal(null); setEditInput("") }}
@@ -949,9 +950,9 @@ function CatalogCombo({
                         </>
                       ) : deletingVal === item ? (
                         <>
-                          <span className="flex-1 text-xs text-red-600 truncate">{item}</span>
+                          <span className="flex-1 text-xs text-rose-600 truncate">{item}</span>
                           <button type="button" onClick={() => handleDelete(item)} disabled={saving}
-                            className="text-[10px] font-bold text-red-600 hover:text-red-700 px-1 shrink-0">Delete?</button>
+                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 px-1 shrink-0">Delete?</button>
                           <button type="button" onClick={() => setDeletingVal(null)}
                             className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0">No</button>
                         </>
@@ -960,10 +961,10 @@ function CatalogCombo({
                           <span className="flex-1 text-xs text-slate-700 truncate">{item}</span>
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             {onEdit && <button type="button" onClick={() => { setEditingVal(item); setEditInput(item) }}
-                              className="p-1 rounded hover:bg-blue-50 text-slate-300 hover:text-blue-500 transition-colors">
+                              className="p-1 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-500 transition-colors">
                               <Pencil className="w-3 h-3" /></button>}
                             {onDelete && <button type="button" onClick={() => setDeletingVal(item)}
-                              className="p-1 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors">
+                              className="p-1 rounded hover:bg-rose-50 text-slate-300 hover:text-rose-500 transition-colors">
                               <Trash2 className="w-3 h-3" /></button>}
                           </div>
                         </>
@@ -1404,7 +1405,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           <p className="text-xs text-slate-400">
             {rows.length} phone{rows.length !== 1 ? "s" : ""}
             {completedCount > 0 && <span className="text-emerald-600"> - {completedCount} ready</span>}
-            {saveProgress && <span className="text-blue-600 font-medium"> - Saving {saveProgress.done}/{saveProgress.total}...</span>}
+            {saveProgress && <span className="text-indigo-600 font-medium"> - Saving {saveProgress.done}/{saveProgress.total}...</span>}
           </p>
         </div>
         <button onClick={toggleExpandAll}
@@ -1412,7 +1413,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           {allExpanded ? "Collapse all" : "Expand all"}
         </button>
         <button onClick={handleSave} disabled={saving}
-          className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center gap-2 shrink-0">
+          className="px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center gap-2 shrink-0">
           {saving
             ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             : <CheckCircle2 className="w-4 h-4" />}
@@ -1438,7 +1439,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
                 {/* Source Type */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Source <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Source <span className="text-rose-500">*</span></label>
                   <div className="flex gap-1.5">
                     {([
                       { val: "purchased",         label: "Supplier"   },
@@ -1450,8 +1451,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         className={cn(
                           "px-3 h-9 rounded-lg text-xs font-semibold border transition-colors",
                           sourceType === opt.val
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-white text-slate-600 border-slate-300 hover:border-indigo-400"
                         )}>
                         {opt.label}
                       </button>
@@ -1462,7 +1463,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                 {/* Supplier (when source = purchased) */}
                 {sourceType === "purchased" && (
                   <div className="w-64">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Supplier <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Supplier <span className="text-rose-500">*</span></label>
                     <CatalogCombo
                       value={localSuppliers.find(s => s.id === supplierId)?.companyName ?? ""}
                       onChange={v => { const s = localSuppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
@@ -1471,14 +1472,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       error={supplierErr}
                       disabled={suppliersLoading}
                     />
-                    {supplierErr && <p className="text-xs text-red-500 mt-1">Supplier is required</p>}
+                    {supplierErr && <p className="text-xs text-rose-500 mt-1">Supplier is required</p>}
                   </div>
                 )}
 
                 {/* Customer (when source = customer_trade_in) */}
                 {sourceType === "customer_trade_in" && (
                   <div className="w-64">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Customer <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Customer <span className="text-rose-500">*</span></label>
                     <CatalogCombo
                       value={selectedCustomerName}
                       onChange={v => { setSelectedCustomerName(v); const c = localCustomers.find((x: any) => x.name === v); setSelectedCustomerId((c as any)?.id ?? "") }}
@@ -1492,40 +1493,40 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                 {sourceType === "walk_in" && (
                   <div className="flex flex-wrap gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Seller Name <span className="text-red-500">*</span></label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Seller Name <span className="text-rose-500">*</span></label>
                       <input value={walkinName} onChange={e => setWalkinName(e.target.value)}
                         placeholder="e.g. Muhammad Ali"
-                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-44" />
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-44" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone</label>
                       <input value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)}
                         placeholder="03001234567"
-                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-36" />
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-36" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">CNIC <span className="text-slate-400 font-normal">(optional)</span></label>
                       <input value={walkinCnic} onChange={e => setWalkinCnic(e.target.value.replace(/[^0-9-]/g, "").slice(0, 15))}
                         placeholder="42101-1234567-1"
-                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-40" />
+                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-40" />
                     </div>
                   </div>
                 )}
 
                 {/* Date */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Purchase Date <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Purchase Date <span className="text-rose-500">*</span></label>
                   <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)}
                     className={cn(
-                      "h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors bg-white",
-                      !purchaseDate ? "border-red-400 bg-red-50" : "border-slate-300"
+                      "h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors bg-white",
+                      !purchaseDate ? "border-rose-400 bg-rose-50" : "border-slate-300"
                     )} />
                 </div>
 
                 {/* Lock hint */}
                 <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pb-1">
-                  <Lock className="w-3 h-3 text-blue-400 shrink-0" />
-                  <span>{language === "ur" ? <>لاک <Lock className="w-2.5 h-2.5 inline text-blue-400" /> کریں کوئی بھی خانہ — اگلے فون میں خود کاپی ہو گا</> : <>Lock <Lock className="w-2.5 h-2.5 inline text-blue-400" /> any field on a phone card to copy it to the next</>}</span>
+                  <Lock className="w-3 h-3 text-indigo-400 shrink-0" />
+                  <span>{language === "ur" ? <>لاک <Lock className="w-2.5 h-2.5 inline text-indigo-400" /> کریں کوئی بھی خانہ — اگلے فون میں خود کاپی ہو گا</> : <>Lock <Lock className="w-2.5 h-2.5 inline text-indigo-400" /> any field on a phone card to copy it to the next</>}</span>
                 </div>
               </div>
             </div>
@@ -1543,14 +1544,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
             return (
               <div key={row.id} className={cn(
                 "rounded-xl border bg-white shadow-sm transition-all",
-                hasError ? "border-red-400 ring-1 ring-red-200" : isComplete ? "border-emerald-400" : "border-slate-200"
+                hasError ? "border-rose-400 ring-1 ring-rose-200" : isComplete ? "border-emerald-400" : "border-slate-200"
               )}>
                 {/* Card header */}
                 <div className="flex items-center gap-2.5 px-4 py-2.5 cursor-pointer select-none"
                   onClick={() => setRows(prev => prev.map(r => r.id === row.id ? { ...r, expanded: !r.expanded } : r))}>
                   <div className={cn(
                     "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
-                    isComplete ? "bg-emerald-100 text-emerald-700" : hasError ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"
+                    isComplete ? "bg-emerald-100 text-emerald-700" : hasError ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"
                   )}>
                     {isComplete ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
                   </div>
@@ -1573,19 +1574,19 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     {Number(row.purchase_price) > 0 && <span className="text-[10px] text-slate-400">Buy {formatCurrency(Number(row.purchase_price))}</span>}
                     {Number(row.selling_price) > 0 && <span className="text-[10px] text-slate-400">Sell {formatCurrency(Number(row.selling_price))}</span>}
                     {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 && (
-                      <span className={cn("text-[10px] font-semibold", rowProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
+                      <span className={cn("text-[10px] font-semibold", rowProfit >= 0 ? "text-emerald-600" : "text-rose-500")}>
                         {rowProfit >= 0 ? "+" : ""}{formatCurrency(rowProfit)}
                       </span>
                     )}
-                    {hasError && <span className="text-[10px] text-red-500 font-medium">{row.rowError}</span>}
+                    {hasError && <span className="text-[10px] text-rose-500 font-medium">{row.rowError}</span>}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
                     <button onClick={() => duplicateRow(row.id)} title="Duplicate"
-                      className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors">
+                      className="p-1.5 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-md transition-colors">
                       <Copy className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => removeRow(row.id)} disabled={rows.length === 1}
-                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-20">
+                      className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors disabled:opacity-20">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                     {row.expanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400 ml-0.5" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />}
@@ -1606,7 +1607,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         {/* Brand - col 2 */}
                         <div className="col-span-2">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                            Brand <span className="text-red-500">*</span>
+                            Brand <span className="text-rose-500">*</span>
                           </label>
                           <CatalogCombo
                             label="Brand"
@@ -1624,7 +1625,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         {/* Model - col 4 */}
                         <div className="col-span-4">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                            Model <span className="text-red-500">*</span>
+                            Model <span className="text-rose-500">*</span>
                           </label>
                           <CatalogCombo
                             label="Model"
@@ -1679,7 +1680,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                                 <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
                                   onChange={e => updateRow(row.id, "battery_health", e.target.value)}
                                   placeholder="91" min="1" max="100"
-                                  className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                                  className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
                                 <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
                               </div>
                             </>
@@ -1712,7 +1713,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
                         {/* IMEI - col 3 */}
                         <div className="col-span-3">
-                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">IMEI <span className="text-red-500">*</span></label>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">IMEI <span className="text-rose-500">*</span></label>
                           <div className="relative">
                             <input value={row.imei_number}
                               onChange={e => updateRow(row.id, "imei_number", e.target.value.replace(/\D/g, "").slice(0, 15))}
@@ -1721,7 +1722,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                                 "w-full h-9 border rounded-lg px-2.5 pr-8 text-sm font-mono focus:outline-none focus:ring-2 transition-colors",
                                 row.imei_number.length === 15 ? "border-emerald-400 bg-emerald-50 focus:ring-emerald-400"
                                 : row.imei_number.length > 0 ? "border-amber-400 focus:ring-amber-400"
-                                : hasError ? "border-red-400 bg-red-50 focus:ring-red-400" : "border-slate-300 focus:ring-blue-500"
+                                : hasError ? "border-rose-400 bg-rose-50 focus:ring-rose-400" : "border-slate-300 focus:ring-indigo-500"
                               )} />
                             {row.imei_number.length > 0 && row.imei_number.length < 15 && (
                               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-amber-500 font-bold pointer-events-none">{15 - row.imei_number.length}</span>
@@ -1738,7 +1739,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                               <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
                                 onChange={e => updateRow(row.id, "battery_health", e.target.value)}
                                 placeholder="85" min="1" max="100"
-                                className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                                className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
                               <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
                             </div>
                           </div>
@@ -1750,7 +1751,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <button type="button" onClick={() => toggleLock("condition_grade")}
                               title={locks.condition_grade ? "Locked" : "Click to lock grade"}
                               className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.condition_grade ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                                locks.condition_grade ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
                               {locks.condition_grade ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
                             </button>
                             <label className="text-xs font-semibold text-slate-600">Grade</label>
@@ -1779,14 +1780,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <button type="button" onClick={() => toggleLock("screen_condition")}
                               title={locks.screen_condition ? "Locked" : "Click to lock"}
                               className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.screen_condition ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                                locks.screen_condition ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
                               {locks.screen_condition ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
                             </button>
                             <label className="text-xs font-semibold text-slate-600">Screen</label>
                           </div>
                           <select value={row.screen_condition} onChange={e => updateRow(row.id, "screen_condition", e.target.value as ScreenCondition)}
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
-                              locks.screen_condition ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                              locks.screen_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
                             <option value="perfect">Perfect</option>
                             <option value="minor_scratches">Scratches</option>
                             <option value="cracked">Cracked</option>
@@ -1800,14 +1801,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <button type="button" onClick={() => toggleLock("body_condition")}
                               title={locks.body_condition ? "Locked" : "Click to lock"}
                               className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.body_condition ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                                locks.body_condition ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
                               {locks.body_condition ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
                             </button>
                             <label className="text-xs font-semibold text-slate-600">Body</label>
                           </div>
                           <select value={row.body_condition} onChange={e => updateRow(row.id, "body_condition", e.target.value as BodyCondition)}
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
-                              locks.body_condition ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                              locks.body_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
                             <option value="perfect">Perfect</option>
                             <option value="minor_wear">Minor Wear</option>
                             <option value="dents">Dents</option>
@@ -1831,18 +1832,18 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <button type="button" onClick={() => toggleLock("purchase_price")}
                               title={locks.purchase_price ? "Locked" : "Click to lock buy price"}
                               className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.purchase_price ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                                locks.purchase_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
                               {locks.purchase_price ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
                             </button>
-                            <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-red-500">*</span></label>
+                            <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-rose-500">*</span></label>
                           </div>
                           <input type="number" onWheel={e => e.currentTarget.blur()} value={row.purchase_price}
                             onChange={e => updateRow(row.id, "purchase_price", e.target.value)}
                             placeholder="0" min="0"
                             className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
                               (!row.purchase_price || Number(row.purchase_price) <= 0) && hasError
-                                ? "border-red-400 bg-red-50 focus:ring-red-400"
-                                : locks.purchase_price ? "border-blue-400 bg-blue-50 focus:ring-blue-500" : "border-slate-300 focus:ring-blue-500")} />
+                                ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
+                                : locks.purchase_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
                         </div>
 
                         {/* Sell Price - col 2 */}
@@ -1851,18 +1852,18 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <button type="button" onClick={() => toggleLock("selling_price")}
                               title={locks.selling_price ? "Locked" : "Click to lock sell price"}
                               className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.selling_price ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                                locks.selling_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
                               {locks.selling_price ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
                             </button>
-                            <label className="text-xs font-semibold text-slate-600">Sell Price <span className="text-red-500">*</span></label>
+                            <label className="text-xs font-semibold text-slate-600">Sell Price <span className="text-rose-500">*</span></label>
                           </div>
                           <input type="number" onWheel={e => e.currentTarget.blur()} value={row.selling_price}
                             onChange={e => updateRow(row.id, "selling_price", e.target.value)}
                             placeholder="0" min="0"
                             className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
                               (!row.selling_price || Number(row.selling_price) <= 0) && hasError
-                                ? "border-red-400 bg-red-50 focus:ring-red-400"
-                                : locks.selling_price ? "border-blue-400 bg-blue-50 focus:ring-blue-500" : "border-slate-300 focus:ring-blue-500")} />
+                                ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
+                                : locks.selling_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
                         </div>
 
                         {/* Profit display - col 2 */}
@@ -1870,10 +1871,10 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           <div className="col-span-2 flex flex-col justify-end">
                             <label className="block text-xs font-semibold text-slate-400 mb-1.5">Margin</label>
                             <div className={cn("h-9 flex items-center px-3 rounded-lg text-sm font-bold border",
-                              rowProfit >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200")}>
+                              rowProfit >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-600 border-rose-200")}>
                               {rowProfit >= 0 ? "+" : ""}{formatCurrency(rowProfit)}
                               <span className={cn("ml-1.5 text-xs font-medium",
-                                rowProfit >= 0 ? "text-emerald-500" : "text-red-400")}>
+                                rowProfit >= 0 ? "text-emerald-500" : "text-rose-400")}>
                                 ({Number(row.selling_price) > 0 ? Math.round((rowProfit / Number(row.selling_price)) * 100) : 0}%)
                               </span>
                             </div>
@@ -1886,14 +1887,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <button type="button" onClick={() => toggleLock("warranty_days")}
                               title={locks.warranty_days ? "Locked" : "Click to lock warranty"}
                               className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.warranty_days ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                                locks.warranty_days ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
                               {locks.warranty_days ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
                             </button>
                             <label className="text-xs font-semibold text-slate-600">Warranty</label>
                           </div>
                           <select value={row.warranty_days} onChange={e => updateRow(row.id, "warranty_days", e.target.value)}
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
-                              locks.warranty_days ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                              locks.warranty_days ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
                             <option value="0">No warranty</option>
                             <option value="3">3 days</option>
                             <option value="7">7 days</option>
@@ -1909,14 +1910,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <button type="button" onClick={() => toggleLock("pta_status")}
                               title={locks.pta_status ? "Locked" : "Click to lock PTA"}
                               className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.pta_status ? "bg-blue-100 border-blue-400 text-blue-600" : "border-slate-300 text-slate-300 hover:border-blue-300 hover:text-blue-400")}>
+                                locks.pta_status ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
                               {locks.pta_status ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
                             </button>
                             <label className="text-xs font-semibold text-slate-600">PTA</label>
                           </div>
                           <select value={row.pta_status} onChange={e => updateRow(row.id, "pta_status", e.target.value as UsedPTAStatus)}
-                            className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors",
-                              locks.pta_status ? "border-blue-400 bg-blue-50" : "border-slate-300")}>
+                            className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                              locks.pta_status ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
                             <option value="approved">PTA Approved</option>
                             <option value="non_pta">Non-PTA</option>
                             {row.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
@@ -1928,7 +1929,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">Notes</label>
                           <input value={row.condition_notes} onChange={e => updateRow(row.id, "condition_notes", e.target.value)}
                             placeholder="Accessories, issues, remarks..."
-                            className="w-full h-9 border border-slate-300 rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                            className="w-full h-9 border border-slate-300 rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
                         </div>
                       </div>
                     </div>
@@ -1942,7 +1943,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
           {/* Add phone button */}
           <button onClick={addRow}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-dashed border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50 hover:border-blue-400 transition-all">
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-600 text-sm font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all">
             <Plus className="w-4 h-4" /> Add Another Phone
           </button>
           </div>{/* end phone cards */}
@@ -1993,12 +1994,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         <label className="block text-xs font-semibold text-slate-600 mb-1.5">Amount Paid (Rs)</label>
                         <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={amountPaid}
                           onChange={e => setAmountPaid(e.target.value)}
-                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder:text-slate-400 transition-colors" />
+                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1.5">Payment Account</label>
                         <select value={accountId} onChange={e => setAccountId(e.target.value)}
-                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-colors">
+                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors">
                           <option value="">No account</option>
                           {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
@@ -2049,7 +2050,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                   )}
 
                   <button onClick={handleSave} disabled={saving}
-                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
+                    className="w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
                     {saving
                       ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       : <CheckCircle2 className="w-4 h-4" />}
@@ -2112,7 +2113,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   return (
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
       </label>
       {children}
     </div>
@@ -2276,7 +2277,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     ? ((profit / Number(form.selling_price)) * 100).toFixed(0)
     : "0"
 
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
   const selectCls = inputCls
 
   return (
@@ -2297,13 +2298,13 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                 <React.Fragment key={s}>
                   <div className={cn(
                     "flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-full transition-all whitespace-nowrap",
-                    i === step ? "bg-blue-100 text-blue-700" :
+                    i === step ? "bg-indigo-100 text-indigo-700" :
                     i < step  ? "bg-emerald-100 text-emerald-700" :
                     "text-slate-400"
                   )}>
                     <span className={cn(
                       "w-4 h-4 rounded-full flex items-center justify-center text-[10px] flex-shrink-0",
-                      i === step ? "bg-blue-600 text-white" :
+                      i === step ? "bg-indigo-600 text-white" :
                       i < step  ? "bg-emerald-500 text-white" :
                       "bg-slate-200"
                     )}>
@@ -2368,7 +2369,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           {colors.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                         <button type="button" onClick={() => setShowNewColor(true)}
-                          className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1">
+                          className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1">
                           <Plus className="w-3 h-3" /> Add New Color
                         </button>
                       </>
@@ -2385,7 +2386,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                             }
                           }} />
                         <button type="button" disabled={!newColorName.trim() || addingColor}
-                          className="h-9 px-3 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                          className="h-9 px-3 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:opacity-50"
                           onClick={async () => {
                             if (!newColorName.trim()) return
                             setAddingColor(true)
@@ -2405,7 +2406,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           {storageOptions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                         <button type="button" onClick={() => setShowNewStorage(true)}
-                          className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1">
+                          className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1">
                           <Plus className="w-3 h-3" /> Add New Storage
                         </button>
                       </>
@@ -2422,7 +2423,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                             }
                           }} />
                         <button type="button" disabled={!newStorageName.trim() || addingStorage}
-                          className="h-9 px-3 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                          className="h-9 px-3 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:opacity-50"
                           onClick={async () => {
                             if (!newStorageName.trim()) return
                             setAddingStorage(true)
@@ -2444,7 +2445,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           {ramOptions.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                         <button type="button" onClick={() => setShowNewRam(true)}
-                          className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium mt-1">
+                          className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mt-1">
                           <Plus className="w-3 h-3" /> Add New RAM
                         </button>
                       </>
@@ -2461,7 +2462,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                             }
                           }} />
                         <button type="button" disabled={!newRamName.trim() || addingRam}
-                          className="h-9 px-3 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                          className="h-9 px-3 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:opacity-50"
                           onClick={async () => {
                             if (!newRamName.trim()) return
                             setAddingRam(true)
@@ -2481,7 +2482,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                 </Field>
                 {/* -- Source -- */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Where did this phone come from?<span className="text-red-500 ml-0.5">*</span></label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Where did this phone come from?<span className="text-rose-500 ml-0.5">*</span></label>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {([
                       { type: "walk_in"           as SourceType, label: "Walk-in Seller", icon: "🚶", desc: "Person off the street" },
@@ -2495,7 +2496,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                         className={cn(
                           "flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-center transition-all",
                           form.source_type === opt.type
-                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            ? "border-indigo-500 bg-indigo-50 text-indigo-700"
                             : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                         )}
                       >
@@ -2512,7 +2513,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Seller Details</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1">Full Name <span className="text-red-500">*</span></label>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Full Name <span className="text-rose-500">*</span></label>
                           <input type="text" value={form.walkin_name} onChange={e => set("walkin_name", e.target.value)} placeholder="e.g. Ali Raza" className={inputCls} />
                         </div>
                         <div>
@@ -2552,7 +2553,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       {form.source_customer_id && (() => {
                         const c = customers.find(x => x.id === form.source_customer_id)
                         return c ? (
-                          <div className="flex items-center gap-2 mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2 mt-1 text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
                             <span className="font-semibold">{c.name}</span>
                             {c.phone && <span className="text-slate-500"> ·  {c.phone}</span>}
                           </div>
@@ -2647,13 +2648,13 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     {FUNCTIONAL_ISSUES.map(fi => (
                       <label key={fi.id} className={cn(
                         "flex items-center gap-2 p-2 border rounded-lg cursor-pointer text-xs transition-all",
-                        form.functional_issues.includes(fi.id) ? "bg-red-50 border-red-300 text-red-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        form.functional_issues.includes(fi.id) ? "bg-rose-50 border-rose-300 text-rose-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                       )}>
                         <input
                           type="checkbox"
                           checked={form.functional_issues.includes(fi.id)}
                           onChange={() => toggleCheck("functional_issues", fi.id)}
-                          className="w-3.5 h-3.5 accent-red-600"
+                          className="w-3.5 h-3.5 accent-rose-600"
                         />
                         {fi.label}
                       </label>
@@ -2666,13 +2667,13 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     {ACCESSORIES_LIST.map(acc => (
                       <label key={acc.id} className={cn(
                         "flex items-center gap-2 p-2 border rounded-lg cursor-pointer text-xs transition-all",
-                        form.accessories_included.includes(acc.id) ? "bg-blue-50 border-blue-300 text-blue-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        form.accessories_included.includes(acc.id) ? "bg-indigo-50 border-indigo-300 text-indigo-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                       )}>
                         <input
                           type="checkbox"
                           checked={form.accessories_included.includes(acc.id)}
                           onChange={() => toggleCheck("accessories_included", acc.id)}
-                          className="w-3.5 h-3.5 accent-blue-600"
+                          className="w-3.5 h-3.5 accent-indigo-600"
                         />
                         {acc.label}
                       </label>
@@ -2685,7 +2686,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     onChange={e => set("condition_notes", e.target.value)}
                     rows={3}
                     placeholder="Describe the condition in detail..."
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                   />
                 </Field>
               </div>
@@ -2712,9 +2713,9 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     <p className="text-xs text-slate-400">Sell Price</p>
                     <p className="text-sm font-bold text-slate-900">{formatCurrency(Number(form.selling_price) || 0)}</p>
                   </div>
-                  <div className={cn("rounded-xl p-3", profit >= 0 ? "bg-emerald-50" : "bg-red-50")}>
+                  <div className={cn("rounded-xl p-3", profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
                     <p className="text-xs text-slate-400">Profit</p>
-                    <p className={cn("text-sm font-bold", profit >= 0 ? "text-emerald-700" : "text-red-700")}>
+                    <p className={cn("text-sm font-bold", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
                       {profit >= 0 ? "+" : ""}{formatCurrency(profit)} ({margin}%)
                     </p>
                   </div>
@@ -2745,7 +2746,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Payment</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Field label="Amount Paid (â‚¨)">
+                      <Field label="Amount Paid (Rs)">
                         <input
                           type="number" onWheel={e => e.currentTarget.blur()}
                           value={form.payment_amount}
@@ -2760,7 +2761,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                           <option value="">-- Select account --</option>
                           {accounts.map(a => (
                             <option key={a.id} value={a.id}>
-                              {a.name} ({a.type === "cash" ? "Cash" : a.type === "bank" ? "Bank" : "Mobile Wallet"}) - â‚¨{a.currentBalance.toLocaleString()}
+                              {a.name} ({a.type === "cash" ? "Cash" : a.type === "bank" ? "Bank" : "Mobile Wallet"}) - Rs{a.currentBalance.toLocaleString()}
                             </option>
                           ))}
                         </select>
@@ -2774,7 +2775,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     {form.payment_amount && Number(form.payment_amount) > 0 && form.payment_account_id && (
                       <p className="text-xs text-emerald-600 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        â‚¨{Number(form.payment_amount).toLocaleString()} will be deducted from your account on save
+                        Rs{Number(form.payment_amount).toLocaleString()} will be deducted from your account on save
                       </p>
                     )}
                   </div>
@@ -2789,7 +2790,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center gap-3 text-slate-400 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-500 transition-all"
+                  className="w-full border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center gap-3 text-slate-400 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-500 transition-all"
                 >
                   <Upload className="w-8 h-8" />
                   <span className="text-sm font-medium">Click to upload photos</span>
@@ -2803,7 +2804,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                         <button
                           type="button"
                           onClick={() => setForm(prev => ({ ...prev, photos: prev.photos.filter((_,j) => j !== i) }))}
-                          className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-red-500 hover:bg-white transition-colors"
+                          className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-rose-500 hover:bg-white transition-colors"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -2852,7 +2853,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     ))}
                   </div>
                 </div>
-                <div className={cn("rounded-xl p-4 border-2", profit >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50")}>
+                <div className={cn("rounded-xl p-4 border-2", profit >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Financials</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
@@ -2865,7 +2866,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     </div>
                     <div>
                       <p className="text-xs text-slate-400">Profit ({margin}%)</p>
-                      <p className={cn("text-base font-bold", profit >= 0 ? "text-emerald-700" : "text-red-700")}>
+                      <p className={cn("text-base font-bold", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
                         {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
                       </p>
                     </div>
@@ -2901,7 +2902,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
               <button
                 type="button"
                 onClick={next}
-                className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-blue-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
               >
                 Next <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
@@ -2923,7 +2924,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
 
 // --Ã¢"â‚¬ Main Page ----------------------------------------------------------------
 
-export default function UsedPhonesPage() {
+function UsedPhonesPageInner() {
   const [phones, setPhones] = useState<UsedPhone[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]             = useState("")
@@ -3285,7 +3286,7 @@ export default function UsedPhonesPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-sm text-slate-500">Loading used phones...</p>
           </div>
         </div>
@@ -3342,7 +3343,7 @@ export default function UsedPhonesPage() {
           </button>
           <button
             onClick={() => setShowBulkDialog(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" /> Add Phone(s)
           </button>
@@ -3373,7 +3374,7 @@ export default function UsedPhonesPage() {
                 <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-center">
                   {phones.filter(p=>p.status==="sold").length} sold
                 </span>
-                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium text-center">
+                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded font-medium text-center">
                   {phones.filter(p=>p.status==="listed_online").length} online
                 </span>
               </div>
@@ -3429,7 +3430,7 @@ export default function UsedPhonesPage() {
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Profit</p>
               <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />
             </div>
-            <p className={cn("text-base font-bold leading-none", stats.profitSold >= 0 ? "text-emerald-700" : "text-red-700")}>
+            <p className={cn("text-base font-bold leading-none", stats.profitSold >= 0 ? "text-emerald-700" : "text-rose-700")}>
               {stats.profitSold >= 0 ? "+" : ""}{formatCurrency(stats.profitSold)}
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">Completed sales</p>
@@ -3447,7 +3448,7 @@ export default function UsedPhonesPage() {
               value={search}
               onChange={e => { setSearch(e.target.value); resetPage() }}
               placeholder="Search by brand, model, color, IMEI..."
-              className="w-full pl-8 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-8 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <button
@@ -3455,14 +3456,14 @@ export default function UsedPhonesPage() {
             className={cn(
               "flex items-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-medium transition-colors",
               showFilters || hasFilters
-                ? "bg-blue-50 border-blue-200 text-blue-700"
+                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
                 : "border-slate-200 text-slate-700 hover:bg-slate-50"
             )}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             Filters
             {hasFilters && (
-              <span className="bg-blue-600 text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+              <span className="bg-indigo-600 text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
                 !
               </span>
             )}
@@ -3471,13 +3472,13 @@ export default function UsedPhonesPage() {
           <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode("grid")}
-              className={cn("p-1.5 transition-colors", viewMode === "grid" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
+              className={cn("p-1.5 transition-colors", viewMode === "grid" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50")}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={cn("p-1.5 transition-colors", viewMode === "list" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50")}
+              className={cn("p-1.5 transition-colors", viewMode === "list" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50")}
             >
               <List className="w-3.5 h-3.5" />
             </button>
@@ -3492,7 +3493,7 @@ export default function UsedPhonesPage() {
               <select
                 value={gradeFilter}
                 onChange={e => { setGradeFilter(e.target.value as ConditionGrade | ""); resetPage() }}
-                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All Grades</option>
                 {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => <option key={g} value={g}>Grade {g}</option>)}
@@ -3503,7 +3504,7 @@ export default function UsedPhonesPage() {
               <select
                 value={brandFilter}
                 onChange={e => { setBrandFilter(e.target.value); resetPage() }}
-                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All Brands</option>
                 {Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort().map(b => <option key={b} value={b}>{b}</option>)}
@@ -3514,7 +3515,7 @@ export default function UsedPhonesPage() {
               <select
                 value={statusFilter}
                 onChange={e => { setStatusFilter(e.target.value as PhoneStatus | ""); resetPage() }}
-                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All Status</option>
                 {(Object.entries(STATUS_META) as [PhoneStatus, typeof STATUS_META[PhoneStatus]][]).map(([k,v]) => (
@@ -3527,7 +3528,7 @@ export default function UsedPhonesPage() {
               <select
                 value={ptaFilter}
                 onChange={e => { setPtaFilter(e.target.value as UsedPTAStatus | ""); resetPage() }}
-                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All PTA</option>
                 <option value="approved">PTA Approved</option>
@@ -3537,19 +3538,19 @@ export default function UsedPhonesPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (Rs)</label>
-              <input type="number" onWheel={e => e.currentTarget.blur()} value={minPrice} onChange={e => { setMinPrice(e.target.value); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={minPrice} onChange={e => { setMinPrice(e.target.value); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (Rs)</label>
-              <input type="number" onWheel={e => e.currentTarget.blur()} value={maxPrice} onChange={e => { setMaxPrice(e.target.value); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={maxPrice} onChange={e => { setMaxPrice(e.target.value); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Min Battery %</label>
-              <input type="number" onWheel={e => e.currentTarget.blur()} value={minBattery} onChange={e => { setMinBattery(e.target.value); resetPage() }} placeholder="0" min={0} max={100} className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" onWheel={e => e.currentTarget.blur()} value={minBattery} onChange={e => { setMinBattery(e.target.value); resetPage() }} placeholder="0" min={0} max={100} className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             {hasFilters && (
               <div className="flex items-end">
-                <button onClick={clearFilters} className="w-full py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+                <button onClick={clearFilters} className="w-full py-2 text-sm font-medium text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 transition-colors">
                   Clear All
                 </button>
               </div>
@@ -3565,7 +3566,7 @@ export default function UsedPhonesPage() {
               : `Showing ${filtered.length} of ${phones.length} phones`}
           </span>
           {hasFilters && (
-            <button onClick={clearFilters} className="text-blue-600 hover:underline font-medium">Clear filters</button>
+            <button onClick={clearFilters} className="text-indigo-600 hover:underline font-medium">Clear filters</button>
           )}
         </div>
       </div>
@@ -3576,7 +3577,7 @@ export default function UsedPhonesPage() {
           <Smartphone className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 font-medium">No phones found</p>
           <p className="text-slate-400 text-sm mt-1">Try adjusting your filters or add a new phone.</p>
-          <button onClick={clearFilters} className="mt-4 text-blue-600 text-sm hover:underline">Clear filters</button>
+          <button onClick={clearFilters} className="mt-4 text-indigo-600 text-sm hover:underline">Clear filters</button>
         </div>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
@@ -3633,7 +3634,7 @@ export default function UsedPhonesPage() {
                   onClick={() => setPage(pg)}
                   className={cn(
                     "w-8 h-8 rounded-lg text-sm font-medium transition-colors",
-                    pg === page ? "bg-blue-600 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    pg === page ? "bg-indigo-600 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"
                   )}
                 >
                   {pg}
@@ -3689,3 +3690,13 @@ export default function UsedPhonesPage() {
     </div>
   )
 }
+
+
+export default function UsedPhonesPage() {
+  return (
+    <PermissionGate permission="inventory.view">
+      <UsedPhonesPageInner />
+    </PermissionGate>
+  )
+}
+
