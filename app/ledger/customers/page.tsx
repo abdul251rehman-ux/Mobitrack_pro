@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import {
   Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown,
@@ -21,6 +22,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 
 type LedgerEntry = {
   id: string
@@ -105,7 +108,7 @@ function EntryDetailModal({
 
   return (
     <Dialog open={!!entry} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-0">
+      <DialogContent className="w-[96vw] max-w-3xl max-h-[85vh] overflow-y-auto p-0">
         {/* ── Header ── */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-slate-100">
           <div>
@@ -113,7 +116,7 @@ function EntryDetailModal({
               <DialogTitle className="text-base font-bold text-slate-900">
                 {isSale ? "Sale Details" : "Payment Details"}
               </DialogTitle>
-              <DialogDescription className="font-mono text-blue-600 text-sm font-semibold mt-0.5">
+              <DialogDescription className="font-mono text-indigo-600 text-sm font-semibold mt-0.5">
                 {entry.reference}
               </DialogDescription>
             </DialogHeader>
@@ -128,7 +131,7 @@ function EntryDetailModal({
                 "text-[10px] font-bold px-2 py-0.5",
                 payStatus === "Paid in Full"   ? "bg-emerald-100 text-emerald-700 border-emerald-200"
                 : payStatus === "Partial Payment" ? "bg-amber-100 text-amber-700 border-amber-200"
-                : "bg-red-100 text-red-700 border-red-200"
+                : "bg-rose-100 text-rose-700 border-rose-200"
               )}>
                 {payStatus}
               </Badge>
@@ -164,8 +167,8 @@ function EntryDetailModal({
         {sale && sale.items.length > 0 && (
           <div className="mx-6 mt-4">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Items Sold</p>
-            <div className="rounded-lg border border-slate-200 overflow-hidden">
-              <table className="w-full text-xs">
+            <div className="rounded-lg border border-slate-200 overflow-x-auto">
+              <table className="w-full min-w-[420px] text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Product</th>
@@ -206,7 +209,7 @@ function EntryDetailModal({
 
             {/* ── Financial summary ── */}
             <div className="mt-3 flex justify-end">
-              <div className="w-64 rounded-lg border border-slate-200 overflow-hidden text-xs">
+              <div className="w-full sm:w-64 rounded-lg border border-slate-200 overflow-hidden text-xs">
                 <div className="flex justify-between px-4 py-2 bg-slate-50 border-b border-slate-100">
                   <span className="text-slate-500">Subtotal</span>
                   <span className="font-medium text-slate-700">{formatCurrency(subtotal)}</span>
@@ -227,12 +230,12 @@ function EntryDetailModal({
                 </div>
                 <div className={cn(
                   "flex justify-between px-4 py-2",
-                  saleOutstanding > 0 ? "bg-red-50" : "bg-emerald-50"
+                  saleOutstanding > 0 ? "bg-rose-50" : "bg-emerald-50"
                 )}>
-                  <span className={cn("font-semibold", saleOutstanding > 0 ? "text-red-700" : "text-emerald-700")}>
+                  <span className={cn("font-semibold", saleOutstanding > 0 ? "text-rose-700" : "text-emerald-700")}>
                     {saleOutstanding > 0 ? "Balance Due" : "Settled"}
                   </span>
-                  <span className={cn("font-bold", saleOutstanding > 0 ? "text-red-700" : "text-emerald-700")}>
+                  <span className={cn("font-bold", saleOutstanding > 0 ? "text-rose-700" : "text-emerald-700")}>
                     {saleOutstanding > 0 ? formatCurrency(saleOutstanding) : "Paid in Full"}
                   </span>
                 </div>
@@ -270,7 +273,7 @@ function EntryDetailModal({
   )
 }
 
-export default function CustomerLedgerPage() {
+function CustomerLedgerPageInner() {
   const [loading, setLoading]     = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales]         = useState<Sale[]>([])
@@ -491,7 +494,7 @@ export default function CustomerLedgerPage() {
 
   // Scenario badge
   const scenario = closingBalance > 0
-    ? { label: "Outstanding Due",    color: "bg-red-50 text-red-700 border-red-200",     icon: <AlertTriangle className="w-3 h-3" /> }
+    ? { label: "Outstanding Due",    color: "bg-rose-50 text-rose-700 border-rose-200",     icon: <AlertTriangle className="w-3 h-3" /> }
     : closingBalance < 0
     ? { label: "Advance / Overpaid", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <TrendingDown className="w-3 h-3" /> }
     : { label: "Account Settled",    color: "bg-slate-50 text-slate-600 border-slate-200",        icon: <CheckCircle className="w-3 h-3" /> }
@@ -508,7 +511,7 @@ export default function CustomerLedgerPage() {
 
   const accentColor = (type: LedgerEntry["type"]) => {
     if (type === "opening") return "bg-slate-400"
-    if (type === "sale")    return "bg-blue-500"
+    if (type === "sale")    return "bg-rose-500"
     return "bg-emerald-500"
   }
 
@@ -607,48 +610,41 @@ export default function CustomerLedgerPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Loading customer ledger...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-slate-900">Customer Ledger</h1>
-          <p className="text-slate-500 text-xs mt-0.5">Account statements, outstanding dues, advances and settled accounts</p>
-        </div>
-        <div className="flex gap-1.5">
-          {selectedCustomerId && (
+      <PageHeader
+        title="Customer Ledger"
+        description="Account statements, outstanding dues, advances and settled accounts"
+        action={
+          <div className="flex gap-1.5">
+            {selectedCustomerId && (
+              <button
+                onClick={openCollectDialog}
+                className="flex items-center gap-1.5 h-8 px-3 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors"
+              >
+                <PlusCircle className="w-3.5 h-3.5" /> Collect Payment
+              </button>
+            )}
             <button
-              onClick={openCollectDialog}
-              className="flex items-center gap-1.5 h-8 px-3 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors"
+              onClick={handlePDFExport}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
             >
-              <PlusCircle className="w-3.5 h-3.5" /> Collect Payment
+              <FileText className="w-3.5 h-3.5" /> PDF
             </button>
-          )}
-          <button
-            onClick={handlePDFExport}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5" /> PDF
-          </button>
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" /> Excel
-          </button>
-        </div>
-      </div>
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> Excel
+            </button>
+          </div>
+        }
+      />
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <Card>
@@ -661,7 +657,7 @@ export default function CustomerLedgerPage() {
               <select
                 value={selectedCustomerId}
                 onChange={e => { setSelectedCustomerId(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All Customers ({filteredCustomers.length})</option>
                 {filteredCustomers.map(c => {
@@ -676,7 +672,7 @@ export default function CustomerLedgerPage() {
               <select
                 value={accountStatus}
                 onChange={e => { setAccountStatus(e.target.value as AccountStatus); setSelectedCustomerId(""); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="all">All Accounts</option>
                 <option value="outstanding">Outstanding / Dues Only</option>
@@ -693,7 +689,7 @@ export default function CustomerLedgerPage() {
               <select
                 value={periodPreset}
                 onChange={e => handlePresetChange(e.target.value as PeriodPreset)}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="all_time">All Time</option>
                 <option value="this_week">This Week</option>
@@ -710,7 +706,7 @@ export default function CustomerLedgerPage() {
               <input
                 type="date" value={dateFrom}
                 onChange={e => { setDateFrom(e.target.value); setPeriodPreset("custom"); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div>
@@ -718,7 +714,7 @@ export default function CustomerLedgerPage() {
               <input
                 type="date" value={dateTo}
                 onChange={e => { setDateTo(e.target.value); setPeriodPreset("custom"); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div>
@@ -727,7 +723,7 @@ export default function CustomerLedgerPage() {
                 type="number" onWheel={e => e.currentTarget.blur()}
                 value={openingBalance}
                 onChange={e => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="0 (positive = customer needs to pay us, negative = advance paid)"
               />
             </div>
@@ -738,7 +734,7 @@ export default function CustomerLedgerPage() {
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => { setDateFrom(""); setDateTo(""); setPeriodPreset("all_time"); setSelectedCustomerId(""); setAccountStatus("all"); setOpeningBalance(0); setPage(1) }}
-                className="text-[10px] text-blue-600 hover:underline"
+                className="text-[10px] text-indigo-600 hover:underline"
               >
                 Clear all filters
               </button>
@@ -749,7 +745,7 @@ export default function CustomerLedgerPage() {
 
       {/* ── Summary cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <Card className="border-l-4 border-l-blue-500">
+        <Card className="border-l-4 border-l-rose-500">
           <CardContent className="px-3 py-2.5">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Debit</p>
             <p className="text-base font-bold text-slate-900 mt-0.5">{formatCurrency(totalDebit)}</p>
@@ -763,10 +759,10 @@ export default function CustomerLedgerPage() {
             <p className="text-[10px] text-slate-400 mt-0.5">Payments received</p>
           </CardContent>
         </Card>
-        <Card className={cn("border-l-4", closingBalance > 0 ? "border-l-red-500" : closingBalance < 0 ? "border-l-emerald-400" : "border-l-slate-300")}>
+        <Card className={cn("border-l-4", closingBalance > 0 ? "border-l-rose-500" : closingBalance < 0 ? "border-l-emerald-400" : "border-l-slate-300")}>
           <CardContent className="px-3 py-2.5">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Net Balance</p>
-            <p className={cn("text-base font-bold mt-0.5", closingBalance > 0 ? "text-red-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400")}>
+            <p className={cn("text-base font-bold mt-0.5", closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400")}>
               {formatCurrency(Math.abs(closingBalance))}
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">
@@ -774,7 +770,7 @@ export default function CustomerLedgerPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className={cn("border-l-4", scenario.color.includes("red") ? "border-l-red-500" : scenario.color.includes("emerald") ? "border-l-emerald-500" : "border-l-slate-300")}>
+        <Card className={cn("border-l-4", scenario.color.includes("rose") ? "border-l-rose-500" : scenario.color.includes("emerald") ? "border-l-emerald-500" : "border-l-slate-300")}>
           <CardContent className="px-3 py-2.5">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</p>
             <div className={cn("mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full border", scenario.color)}>
@@ -806,7 +802,7 @@ export default function CustomerLedgerPage() {
                 )}
               </CardTitle>
               <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Sale (Dr)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />Sale (Dr)</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Payment (Cr)</span>
               </div>
             </div>
@@ -822,7 +818,7 @@ export default function CustomerLedgerPage() {
                     {!selectedCustomerId && <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Customer</th>}
                     <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Reference</th>
                     <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Description</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-blue-500 uppercase tracking-wider whitespace-nowrap">Debit</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider whitespace-nowrap">Debit</th>
                     <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">Credit</th>
                     <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Balance</th>
                     <th className="px-3 py-2 w-8" />
@@ -835,14 +831,14 @@ export default function CustomerLedgerPage() {
                       {!selectedCustomerId && <td className="px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap">{entry.customerName || "-"}</td>}
                       <td className="px-3 py-2 font-mono text-xs text-slate-400 whitespace-nowrap">{entry.reference}</td>
                       <td className="px-3 py-2 text-xs text-slate-700">{entry.description}</td>
-                      <td className="px-3 py-2 text-right text-xs font-medium text-blue-600 whitespace-nowrap">
+                      <td className="px-3 py-2 text-right text-xs font-medium text-rose-600 whitespace-nowrap">
                         {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-emerald-600 whitespace-nowrap">
                         {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className={cn("px-3 py-2 text-right text-xs font-bold whitespace-nowrap",
-                        entry.balance > 0 ? "text-red-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400")}>
+                        entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400")}>
                         {formatCurrency(Math.abs(entry.balance))}
                         <span className="font-medium ml-0.5 text-[10px]">
                           {entry.balance > 0 ? " Dr" : entry.balance < 0 ? " Cr" : ""}
@@ -851,7 +847,7 @@ export default function CustomerLedgerPage() {
                       <td className="px-2 py-2 text-center">
                         <button
                           onClick={() => setDrawerEntry(entry)}
-                          className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
+                          className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
@@ -862,10 +858,10 @@ export default function CustomerLedgerPage() {
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
                     <td colSpan={!selectedCustomerId ? 4 : 3} className="px-3 py-2 text-xs text-slate-500 text-right">Totals</td>
-                    <td className="px-3 py-2 text-right text-xs font-bold text-blue-700 whitespace-nowrap">{formatCurrency(totalDebit)}</td>
+                    <td className="px-3 py-2 text-right text-xs font-bold text-rose-700 whitespace-nowrap">{formatCurrency(totalDebit)}</td>
                     <td className="px-3 py-2 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalCredit)}</td>
                     <td className={cn("px-3 py-2 text-right text-xs font-bold whitespace-nowrap",
-                      closingBalance > 0 ? "text-red-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400")}>
+                      closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400")}>
                       {formatCurrency(Math.abs(closingBalance))}
                       <span className="font-medium ml-0.5 text-[10px]">{closingBalance > 0 ? " Dr" : closingBalance < 0 ? " Cr" : ""}</span>
                     </td>
@@ -908,7 +904,7 @@ export default function CustomerLedgerPage() {
 
       {/* ── Collect Payment dialog ──────────────────────────────────────────── */}
       <Dialog open={collectOpen} onOpenChange={v => { if (!v) setCollectOpen(false) }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[96vw] max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900">Collect Payment</DialogTitle>
             <DialogDescription className="text-slate-500 text-sm">
@@ -925,21 +921,21 @@ export default function CustomerLedgerPage() {
               return (
                 <div className={cn(
                   "rounded-xl px-4 py-3.5 border",
-                  netDue > 0 ? "bg-red-50 border-red-200" : netDue < 0 ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"
+                  netDue > 0 ? "bg-rose-50 border-rose-200" : netDue < 0 ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"
                 )}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
                         {netDue > 0 ? "Running Balance (Due)" : netDue < 0 ? "Advance on Account" : "Settled"}
                       </p>
-                      <p className={cn("text-2xl font-extrabold tabular-nums", netDue > 0 ? "text-red-700" : netDue < 0 ? "text-emerald-700" : "text-slate-400")}>
+                      <p className={cn("text-2xl font-extrabold tabular-nums", netDue > 0 ? "text-rose-700" : netDue < 0 ? "text-emerald-700" : "text-slate-400")}>
                         {formatCurrency(Math.abs(netDue))}
                       </p>
                     </div>
                     {amt > 0 && (
                       <div className="text-right">
                         <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">After Collection</p>
-                        <p className={cn("text-lg font-bold tabular-nums", after > 0 ? "text-red-600" : after < 0 ? "text-emerald-600" : "text-emerald-600")}>
+                        <p className={cn("text-lg font-bold tabular-nums", after > 0 ? "text-rose-600" : after < 0 ? "text-emerald-600" : "text-emerald-600")}>
                           {formatCurrency(Math.abs(after))}
                           <span className="text-xs font-medium ml-1">{after > 0 ? "Dr" : after <= 0 ? "Cr / Settled" : ""}</span>
                         </p>
@@ -1007,5 +1003,13 @@ export default function CustomerLedgerPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function CustomerLedgerPage() {
+  return (
+    <PermissionGate permission="ledger.view">
+      <CustomerLedgerPageInner />
+    </PermissionGate>
   )
 }

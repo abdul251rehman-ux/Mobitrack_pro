@@ -1,12 +1,15 @@
 ﻿﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
-import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet, Plus, Banknote } from "lucide-react"
+import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet, Plus, Banknote, Search } from "lucide-react"
 import { toast } from "sonner"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts } from "@/lib/api/finance"
+import { getRebateEntries } from "@/lib/api/rebate"
+import type { RebateEntry } from "@/lib/api/rebate"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import type { Supplier, Purchase, Payment } from "@/data/types"
@@ -17,6 +20,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
+import { DetailDrawer, DetailDrawerHeader, DetailDrawerBody, DetailDrawerFooter } from "@/components/shared/detail-drawer"
 
 type LedgerEntry = {
   id: string
@@ -26,26 +32,29 @@ type LedgerEntry = {
   debit: number
   credit: number
   balance: number
-  type: "purchase" | "payment" | "opening"
+  type: "purchase" | "payment" | "opening" | "rebate"
   supplierName?: string
+  rebateEntry?: RebateEntry
 }
 
 const PAGE_SIZE = 15
 
-export default function SupplierLedgerPage() {
+function SupplierLedgerPageInner() {
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [supplierPayments, setSupplierPayments] = useState<Payment[]>([])
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
+  const [rebates, setRebates] = useState<RebateEntry[]>([])
 
   async function loadAll() {
     try {
-      const [sup, pur, pay, accs] = await Promise.all([getSuppliers(), getPurchases(), getPayments(), getFinanceAccounts()])
+      const [sup, pur, pay, accs, reb] = await Promise.all([getSuppliers(), getPurchases(), getPayments(), getFinanceAccounts(), getRebateEntries()])
       setSuppliers(sup)
       setPurchases(pur)
       setSupplierPayments(pay.filter((p) => p.entityType === "Supplier" && p.type === "Paid"))
       setAccounts(accs)
+      setRebates(reb.filter(r => r.status === "posted"))
     } catch (err) {
       toast.error("Failed to load supplier ledger data")
       console.error(err)
@@ -104,12 +113,34 @@ export default function SupplierLedgerPage() {
       })
       if (payErr) throw new Error(payErr.message)
 
-      // 2. Deduct from finance account balance
+      // 2. Read FRESH balance from DB (never use stale React state)
+      const { data: accRow, error: accReadErr } = await supabase
+        .from("finance_accounts")
+        .select("current_balance")
+        .eq("id", payAccountId)
+        .single()
+      if (accReadErr || !accRow) throw new Error("Could not read account balance")
+      const freshBalance = (accRow as any).current_balance as number
+      const newBalance = Math.max(0, freshBalance - amount)
+
       const { error: accErr } = await supabase
         .from("finance_accounts")
-        .update({ current_balance: (selectedAccount?.currentBalance ?? 0) - amount })
+        .update({ current_balance: newBalance })
         .eq("id", payAccountId)
       if (accErr) throw new Error(accErr.message)
+
+      // 3. Write finance_transactions audit row so Finance page shows it
+      const { error: ftErr } = await supabase.from("finance_transactions").insert({
+        tenant_id: tenantId,
+        date: payDate,
+        type: "supplier_payment",
+        account_id: payAccountId,
+        amount,
+        reference_type: "Purchase",
+        reference_number: refNum,
+        description: `Payment to ${selectedSupplier?.companyName ?? "Supplier"}${payNotes ? ` — ${payNotes}` : ""}`,
+      })
+      if (ftErr) throw new Error(`Finance audit failed: ${ftErr.message}`)
 
       toast.success(`Payment of ${formatCurrency(amount)} recorded to ${selectedSupplier?.companyName}`)
       setPayDialogOpen(false)
@@ -125,6 +156,7 @@ export default function SupplierLedgerPage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [search, setSearch] = useState("")
   const [openingBalance, setOpeningBalance] = useState(0)
   const [page, setPage] = useState(1)
   const [drawerEntry, setDrawerEntry] = useState<LedgerEntry | null>(null)
@@ -177,7 +209,23 @@ export default function SupplierLedgerPage() {
       })
     })
 
-    // Same-date: purchases (credits) before payments (debits) so balance reads correctly
+    // Rebate & rate-diff credits (posted only) — reduce payable
+    const filteredRebates = selectedSupplierId
+      ? rebates.filter(r => r.supplierId === selectedSupplierId)
+      : rebates
+    filteredRebates.forEach(r => {
+      raw.push({
+        id: r.id,
+        date: r.postedAt ? r.postedAt.slice(0, 10) : r.createdAt.slice(0, 10),
+        reference: r.type === "rebate" ? "REBATE" : "RATE-DIFF",
+        description: `${r.type === "rebate" ? "Rebate Credit" : "Rate Difference Credit"} — ${r.model} · ${r.units} units × ${formatCurrency(r.ratePerUnit)}${r.notes ? ` · ${r.notes}` : ""}`,
+        debit: r.total, credit: 0, type: "rebate" as const,
+        supplierName: r.supplierName,
+        rebateEntry: r,
+      })
+    })
+
+    // Sort: purchases before payments/rebates on same date
     raw.sort((a, b) => {
       const d = a.date.localeCompare(b.date)
       if (d !== 0) return d
@@ -205,19 +253,25 @@ export default function SupplierLedgerPage() {
     })
 
     return result
-  }, [selectedSupplierId, openingBalance, purchases, supplierPayments, suppliers])
+  }, [selectedSupplierId, openingBalance, purchases, supplierPayments, suppliers, rebates])
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
     return allEntries.filter((e) => {
       if (e.type === "opening") return true
       if (dateFrom && e.date < dateFrom) return false
       if (dateTo && e.date > dateTo) return false
+      if (q) {
+        const haystack = [e.description, e.reference, e.supplierName ?? "", e.date].join(" ").toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
       return true
     })
-  }, [allEntries, dateFrom, dateTo])
+  }, [allEntries, dateFrom, dateTo, search])
 
   const txEntries = filtered.filter((e) => e.type !== "opening")
-  const totalDebit = txEntries.reduce((s, e) => s + e.debit, 0)
+  const totalDebit = txEntries.filter(e => e.type === "payment").reduce((s, e) => s + e.debit, 0)
+  const totalRebateCredit = txEntries.filter(e => e.type === "rebate").reduce((s, e) => s + e.debit, 0)
   const totalCredit = txEntries.reduce((s, e) => s + e.credit, 0)
   const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
 
@@ -227,7 +281,8 @@ export default function SupplierLedgerPage() {
 
   const accentColor = (type: LedgerEntry["type"]) => {
     if (type === "opening") return "bg-slate-400"
-    if (type === "purchase") return "bg-orange-500"
+    if (type === "purchase") return "bg-rose-500"
+    if (type === "rebate") return "bg-emerald-600"
     return "bg-emerald-500"
   }
 
@@ -272,9 +327,10 @@ export default function SupplierLedgerPage() {
       columns,
       rows,
       summary: [
-        { label: "Total Purchases", value: "Rs " + totalCredit.toLocaleString() },
-        { label: "Total Paid",      value: "Rs " + totalDebit.toLocaleString() },
-        { label: "Outstanding",     value: "Rs " + Math.abs(closingBalance).toLocaleString() + balLabel },
+        { label: "Total Purchases",      value: "Rs " + totalCredit.toLocaleString() },
+        { label: "Total Paid",           value: "Rs " + totalDebit.toLocaleString() },
+        ...(totalRebateCredit > 0 ? [{ label: "Rebates / Rate Diff", value: "Rs " + totalRebateCredit.toLocaleString() }] : []),
+        { label: "Outstanding",          value: "Rs " + Math.abs(closingBalance).toLocaleString() + balLabel },
       ],
       filename: "supplier-ledger-" + todayPKT(),
     })
@@ -323,70 +379,112 @@ export default function SupplierLedgerPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Loading supplier ledger...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-slate-900">Supplier Ledger</h1>
-          <p className="text-slate-500 text-xs mt-0.5">View financial records and outstanding payables for any supplier</p>
-        </div>
-        <div className="flex gap-1.5">
-          <Button onClick={openPayDialog} size="sm" className="h-8 text-xs gap-1.5 px-3 bg-emerald-600 hover:bg-emerald-700">
-            <Banknote className="w-3.5 h-3.5" />Pay Supplier
-          </Button>
-          <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
-            <FileText className="w-3.5 h-3.5" />PDF
-          </button>
-          <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
-            <Download className="w-3.5 h-3.5" />Excel
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Supplier Ledger"
+        description="View financial records and outstanding payables for any supplier"
+        action={
+          <div className="flex gap-1.5">
+            <Button onClick={openPayDialog} size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+              <Banknote className="w-3.5 h-3.5" />Pay Supplier
+            </Button>
+            <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
+              <FileText className="w-3.5 h-3.5" />PDF
+            </button>
+            <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
+              <Download className="w-3.5 h-3.5" />Excel
+            </button>
+          </div>
+        }
+      />
 
       {/* Filters */}
       <Card>
         <CardContent className="px-3 py-2.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <div className="sm:col-span-2">
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Select Supplier</label>
-              <select
-                value={selectedSupplierId}
-                onChange={(e) => { setSelectedSupplierId(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">All Suppliers ({activeSuppliers.length})</option>
-                {activeSuppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.companyName} - {s.city}</option>
-                ))}
-              </select>
+              {/* Supplier selector — plain dropdown always visible; highlighted card overlays when selected */}
+              <div className="relative">
+                {selectedSupplier ? (
+                  <div className="flex items-center gap-2.5 rounded-xl border-2 border-orange-400 bg-orange-50 px-3 py-2 shadow-sm shadow-orange-100">
+                    <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center shrink-0 shadow text-white font-bold text-sm">
+                      {selectedSupplier.companyName.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-orange-900 truncate">{selectedSupplier.companyName}</p>
+                      <p className="text-[10px] text-orange-500">{[selectedSupplier.city, selectedSupplier.phone].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedSupplierId(""); setPage(1) }}
+                      className="shrink-0 p-1 rounded-full hover:bg-orange-200 text-orange-400 hover:text-orange-700 transition-colors"
+                      title="Clear selection"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border-2 border-orange-300 bg-orange-50/40 overflow-hidden shadow-sm shadow-orange-100">
+                    <div className="flex items-center gap-2 px-2.5 py-1 border-b border-orange-100 bg-orange-100/60">
+                      <div className="w-4 h-4 rounded-full bg-orange-400 flex items-center justify-center shrink-0">
+                        <span className="text-white text-[8px] font-bold">S</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider">Select Supplier</span>
+                    </div>
+                    <select
+                      value={selectedSupplierId}
+                      onChange={(e) => { setSelectedSupplierId(e.target.value); setPage(1) }}
+                      className="w-full h-8 px-2.5 text-xs bg-transparent text-slate-700 font-medium focus:outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="">All Suppliers ({activeSuppliers.length})</option>
+                      {activeSuppliers.map((s) => (
+                        <option key={s.id} value={s.id}>{s.companyName} - {s.city}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">From Date</label>
               <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">To Date</label>
               <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
             </div>
           </div>
+          {/* Search */}
+          <div className="mt-2 pt-2 border-t border-slate-100">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => { setSearch(e.target.value); setPage(1) }}
+                placeholder="Search description, reference, supplier, date..."
+                className="w-full h-8 pl-8 pr-3 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {search && (
+                <button onClick={() => { setSearch(""); setPage(1) }} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {selectedSupplierId && (
             <div className="mt-2 flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
               <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Opening Balance (Rs)</label>
               <input type="number" onWheel={e => e.currentTarget.blur()} value={openingBalance} onChange={(e) => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
-                className="w-32 h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" />
+                className="w-32 h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="0" />
               <span className="text-[10px] text-slate-400">Positive = we need to pay them · Negative = we paid extra (advance)</span>
             </div>
           )}
@@ -394,12 +492,12 @@ export default function SupplierLedgerPage() {
       </Card>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-2.5">
-        <Card className="border-l-4 border-l-orange-500">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <Card className="border-l-4 border-l-rose-500">
           <CardContent className="px-3 py-2.5">
             <div className="flex items-center justify-between mb-1">
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Purchases</p>
-              <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+              <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
             </div>
             <p className="text-lg font-bold text-slate-900 leading-none">{formatCurrency(totalCredit)}</p>
             <p className="text-[10px] text-slate-400 mt-1">Total we bought from supplier</p>
@@ -415,13 +513,13 @@ export default function SupplierLedgerPage() {
             <p className="text-[10px] text-slate-400 mt-1">Payments made to supplier</p>
           </CardContent>
         </Card>
-        <Card className={`border-l-4 ${closingBalance > 0 ? "border-l-red-500" : closingBalance < 0 ? "border-l-emerald-500" : "border-l-slate-300"}`}>
+        <Card className={`border-l-4 ${closingBalance > 0 ? "border-l-rose-500" : closingBalance < 0 ? "border-l-emerald-500" : "border-l-slate-300"}`}>
           <CardContent className="px-3 py-2.5">
             <div className="flex items-center justify-between mb-1">
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Outstanding</p>
-              {closingBalance > 0 ? <TrendingUp className="w-3.5 h-3.5 text-red-400" /> : closingBalance < 0 ? <TrendingDown className="w-3.5 h-3.5 text-emerald-400" /> : <Minus className="w-3.5 h-3.5 text-slate-400" />}
+              {closingBalance > 0 ? <TrendingUp className="w-3.5 h-3.5 text-rose-400" /> : closingBalance < 0 ? <TrendingDown className="w-3.5 h-3.5 text-emerald-400" /> : <Minus className="w-3.5 h-3.5 text-slate-400" />}
             </div>
-            <p className={`text-lg font-bold leading-none ${closingBalance > 0 ? "text-red-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+            <p className={`text-lg font-bold leading-none ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
               {formatCurrency(Math.abs(closingBalance))}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
@@ -447,10 +545,13 @@ export default function SupplierLedgerPage() {
               </CardTitle>
               <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />Purchase (Cr)
+                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />Purchase (Cr)
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Payment (Dr)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />Rebate (Dr)
                 </span>
               </div>
             </div>
@@ -470,8 +571,8 @@ export default function SupplierLedgerPage() {
                       </div>
                       <div className="text-right flex-shrink-0">
                         {entry.debit > 0 && <p className="text-xs font-semibold text-emerald-600">Dr {formatCurrency(entry.debit)}</p>}
-                        {entry.credit > 0 && <p className="text-xs font-semibold text-orange-600">Cr {formatCurrency(entry.credit)}</p>}
-                        <p className={`text-[10px] font-bold mt-0.5 ${entry.balance > 0 ? "text-red-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                        {entry.credit > 0 && <p className="text-xs font-semibold text-rose-600">Cr {formatCurrency(entry.credit)}</p>}
+                        <p className={`text-[10px] font-bold mt-0.5 ${entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                           Bal: {formatCurrency(Math.abs(entry.balance))}{entry.balance > 0 ? " Cr" : entry.balance < 0 ? " Dr" : ""}
                         </p>
                       </div>
@@ -480,11 +581,12 @@ export default function SupplierLedgerPage() {
                 </div>
               ))}
               <div className="px-3 py-2 bg-slate-50 border-t-2 border-slate-200">
-                <div className="flex justify-between text-xs"><span className="font-semibold text-slate-600">Total Purchases</span><span className="font-bold text-orange-700">{formatCurrency(totalCredit)}</span></div>
+                <div className="flex justify-between text-xs"><span className="font-semibold text-slate-600">Total Purchases</span><span className="font-bold text-rose-700">{formatCurrency(totalCredit)}</span></div>
                 <div className="flex justify-between text-xs mt-1"><span className="font-semibold text-slate-600">Total Paid</span><span className="font-bold text-emerald-700">{formatCurrency(totalDebit)}</span></div>
+                {totalRebateCredit > 0 && <div className="flex justify-between text-xs mt-1"><span className="font-semibold text-slate-600">Rebates / Rate Diff</span><span className="font-bold text-emerald-700">{formatCurrency(totalRebateCredit)}</span></div>}
                 <div className="flex justify-between text-xs mt-1 pt-1 border-t border-slate-200">
                   <span className="font-semibold text-slate-700">Outstanding</span>
-                  <span className={`font-bold ${closingBalance > 0 ? "text-red-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                  <span className={`font-bold ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                     {formatCurrency(Math.abs(closingBalance))}{closingBalance > 0 ? " Cr" : closingBalance < 0 ? " Dr" : ""}
                   </span>
                 </div>
@@ -501,7 +603,7 @@ export default function SupplierLedgerPage() {
                     <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Reference</th>
                     <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Description</th>
                     <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">Debit</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-orange-500 uppercase tracking-wider whitespace-nowrap">Credit</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider whitespace-nowrap">Credit</th>
                     <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Balance</th>
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -513,18 +615,20 @@ export default function SupplierLedgerPage() {
                       {!selectedSupplierId && <td className="px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap">{entry.supplierName || "-"}</td>}
                       <td className="px-3 py-2 font-mono text-xs text-slate-400 whitespace-nowrap">{entry.reference}</td>
                       <td className="px-3 py-2 text-xs text-slate-700">{entry.description}</td>
-                      <td className="px-3 py-2 text-right text-xs font-medium text-emerald-600 whitespace-nowrap">
-                        {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">-</span>}
+                      <td className="px-3 py-2 text-right text-xs font-medium whitespace-nowrap">
+                        {entry.debit > 0
+                          ? <span className={entry.type === "rebate" ? "text-emerald-700 font-bold" : "text-emerald-600"}>{formatCurrency(entry.debit)}</span>
+                          : <span className="text-slate-300">-</span>}
                       </td>
-                      <td className="px-3 py-2 text-right text-xs font-medium text-orange-600 whitespace-nowrap">
+                      <td className="px-3 py-2 text-right text-xs font-medium text-rose-600 whitespace-nowrap">
                         {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">-</span>}
                       </td>
-                      <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-red-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                      <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                         {formatCurrency(Math.abs(entry.balance))}
                         <span className="font-medium ml-0.5">{entry.balance > 0 ? " Cr" : entry.balance < 0 ? " Dr" : ""}</span>
                       </td>
                       <td className="px-2 py-2 text-center">
-                        <button onClick={() => setDrawerEntry(entry)} className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-orange-600 transition-colors" title="View details">
+                        <button onClick={() => setDrawerEntry(entry)} className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors" title="View details">
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                       </td>
@@ -532,11 +636,19 @@ export default function SupplierLedgerPage() {
                   ))}
                 </tbody>
                 <tfoot>
+                  {totalRebateCredit > 0 && (
+                    <tr className="border-t border-slate-100 bg-emerald-50/60">
+                      <td colSpan={!selectedSupplierId ? 4 : 3} className="px-3 py-1.5 text-xs text-emerald-600 text-right font-medium">Rebates / Rate Diff</td>
+                      <td className="px-3 py-1.5 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalRebateCredit)}</td>
+                      <td className="px-3 py-1.5 text-right text-xs text-slate-300">-</td>
+                      <td colSpan={2} />
+                    </tr>
+                  )}
                   <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
                     <td colSpan={!selectedSupplierId ? 4 : 3} className="px-3 py-2 text-xs text-slate-500 text-right">Totals</td>
-                    <td className="px-3 py-2 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalDebit)}</td>
-                    <td className="px-3 py-2 text-right text-xs font-bold text-orange-700 whitespace-nowrap">{formatCurrency(totalCredit)}</td>
-                    <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${closingBalance > 0 ? "text-red-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                    <td className="px-3 py-2 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalDebit + totalRebateCredit)}</td>
+                    <td className="px-3 py-2 text-right text-xs font-bold text-rose-700 whitespace-nowrap">{formatCurrency(totalCredit)}</td>
+                    <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                       {formatCurrency(Math.abs(closingBalance))}
                       <span className="font-medium ml-0.5">{closingBalance > 0 ? " Cr" : closingBalance < 0 ? " Dr" : ""}</span>
                     </td>
@@ -571,7 +683,7 @@ export default function SupplierLedgerPage() {
 
       {/* Pay Supplier Dialog */}
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-[96vw] max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold flex items-center gap-2">
               <Banknote className="w-4 h-4 text-emerald-600" />
@@ -584,13 +696,13 @@ export default function SupplierLedgerPage() {
               <span className="text-xs font-bold text-slate-800">{selectedSupplier?.companyName}</span>
             </div>
             {closingBalance > 0 && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 flex items-center justify-between">
-                <span className="text-xs text-red-600">Outstanding balance</span>
-                <span className="text-sm font-bold text-red-700">{formatCurrency(closingBalance)}</span>
+              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 flex items-center justify-between">
+                <span className="text-xs text-rose-600">Outstanding balance</span>
+                <span className="text-sm font-bold text-rose-700">{formatCurrency(closingBalance)}</span>
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-xs">Amount (â‚¨) <span className="text-red-500">*</span></Label>
+              <Label className="text-xs">Amount (Rs)<span className="text-rose-500">*</span></Label>
               <Input
                 type="number" onWheel={e => e.currentTarget.blur()} min={1} placeholder="0"
                 value={payAmount}
@@ -620,7 +732,7 @@ export default function SupplierLedgerPage() {
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Pay From Account <span className="text-red-500">*</span></Label>
+              <Label className="text-xs">Pay From Account <span className="text-rose-500">*</span></Label>
               <select
                 value={payAccountId}
                 onChange={e => setPayAccountId(e.target.value)}
@@ -649,48 +761,42 @@ export default function SupplierLedgerPage() {
       </Dialog>
 
       {/* Side Drawer */}
-      {drawerEntry && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-[1px]" onClick={() => setDrawerEntry(null)} />
-          <div className="fixed top-0 right-0 h-full w-80 bg-white z-50 shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
-            <div className={`flex items-center justify-between px-4 py-3 border-b border-slate-100 ${drawerEntry.type === "purchase" ? "bg-orange-50" : drawerEntry.type === "payment" ? "bg-emerald-50" : "bg-slate-50"}`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${drawerEntry.type === "purchase" ? "bg-orange-100" : drawerEntry.type === "payment" ? "bg-emerald-100" : "bg-slate-200"}`}>
-                  {drawerEntry.type === "purchase"
-                    ? <ArrowUpRight className="w-4 h-4 text-orange-600" />
-                    : drawerEntry.type === "payment"
-                    ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
-                    : <Wallet className="w-4 h-4 text-slate-500" />}
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-800">
-                    {drawerEntry.type === "purchase" ? "Purchase Transaction" : drawerEntry.type === "payment" ? "Payment Made" : "Opening Balance"}
-                  </p>
-                  <p className="text-[10px] text-slate-400">{drawerEntry.reference}</p>
-                </div>
-              </div>
-              <button onClick={() => setDrawerEntry(null)} className="p-1 rounded-md hover:bg-white/60 transition-colors">
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
+      <DetailDrawer open={!!drawerEntry} onOpenChange={(open) => !open && setDrawerEntry(null)}>
+        {drawerEntry && (
+          <>
+            <DetailDrawerHeader
+              icon={
+                drawerEntry.type === "purchase" ? <ArrowUpRight />
+                : drawerEntry.type === "payment" ? <ArrowDownLeft />
+                : drawerEntry.type === "rebate" ? <TrendingDown />
+                : <Wallet />
+              }
+              iconBg={drawerEntry.type === "purchase" ? "bg-rose-100" : drawerEntry.type === "payment" ? "bg-emerald-100" : drawerEntry.type === "rebate" ? "bg-emerald-100" : "bg-slate-200"}
+              iconColor={drawerEntry.type === "purchase" ? "text-rose-600" : drawerEntry.type === "payment" ? "text-emerald-600" : drawerEntry.type === "rebate" ? "text-emerald-600" : "text-slate-500"}
+              headerBg={drawerEntry.type === "purchase" ? "bg-rose-50" : drawerEntry.type === "payment" ? "bg-emerald-50" : drawerEntry.type === "rebate" ? "bg-emerald-50" : "bg-slate-50"}
+              title={drawerEntry.type === "purchase" ? "Purchase Transaction" : drawerEntry.type === "payment" ? "Payment Made" : drawerEntry.type === "rebate" ? (drawerEntry.rebateEntry?.type === "rebate" ? "Rebate Credit" : "Rate Difference Credit") : "Opening Balance"}
+              subtitle={drawerEntry.reference}
+            />
 
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            <DetailDrawerBody>
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2">
                 {drawerEntry.debit > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Debit (Dr)</span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                      {drawerEntry.type === "rebate" ? "Rebate Credit (reduces payable)" : "Debit (Dr)"}
+                    </span>
                     <span className="text-base font-bold text-emerald-600">{formatCurrency(drawerEntry.debit)}</span>
                   </div>
                 )}
                 {drawerEntry.credit > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Credit (Cr)</span>
-                    <span className="text-base font-bold text-orange-600">{formatCurrency(drawerEntry.credit)}</span>
+                    <span className="text-base font-bold text-rose-600">{formatCurrency(drawerEntry.credit)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                   <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Running Balance</span>
-                  <span className={`text-sm font-bold ${drawerEntry.balance > 0 ? "text-red-600" : drawerEntry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                  <span className={`text-sm font-bold ${drawerEntry.balance > 0 ? "text-rose-600" : drawerEntry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                     {formatCurrency(Math.abs(drawerEntry.balance))}
                     <span className="text-xs ml-1">{drawerEntry.balance > 0 ? "Cr" : drawerEntry.balance < 0 ? "Dr" : ""}</span>
                   </span>
@@ -730,22 +836,56 @@ export default function SupplierLedgerPage() {
                 </div>
               </div>
 
+              {/* Rebate detail breakdown */}
+              {drawerEntry.type === "rebate" && drawerEntry.rebateEntry && (
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-1.5">
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Rebate Details</p>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Model</span>
+                    <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.model}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Units</span>
+                    <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.units}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Rate / Unit</span>
+                    <span className="font-semibold text-slate-700">{formatCurrency(drawerEntry.rebateEntry.ratePerUnit)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs border-t border-emerald-200 pt-1.5 mt-1.5">
+                    <span className="font-bold text-emerald-700">Total Credit</span>
+                    <span className="font-bold text-emerald-700">{formatCurrency(drawerEntry.rebateEntry.total)}</span>
+                  </div>
+                  {drawerEntry.rebateEntry.notes && (
+                    <p className="text-[10px] text-slate-400 pt-1">{drawerEntry.rebateEntry.notes}</p>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Entry Type</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${drawerEntry.type === "purchase" ? "bg-orange-100 text-orange-700" : drawerEntry.type === "payment" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-                  {drawerEntry.type === "purchase" ? "Purchase (Cr)" : drawerEntry.type === "payment" ? "Payment (Dr)" : "Opening Balance"}
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${drawerEntry.type === "purchase" ? "bg-rose-100 text-rose-700" : drawerEntry.type === "payment" ? "bg-emerald-100 text-emerald-700" : drawerEntry.type === "rebate" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                  {drawerEntry.type === "purchase" ? "Purchase (Cr)" : drawerEntry.type === "payment" ? "Payment (Dr)" : drawerEntry.type === "rebate" ? "Rebate (Dr)" : "Opening Balance"}
                 </span>
               </div>
-            </div>
+            </DetailDrawerBody>
 
-            <div className="px-4 py-3 border-t border-slate-100">
+            <DetailDrawerFooter>
               <button onClick={() => setDrawerEntry(null)} className="w-full h-8 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
                 Close
               </button>
-            </div>
-          </div>
-        </>
-      )}
+            </DetailDrawerFooter>
+          </>
+        )}
+      </DetailDrawer>
     </div>
+  )
+}
+
+export default function SupplierLedgerPage() {
+  return (
+    <PermissionGate permission="ledger.view">
+      <SupplierLedgerPageInner />
+    </PermissionGate>
   )
 }
