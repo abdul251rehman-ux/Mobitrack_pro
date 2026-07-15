@@ -1,5 +1,6 @@
 ﻿﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import {
   Plus, Banknote, Building2, Smartphone, Zap, CreditCard,
@@ -31,6 +32,7 @@ import { generateReportPDF } from "@/lib/pdf/report"
 import { getTenant } from "@/lib/api/settings"
 
 import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
@@ -63,23 +65,23 @@ const ACCOUNT_TYPE_META: Record<FinanceAccountType, {
   topBorder: string
 }> = {
   cash:          { label: "Cash",          icon: <Banknote className="h-5 w-5" />,   color: "text-emerald-700", bg: "bg-emerald-600", border: "border-emerald-200", topBorder: "border-t-emerald-500" },
-  bank:          { label: "Bank",          icon: <Building2 className="h-5 w-5" />,  color: "text-purple-700",  bg: "bg-purple-600",  border: "border-purple-200",  topBorder: "border-t-purple-500"  },
-  mobile_wallet: { label: "Mobile Wallet", icon: <Smartphone className="h-5 w-5" />, color: "text-red-700",     bg: "bg-red-600",     border: "border-red-200",     topBorder: "border-t-red-500"     },
+  bank:          { label: "Bank",          icon: <Building2 className="h-5 w-5" />,  color: "text-indigo-700",  bg: "bg-indigo-600",  border: "border-indigo-200",  topBorder: "border-t-indigo-500"  },
+  mobile_wallet: { label: "Mobile Wallet", icon: <Smartphone className="h-5 w-5" />, color: "text-cyan-700",    bg: "bg-cyan-600",    border: "border-cyan-200",    topBorder: "border-t-cyan-500"     },
 }
 
 const TX_META: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
   deposit:          { label: "Deposit",          color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
-  withdrawal:       { label: "Withdrawal",       color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
-  transfer_in:      { label: "Transfer In",      color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    icon: <ArrowDownLeft className="h-3 w-3" /> },
+  withdrawal:       { label: "Withdrawal",       color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
+  transfer_in:      { label: "Transfer In",      color: "text-indigo-700",  bg: "bg-indigo-50",  border: "border-indigo-200",  icon: <ArrowDownLeft className="h-3 w-3" /> },
   transfer_out:     { label: "Transfer Out",     color: "text-orange-700",  bg: "bg-orange-50",  border: "border-orange-200",  icon: <ArrowUpRight className="h-3 w-3" />  },
   sale_receipt:     { label: "Sale Receipt",     color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
-  purchase_payment: { label: "Purchase Payment", color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
-  expense:          { label: "Expense",          color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
+  purchase_payment: { label: "Purchase Payment", color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
+  expense:          { label: "Expense",          color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
   opening_balance:  { label: "Opening Balance",  color: "text-slate-700",   bg: "bg-slate-50",   border: "border-slate-200",   icon: <Wallet className="h-3 w-3" />        },
-  person_gave:        { label: "Gave to Person",   color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
+  person_gave:        { label: "Gave to Person",   color: "text-indigo-700",  bg: "bg-indigo-50",  border: "border-indigo-200",  icon: <ArrowUpRight className="h-3 w-3" />  },
   person_took:        { label: "Took from Person", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
   customer_payment:   { label: "Customer Payment", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
-  supplier_payment:   { label: "Supplier Payment", color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUpRight className="h-3 w-3" />  },
+  supplier_payment:   { label: "Supplier Payment", color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
 }
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card", "Cheque"]
@@ -97,7 +99,7 @@ function isInflow(type: string) {
 
 // â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-export default function FinancePage() {
+function FinancePageInner() {
   // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([])
@@ -594,11 +596,7 @@ export default function FinancePage() {
   // â"€â"€ Render â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
@@ -611,11 +609,11 @@ export default function FinancePage() {
       />
 
       {/* â"€â"€â"€ Summary Bar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Cash in Hand"   value={formatCurrency(summary.cash)}    icon={Banknote}   iconBg="bg-emerald-100" subtext={`${accounts.filter(a => a.type === "cash").length} cash account(s)`} />
-        <StatCard title="In Banks"        value={formatCurrency(summary.banks)}   icon={Building2}  iconBg="bg-violet-100"  subtext={`${accounts.filter(a => a.type === "bank").length} bank account(s)`} />
-        <StatCard title="Mobile Wallets"  value={formatCurrency(summary.wallets)} icon={Smartphone} iconBg="bg-red-100"     subtext={`${accounts.filter(a => a.type === "mobile_wallet").length} wallet(s)`} />
-        <StatCard title="Total Available" value={formatCurrency(summary.total)}   icon={Wallet}     iconBg="bg-blue-100"    subtext="Across all accounts" />
+        <StatCard title="In Banks"        value={formatCurrency(summary.banks)}   icon={Building2}  iconBg="bg-cyan-100"    subtext={`${accounts.filter(a => a.type === "bank").length} bank account(s)`} />
+        <StatCard title="Mobile Wallets"  value={formatCurrency(summary.wallets)} icon={Smartphone} iconBg="bg-slate-100"   subtext={`${accounts.filter(a => a.type === "mobile_wallet").length} wallet(s)`} />
+        <StatCard title="Total Available" value={formatCurrency(summary.total)}   icon={Wallet}     iconBg="bg-indigo-100"  subtext="Across all accounts" />
       </div>
 
       {/* â"€â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
@@ -629,7 +627,7 @@ export default function FinancePage() {
           {activeTab === "accounts" && (
             <Button
               onClick={() => { setAccForm({ type: "bank", name: "", accountTitle: "", bankName: "", accountNumber: "", openingBalance: "" }); setModal("addAccount") }}
-              className="bg-blue-600 hover:bg-blue-700 h-8 text-xs gap-1.5 px-3"
+              className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs gap-1.5 px-3"
             >
               <Plus className="h-3.5 w-3.5" /> Add Account
             </Button>
@@ -637,7 +635,7 @@ export default function FinancePage() {
           {activeTab === "receivables" && (
             <Button
               onClick={() => { const def = accounts.find(a => a.isDefaultCash) ?? accounts[0]; setPayForm({ type: "Received", entityType: "Customer", entityId: "", referenceNumber: "", amount: "", method: "Cash", accountId: def?.id ?? "", notes: "" }); setModal("recordPayment") }}
-              className="bg-blue-600 hover:bg-blue-700 h-8 text-xs gap-1.5 px-3"
+              className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs gap-1.5 px-3"
             >
               <Plus className="h-3.5 w-3.5" /> Record Payment
             </Button>
@@ -698,7 +696,7 @@ export default function FinancePage() {
                       {/* Balance */}
                       <div className="mb-4">
                         <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Current Balance</p>
-                        <p className={cn("text-2xl font-bold tracking-tight", acc.currentBalance >= 0 ? "text-slate-900" : "text-red-600")}>
+                        <p className={cn("text-2xl font-bold tracking-tight", acc.currentBalance >= 0 ? "text-slate-900" : "text-rose-600")}>
                           {formatCurrency(acc.currentBalance)}
                         </p>
                         {acc.openingBalance > 0 && (
@@ -721,7 +719,7 @@ export default function FinancePage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="flex-1 h-7 text-[11px] gap-1 text-red-600 border-red-200 hover:bg-red-50 px-2"
+                          className="flex-1 h-7 text-[11px] gap-1 text-rose-600 border-rose-200 hover:bg-rose-50 px-2"
                           onClick={() => openWithdraw(acc)}
                         >
                           <ArrowUpRight className="h-3 w-3" /> Withdraw
@@ -729,7 +727,7 @@ export default function FinancePage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="flex-1 h-7 text-[11px] gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 px-2"
+                          className="flex-1 h-7 text-[11px] gap-1 text-indigo-600 border-indigo-200 hover:bg-indigo-50 px-2"
                           onClick={() => openTransfer(acc)}
                         >
                           <ArrowLeftRight className="h-3 w-3" /> Transfer
@@ -788,7 +786,7 @@ export default function FinancePage() {
                       <SelectItem value="all">All Time</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button onClick={handlePDFReport} className="h-8 text-xs gap-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button onClick={handlePDFReport} className="h-8 text-xs gap-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white">
                     <FileText className="h-3.5 w-3.5" /> PDF Report
                   </Button>
                 </div>
@@ -842,7 +840,7 @@ export default function FinancePage() {
                             {tx.referenceNumber ?? "-"}
                           </TableCell>
                           <TableCell className="px-3 py-2 text-right whitespace-nowrap">
-                            <span className={cn("text-xs font-semibold", inflow ? "text-emerald-600" : "text-red-600")}>
+                            <span className={cn("text-xs font-semibold", inflow ? "text-emerald-600" : "text-rose-600")}>
                               {inflow ? "+" : "-"}{formatCurrency(tx.amount)}
                             </span>
                           </TableCell>
@@ -903,7 +901,7 @@ export default function FinancePage() {
                       </div>
                       <Button
                         variant="outline" size="sm"
-                        className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 shrink-0"
+                        className="h-7 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 px-2 shrink-0"
                         onClick={() => { const def = accounts.find(a => a.isDefaultCash) ?? accounts[0]; setPayForm({ type: "Received", entityType: "Customer", entityId: c.id, referenceNumber: "", amount: String(c.outstanding), method: "Cash", accountId: def?.id ?? "", notes: "" }); setModal("recordPayment") }}
                       >
                         Collect
@@ -924,14 +922,14 @@ export default function FinancePage() {
             <Card className="border-slate-100 shadow-sm">
               <CardContent className="p-0">
                 <div className="px-3 py-2.5 border-b border-slate-100 flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-red-600 flex items-center justify-center shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-rose-600 flex items-center justify-center shrink-0">
                     <Truck className="h-3.5 w-3.5 text-white" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-slate-800">Supplier Payables</h3>
                     <p className="text-xs text-slate-400">Outstanding amounts to pay</p>
                   </div>
-                  <Badge variant="outline" className="ml-auto text-[10px] bg-red-50 text-red-700 border-red-200">
+                  <Badge variant="outline" className="ml-auto text-[10px] bg-rose-50 text-rose-700 border-rose-200">
                     {supplierPayables.length} pending
                   </Badge>
                 </div>
@@ -948,12 +946,12 @@ export default function FinancePage() {
                         <p className="text-[10px] text-slate-400">{s.phone}</p>
                       </div>
                       <div className="text-right mr-2 shrink-0">
-                        <p className="text-xs font-bold text-red-600">{formatCurrency(s.outstanding)}</p>
+                        <p className="text-xs font-bold text-rose-600">{formatCurrency(s.outstanding)}</p>
                         <p className="text-[10px] text-slate-400">{s.lastPayDate ? `Last: ${formatDate(s.lastPayDate)}` : "No payments"}</p>
                       </div>
                       <Button
                         variant="outline" size="sm"
-                        className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 shrink-0"
+                        className="h-7 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 px-2 shrink-0"
                         onClick={() => { const def = accounts.find(a => a.isDefaultCash) ?? accounts[0]; setPayForm({ type: "Paid", entityType: "Supplier", entityId: s.id, referenceNumber: "", amount: String(s.outstanding), method: "Cash", accountId: def?.id ?? "", notes: "" }); setModal("recordPayment") }}
                       >
                         Pay
@@ -964,7 +962,7 @@ export default function FinancePage() {
                 {supplierPayables.length > 0 && (
                   <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/50 flex justify-between text-xs">
                     <span className="font-medium text-slate-600">Total Payable</span>
-                    <span className="font-bold text-red-600">{formatCurrency(supplierPayables.reduce((s, sp) => s + sp.outstanding, 0))}</span>
+                    <span className="font-bold text-rose-600">{formatCurrency(supplierPayables.reduce((s, sp) => s + sp.outstanding, 0))}</span>
                   </div>
                 )}
               </CardContent>
@@ -975,13 +973,13 @@ export default function FinancePage() {
 
       {/* â•â•â•â• ADD ACCOUNT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "addAccount"} onOpenChange={o => !o && setModal(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-900">Add New Account</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Account Type <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-slate-600">Account Type <span className="text-rose-500">*</span></Label>
               <div className="grid grid-cols-3 gap-2">
                 {(["bank", "mobile_wallet", "cash"] as FinanceAccountType[]).map(t => {
                   const m = ACCOUNT_TYPE_META[t]
@@ -993,11 +991,11 @@ export default function FinancePage() {
                       className={cn(
                         "flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all text-xs font-medium",
                         accForm.type === t
-                          ? cn("border-blue-500 bg-blue-50 text-blue-700")
+                          ? cn("border-indigo-500 bg-indigo-50 text-indigo-700")
                           : "border-slate-200 hover:border-slate-300 text-slate-600"
                       )}
                     >
-                      <span className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-white", accForm.type === t ? "bg-blue-500" : m.bg)}>
+                      <span className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-white", accForm.type === t ? "bg-indigo-500" : m.bg)}>
                         {m.icon}
                       </span>
                       {m.label}
@@ -1032,7 +1030,7 @@ export default function FinancePage() {
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Account Name <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-slate-600">Account Name <span className="text-rose-500">*</span></Label>
               <Input
                 value={accForm.name}
                 onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))}
@@ -1078,7 +1076,7 @@ export default function FinancePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Cancel</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleAddAccount} disabled={saving}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleAddAccount} disabled={saving}>
               {saving ? "Creating..." : "Create Account"}
             </Button>
           </DialogFooter>
@@ -1087,13 +1085,13 @@ export default function FinancePage() {
 
       {/* â•â•â•â• EDIT ACCOUNT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "editAccount"} onOpenChange={o => !o && setModal(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="w-[96vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-900">Edit Account</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Account Name <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-slate-600">Account Name <span className="text-rose-500">*</span></Label>
               <Input value={accForm.name} onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))} className="h-9 text-sm" />
             </div>
             {accForm.type !== "cash" && (
@@ -1117,7 +1115,7 @@ export default function FinancePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Cancel</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleEditAccount} disabled={saving}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleEditAccount} disabled={saving}>
               {saving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
@@ -1126,7 +1124,7 @@ export default function FinancePage() {
 
       {/* â•â•â•â• DEPOSIT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "deposit"} onOpenChange={o => !o && setModal(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="w-[96vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
               <ArrowDownLeft className="h-5 w-5 text-emerald-600" /> Deposit
@@ -1140,7 +1138,7 @@ export default function FinancePage() {
           )}
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
               <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
             </div>
             <div className="space-y-1.5">
@@ -1167,10 +1165,10 @@ export default function FinancePage() {
 
       {/* â•â•â•â• WITHDRAW DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "withdraw"} onOpenChange={o => !o && setModal(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="w-[96vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <ArrowUpRight className="h-5 w-5 text-red-600" /> Withdraw
+              <ArrowUpRight className="h-5 w-5 text-rose-600" /> Withdraw
             </DialogTitle>
           </DialogHeader>
           {selectedAccount && (
@@ -1181,10 +1179,10 @@ export default function FinancePage() {
           )}
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
               <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" max={selectedAccount?.currentBalance} value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
               {selectedAccount && Number(txForm.amount) > selectedAccount.currentBalance && (
-                <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Exceeds available balance</p>
+                <p className="text-[10px] text-rose-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Exceeds available balance</p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -1202,7 +1200,7 @@ export default function FinancePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Cancel</Button>
-            <Button className="bg-red-600 hover:bg-red-700" onClick={handleWithdraw} disabled={saving}>
+            <Button className="bg-rose-600 hover:bg-rose-700" onClick={handleWithdraw} disabled={saving}>
               {saving ? "Processing..." : "Confirm Withdrawal"}
             </Button>
           </DialogFooter>
@@ -1211,10 +1209,10 @@ export default function FinancePage() {
 
       {/* â•â•â•â• TRANSFER DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "transfer"} onOpenChange={o => !o && setModal(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="w-[96vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <ArrowLeftRight className="h-5 w-5 text-blue-600" /> Transfer Between Accounts
+              <ArrowLeftRight className="h-5 w-5 text-indigo-600" /> Transfer Between Accounts
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -1246,7 +1244,7 @@ export default function FinancePage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
               <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={transferForm.amount} onChange={e => setTransferForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
             </div>
             <div className="space-y-1.5">
@@ -1260,7 +1258,7 @@ export default function FinancePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Cancel</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleTransfer} disabled={saving}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleTransfer} disabled={saving}>
               {saving ? "Processing..." : "Confirm Transfer"}
             </Button>
           </DialogFooter>
@@ -1269,7 +1267,7 @@ export default function FinancePage() {
 
       {/* â•â•â•â• RECORD PAYMENT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "recordPayment"} onOpenChange={o => !o && setModal(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-slate-900">Record Payment</DialogTitle>
           </DialogHeader>
@@ -1298,7 +1296,7 @@ export default function FinancePage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">
-                {payForm.entityType} <span className="text-red-500">*</span>
+                {payForm.entityType} <span className="text-rose-500">*</span>
               </Label>
               <Select value={payForm.entityId} onValueChange={v => setPayForm(f => ({ ...f, entityId: v }))}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={`Select ${payForm.entityType.toLowerCase()}...`} /></SelectTrigger>
@@ -1316,7 +1314,7 @@ export default function FinancePage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
+                <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
                 <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
@@ -1331,7 +1329,7 @@ export default function FinancePage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">
-                {payForm.type === "Received" ? "Receive Into Account" : "Pay From Account"} <span className="text-red-500">*</span>
+                {payForm.type === "Received" ? "Receive Into Account" : "Pay From Account"} <span className="text-rose-500">*</span>
               </Label>
               <Select value={payForm.accountId} onValueChange={v => setPayForm(f => ({ ...f, accountId: v }))}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select account..." /></SelectTrigger>
@@ -1355,7 +1353,7 @@ export default function FinancePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModal(null)} disabled={saving}>Cancel</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleRecordPayment} disabled={saving}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleRecordPayment} disabled={saving}>
               {saving ? "Recording..." : "Record Payment"}
             </Button>
           </DialogFooter>
@@ -1364,3 +1362,13 @@ export default function FinancePage() {
     </div>
   )
 }
+
+
+export default function FinancePage() {
+  return (
+    <PermissionGate permission="payments.view">
+      <FinancePageInner />
+    </PermissionGate>
+  )
+}
+

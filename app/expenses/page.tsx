@@ -1,5 +1,6 @@
 ﻿﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useRef, useEffect } from "react"
 import {
   Plus, Search, Pencil, Trash2, X, FileText, TrendingDown,
@@ -17,6 +18,8 @@ import { Expense, ExpenseCategory, ExpenseType, ExpensePayment } from "@/data/ty
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
 import { useLanguage } from "@/context/language-context"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -59,7 +62,7 @@ const CATEGORY_META: Record<ExpenseCategory, { color: string; bg: string; border
   "Staff Salaries":         { color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500" },
   "Marketing & Advertising":{ color: "text-pink-700",    bg: "bg-pink-50",    border: "border-pink-200",    dot: "bg-pink-500"    },
   "Packaging & Supplies":   { color: "text-orange-700",  bg: "bg-orange-50",  border: "border-orange-200",  dot: "bg-orange-500"  },
-  "Repair & Maintenance":   { color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     dot: "bg-red-500"     },
+  "Repair & Maintenance":   { color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    dot: "bg-rose-500"    },
   "Transport":              { color: "text-cyan-700",    bg: "bg-cyan-50",    border: "border-cyan-200",    dot: "bg-cyan-500"    },
   "Equipment & Furniture":  { color: "text-indigo-700",  bg: "bg-indigo-50",  border: "border-indigo-200",  dot: "bg-indigo-500"  },
   "Shop License & Taxes":   { color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    dot: "bg-rose-500"    },
@@ -68,17 +71,17 @@ const CATEGORY_META: Record<ExpenseCategory, { color: string; bg: string; border
 
 const TYPE_META: Record<ExpenseType, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
   "one-time": { label: "One-Time",  icon: <Receipt className="h-3 w-3" />,  color: "text-slate-600", bg: "bg-slate-100" },
-  "daily":    { label: "Daily",     icon: <Calendar className="h-3 w-3" />,  color: "text-blue-600",  bg: "bg-blue-50"   },
+  "daily":    { label: "Daily",     icon: <Calendar className="h-3 w-3" />,  color: "text-indigo-600",bg: "bg-indigo-50" },
   "monthly":  { label: "Monthly",   icon: <Repeat2 className="h-3 w-3" />,   color: "text-violet-600",bg: "bg-violet-50" },
   "yearly":   { label: "Yearly",    icon: <BarChart3 className="h-3 w-3" />, color: "text-amber-600", bg: "bg-amber-50"  },
 }
 
 const PAYMENT_META: Record<ExpensePayment, { icon: React.ReactNode; color: string }> = {
   "Cash":          { icon: <Banknote className="h-3.5 w-3.5" />,   color: "text-emerald-600" },
-  "Bank Transfer": { icon: <Building2 className="h-3.5 w-3.5" />,  color: "text-purple-600"  },
-  "JazzCash":      { icon: <Smartphone className="h-3.5 w-3.5" />, color: "text-red-600"     },
+  "Bank Transfer": { icon: <Building2 className="h-3.5 w-3.5" />,  color: "text-indigo-600"  },
+  "JazzCash":      { icon: <Smartphone className="h-3.5 w-3.5" />, color: "text-rose-600"    },
   "EasyPaisa":     { icon: <Zap className="h-3.5 w-3.5" />,        color: "text-green-600"   },
-  "Card":          { icon: <CreditCard className="h-3.5 w-3.5" />, color: "text-blue-600"    },
+  "Card":          { icon: <CreditCard className="h-3.5 w-3.5" />, color: "text-indigo-600"  },
 }
 
 const PAYMENT_OPTIONS: ExpensePayment[] = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card"]
@@ -237,7 +240,7 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
         open ? "translate-x-0" : "translate-x-full"
       )}>
         {/* Header */}
-        <div className={cn("shrink-0 px-6 py-5", editing ? "bg-gradient-to-r from-blue-600 to-indigo-600" : "bg-gradient-to-r from-rose-500 to-pink-600")}>
+        <div className={cn("shrink-0 px-6 py-5", editing ? "bg-gradient-to-r from-indigo-600 to-indigo-700" : "bg-gradient-to-r from-rose-500 to-rose-600")}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
@@ -267,17 +270,17 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
             <div className="p-4 space-y-3">
               {/* Title */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Title / Description <span className="text-red-500">*</span></Label>
+                <Label className="text-xs font-semibold text-slate-600">Title / Description <span className="text-rose-500">*</span></Label>
                 <Input value={form.title} onChange={e => up("title", e.target.value)}
-                  placeholder="e.g. Shop Rent, Electricity Bill..." className={cn("h-9 text-sm", errors.title && "border-red-400")} />
-                {errors.title && <p className="text-xs text-red-500">{errors.title}</p>}
+                  placeholder="e.g. Shop Rent, Electricity Bill..." className={cn("h-9 text-sm", errors.title && "border-rose-400")} />
+                {errors.title && <p className="text-xs text-rose-500">{errors.title}</p>}
               </div>
 
               {/* Category */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Category <span className="text-red-500">*</span></Label>
+                <Label className="text-xs font-semibold text-slate-600">Category <span className="text-rose-500">*</span></Label>
                 <Select value={form.category} onValueChange={val => up("category", val as ExpenseCategory)}>
-                  <SelectTrigger className={cn("h-9 text-sm", errors.category && "border-red-400")}>
+                  <SelectTrigger className={cn("h-9 text-sm", errors.category && "border-rose-400")}>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -291,27 +294,27 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.category && <p className="text-xs text-red-500">{errors.category}</p>}
+                {errors.category && <p className="text-xs text-rose-500">{errors.category}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 {/* Amount */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-600">Amount (â‚¨) <span className="text-red-500">*</span></Label>
+                  <Label className="text-xs font-semibold text-slate-600">Amount (Rs)<span className="text-rose-500">*</span></Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">Rs</span>
                     <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={form.amount} onChange={e => up("amount", e.target.value)}
-                      placeholder="0" className={cn("pl-9 h-9 text-sm font-bold", errors.amount && "border-red-400")} />
+                      placeholder="0" className={cn("pl-9 h-9 text-sm font-bold", errors.amount && "border-rose-400")} />
                   </div>
-                  {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
+                  {errors.amount && <p className="text-xs text-rose-500">{errors.amount}</p>}
                 </div>
 
                 {/* Date */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-600">Date <span className="text-red-500">*</span></Label>
+                  <Label className="text-xs font-semibold text-slate-600">Date <span className="text-rose-500">*</span></Label>
                   <Input type="date" value={form.date} onChange={e => up("date", e.target.value)}
-                    className={cn("h-9 text-sm", errors.date && "border-red-400")} />
-                  {errors.date && <p className="text-xs text-red-500">{errors.date}</p>}
+                    className={cn("h-9 text-sm", errors.date && "border-rose-400")} />
+                  {errors.date && <p className="text-xs text-rose-500">{errors.date}</p>}
                 </div>
               </div>
             </div>
@@ -482,7 +485,7 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
         <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 flex items-center gap-3">
           <Button type="button" variant="outline" onClick={onClose} className="w-28">Cancel</Button>
           <Button type="button" onClick={handleSave}
-            className={cn("ml-auto px-6", editing ? "bg-blue-600 hover:bg-blue-700" : "bg-rose-600 hover:bg-rose-700")}>
+            className={cn("ml-auto px-6", editing ? "bg-indigo-600 hover:bg-indigo-700" : "bg-rose-600 hover:bg-rose-700")}>
             {editing ? "Save Changes" : "Add Expense"}
           </Button>
         </div>
@@ -500,7 +503,7 @@ function DeleteDialog({ open, expense, onConfirm, onCancel }: {
     <Dialog open={open} onOpenChange={onCancel}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
+          <DialogTitle className="flex items-center gap-2 text-rose-600">
             <Trash2 className="h-5 w-5" /> Delete Expense
           </DialogTitle>
         </DialogHeader>
@@ -519,7 +522,7 @@ function DeleteDialog({ open, expense, onConfirm, onCancel }: {
 
 // â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-export default function ExpensesPage() {
+function ExpensesPageInner() {
   const { language } = useLanguage()
   const [list, setList] = useState<Expense[]>([])
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
@@ -710,30 +713,28 @@ export default function ExpensesPage() {
   ]
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50/50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
     <div className="space-y-4">
 
         {/* â"€â"€ Page Header â"€â"€ */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">Expenses</h1>
-            <p className="text-xs text-slate-500">{language === "ur" ? "دکان کے تمام اخراجات کا حساب رکھیں — روزانہ، مہینہ اور سال" : "Track and manage all shop expenses - daily, monthly & yearly"}</p>
-          </div>
-          <Button onClick={handleOpenAdd}
-            className="bg-rose-600 hover:bg-rose-700 gap-1.5 h-8 text-xs px-3">
-            <Plus className="h-3.5 w-3.5" /> Add Expense
-          </Button>
-        </div>
+        <PageHeader
+          title="Expenses"
+          description={language === "ur" ? "دکان کے تمام اخراجات کا حساب رکھیں — روزانہ، مہینہ اور سال" : "Track and manage all shop expenses - daily, monthly & yearly"}
+          icon={<TrendingDown />}
+          iconBg="bg-indigo-600"
+          action={
+            <Button onClick={handleOpenAdd}
+              className="bg-indigo-600 hover:bg-indigo-700 gap-1.5 h-8 text-xs px-3">
+              <Plus className="h-3.5 w-3.5" /> Add Expense
+            </Button>
+          }
+        />
 
         {/* â"€â"€ Stats Row â"€â"€ */}
-        <div className="grid grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <StatCard
             label="Today's Expenses" amount={stats.today.amount} count={stats.today.count}
             countLabel="transactions" icon={<TrendingDown className="h-4 w-4 text-white" />}
@@ -742,13 +743,13 @@ export default function ExpensesPage() {
           <StatCard
             label="This Month" amount={stats.month.amount} count={stats.month.count}
             countLabel="expenses" icon={<Calendar className="h-4 w-4 text-white" />}
-            iconBg="bg-blue-600"
+            iconBg="bg-indigo-600"
             trend={format(_now, "MMM yyyy")}
           />
           <StatCard
             label="This Year" amount={stats.year.amount} count={stats.year.count}
             countLabel="expenses" icon={<BarChart3 className="h-4 w-4 text-white" />}
-            iconBg="bg-violet-600"
+            iconBg="bg-cyan-600"
             trend={THIS_YEAR}
           />
           <StatCard
@@ -919,11 +920,11 @@ export default function ExpensesPage() {
                           {/* Actions */}
                           <div className="sm:w-20 flex items-center sm:justify-center gap-1 ml-auto sm:ml-0">
                           <button type="button" onClick={() => handleOpenEdit(exp)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
                           <button type="button" onClick={() => setDeleteTarget(exp)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
@@ -964,8 +965,8 @@ export default function ExpensesPage() {
                   <p className="text-xs font-bold text-slate-800">Monthly Breakdown</p>
                   <p className="text-[10px] text-slate-400">{format(_now, "MMMM yyyy")} - paid only</p>
                 </div>
-                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <BarChart3 className="h-3.5 w-3.5 text-blue-600" />
+                <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                  <BarChart3 className="h-3.5 w-3.5 text-indigo-600" />
                 </div>
               </div>
               <CardContent className="p-3 space-y-2">
@@ -1071,7 +1072,7 @@ export default function ExpensesPage() {
                       <div className="text-right">
                         <p className="text-xs font-bold text-amber-700">{formatCurrency(e.amount)}</p>
                         <button type="button" onClick={() => handleOpenEdit(e)}
-                          className="text-[10px] text-blue-600 hover:underline">Edit</button>
+                          className="text-[10px] text-indigo-600 hover:underline">Edit</button>
                       </div>
                     </div>
                   ))}
@@ -1091,3 +1092,13 @@ export default function ExpensesPage() {
     </div>
   )
 }
+
+
+export default function ExpensesPage() {
+  return (
+    <PermissionGate permission="expenses.view">
+      <ExpensesPageInner />
+    </PermissionGate>
+  )
+}
+

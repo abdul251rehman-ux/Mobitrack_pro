@@ -1,5 +1,6 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { Plus, Eye, Pencil, ShoppingBag, CalendarDays, TrendingDown, AlertCircle, RotateCcw, Truck, Package, FileText, Download, ArrowLeft, Search } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
@@ -13,6 +14,7 @@ import { NewPurchaseSheet } from "@/app/purchases/new-purchase-sheet"
 import { DataTable } from "@/components/shared/data-table"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
@@ -47,7 +49,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       accessorKey: "poNumber",
       header: "PO #",
       cell: ({ row }) => (
-        <span className="text-xs font-semibold text-blue-600 whitespace-nowrap">
+        <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap">
           {row.getValue("poNumber")}
         </span>
       ),
@@ -99,7 +101,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       cell: ({ row }) => {
         const balance: number = row.getValue("balanceDue")
         return balance > 0 ? (
-          <span className="text-xs font-semibold text-red-600 whitespace-nowrap">{formatCurrency(balance)}</span>
+          <span className="text-xs font-semibold text-rose-600 whitespace-nowrap">{formatCurrency(balance)}</span>
         ) : (
           <span className="text-xs text-slate-300">-</span>
         )
@@ -115,7 +117,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       header: "Delivery",
       cell: ({ row }) => {
         const status: string = row.getValue("deliveryStatus")
-        const cls = status === "Partial" ? "bg-blue-100 text-blue-700" : undefined
+        const cls = status === "Partial" ? "bg-indigo-100 text-indigo-700" : undefined
         return <StatusBadge status={status} className={cls} />
       },
     },
@@ -125,7 +127,7 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
       enableHiding: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50" onClick={() => onView(row.original)} title="View details">
+          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => onView(row.original)} title="View details">
             <Eye className="w-3.5 h-3.5" />
           </Button>
           <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => onEdit(row.original)} title="Edit purchase">
@@ -164,7 +166,7 @@ function PurchaseViewDialog({
                 Purchase Order Details
               </DialogTitle>
               <DialogDescription className="text-slate-500 mt-0.5">
-                <span className="font-mono font-semibold text-blue-600 text-sm">
+                <span className="font-mono font-semibold text-indigo-600 text-sm">
                   {purchase.poNumber}
                 </span>
               </DialogDescription>
@@ -173,7 +175,7 @@ function PurchaseViewDialog({
               <StatusBadge status={purchase.paymentStatus} />
               <StatusBadge
                 status={purchase.deliveryStatus}
-                className={purchase.deliveryStatus === "Partial" ? "bg-blue-100 text-blue-700" : undefined}
+                className={purchase.deliveryStatus === "Partial" ? "bg-indigo-100 text-indigo-700" : undefined}
               />
             </div>
           </div>
@@ -223,7 +225,7 @@ function PurchaseViewDialog({
                     variant="outline"
                     className={
                       item.productType === "Mobile"
-                        ? "border-blue-200 text-blue-700 bg-blue-50 shrink-0"
+                        ? "border-indigo-200 text-indigo-700 bg-indigo-50 shrink-0"
                         : "border-slate-200 text-slate-700 bg-slate-50 shrink-0"
                     }
                   >
@@ -284,7 +286,7 @@ function PurchaseViewDialog({
                         variant="outline"
                         className={
                           item.productType === "Mobile"
-                            ? "border-blue-200 text-blue-700 bg-blue-50"
+                            ? "border-indigo-200 text-indigo-700 bg-indigo-50"
                             : "border-slate-200 text-slate-700 bg-slate-50"
                         }
                       >
@@ -333,7 +335,7 @@ function PurchaseViewDialog({
               <span>{formatCurrency(purchase.amountPaid)}</span>
             </div>
             {purchase.balanceDue > 0 && (
-              <div className="flex justify-between text-sm font-semibold text-red-600">
+              <div className="flex justify-between text-sm font-semibold text-rose-600">
                 <span>Balance Due</span>
                 <span>{formatCurrency(purchase.balanceDue)}</span>
               </div>
@@ -346,7 +348,7 @@ function PurchaseViewDialog({
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function PurchasesPage() {
+function PurchasesPageInner() {
   // ── Data state ──────────────────────────────────────────────────────────
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -472,26 +474,26 @@ export default function PurchasesPage() {
   const toolbar = (
     <div className="flex flex-wrap items-center gap-1.5 shrink-0">
       {/* Universal search */}
-      <div className="relative shrink-0">
+      <div className="relative w-full sm:w-56 shrink-0">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
         <Input
           placeholder="Supplier, PO #, product, IMEI..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-8 h-8 w-56 text-xs"
+          className="pl-8 h-8 w-full text-xs"
         />
       </div>
 
       {/* Date range */}
-      <div className="flex items-center gap-1 shrink-0">
-        <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[108px] text-xs" />
-        <span className="text-slate-400 text-xs">-</span>
-        <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[108px] text-xs" />
+      <div className="flex items-center gap-1 w-full sm:w-auto">
+        <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 flex-1 sm:w-[120px] text-xs" />
+        <span className="text-slate-400 text-xs shrink-0">-</span>
+        <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 flex-1 sm:w-[120px] text-xs" />
       </div>
 
       {/* Supplier dropdown (secondary - exact match) */}
       <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-        <SelectTrigger className="h-8 w-32 text-xs">
+        <SelectTrigger className="h-8 w-full sm:w-32 text-xs">
           <SelectValue placeholder="All Suppliers" />
         </SelectTrigger>
         <SelectContent>
@@ -504,7 +506,7 @@ export default function PurchasesPage() {
 
       {/* Payment status */}
       <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
-        <SelectTrigger className="h-8 w-28 text-xs">
+        <SelectTrigger className="h-8 w-full sm:w-28 text-xs">
           <SelectValue placeholder="All Payments" />
         </SelectTrigger>
         <SelectContent>
@@ -517,7 +519,7 @@ export default function PurchasesPage() {
 
       {/* Delivery status */}
       <Select value={deliveryStatusFilter} onValueChange={setDeliveryStatusFilter}>
-        <SelectTrigger className="h-8 w-28 text-xs">
+        <SelectTrigger className="h-8 w-full sm:w-28 text-xs">
           <SelectValue placeholder="All Deliveries" />
         </SelectTrigger>
         <SelectContent>
@@ -530,10 +532,10 @@ export default function PurchasesPage() {
 
       {/* Reset */}
       {activeFilterCount > 0 && (
-        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs text-slate-600 hover:text-red-600 hover:border-red-300" onClick={handleReset}>
+        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs text-slate-600 hover:text-rose-600 hover:border-rose-300" onClick={handleReset}>
           <RotateCcw className="w-3 h-3" />
           Reset
-          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-100 text-red-600 text-[9px] font-bold">
+          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-100 text-rose-600 text-[9px] font-bold">
             {activeFilterCount}
           </span>
         </Button>
@@ -639,7 +641,7 @@ export default function PurchasesPage() {
         title="Purchases"
         description="Manage purchase orders and supplier payments"
         icon={<ShoppingBag />}
-        iconBg="bg-violet-600"
+        iconBg="bg-indigo-600"
         action={
           <div className="flex items-center gap-1.5">
             <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-9 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
@@ -648,7 +650,7 @@ export default function PurchasesPage() {
             <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-9 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
               <Download className="w-3.5 h-3.5" />Excel
             </button>
-            <Button onClick={() => setNewPurchaseOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm h-9">
+            <Button onClick={() => setNewPurchaseOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm h-9">
               <Plus className="w-4 h-4" />
               New Purchase
             </Button>
@@ -657,40 +659,40 @@ export default function PurchasesPage() {
       />
 
       {/* ── Stat Cards - 4 in one row ────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-2.5 sm:gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4">
         <StatCard
           title="Today's Purchases"
           value={formatCurrency(todayStats.total)}
           subtext={`${todayStats.count} order${todayStats.count !== 1 ? "s" : ""}`}
           icon={ShoppingBag}
-          iconBg="bg-blue-100"
+          iconBg="bg-indigo-100"
         />
         <StatCard
           title="This Week"
           value={formatCurrency(weekStats.total)}
           subtext={`${weekStats.count} order${weekStats.count !== 1 ? "s" : ""} - last 7 days`}
           icon={CalendarDays}
-          iconBg="bg-blue-100"
+          iconBg="bg-indigo-100"
         />
         <StatCard
           title="This Month"
           value={formatCurrency(monthStats.total)}
           subtext={`${monthStats.count} order${monthStats.count !== 1 ? "s" : ""} - ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`}
           icon={TrendingDown}
-          iconBg="bg-blue-100"
+          iconBg="bg-indigo-100"
         />
         <StatCard
           title="Total Payable"
           value={formatCurrency(totalPayable)}
           subtext="Balance due to suppliers"
           icon={AlertCircle}
-          iconBg="bg-red-100"
+          iconBg="bg-rose-100"
         />
       </div>
 
       {/* Loading State */}
       {loading ? (
-        <div className="text-center py-12 text-slate-500 text-sm">Loading purchases...</div>
+        <PageLoader fullPage={false} />
       ) : (
       <>
 
@@ -709,7 +711,7 @@ export default function PurchasesPage() {
               ? "bg-emerald-500"
               : purchase.paymentStatus === "Partial"
               ? "bg-amber-400"
-              : "bg-red-400"
+              : "bg-rose-400"
 
           const totalQty = purchase.items.reduce((sum: number, i: { quantity: number }) => sum + i.quantity, 0)
 
@@ -725,12 +727,12 @@ export default function PurchasesPage() {
               <div className="flex-1 p-3 min-w-0">
                 {/* Row 1: PO # + Payment + Delivery badges */}
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="font-mono text-blue-600 text-sm font-bold">{purchase.poNumber}</span>
+                  <span className="font-mono text-indigo-600 text-sm font-bold">{purchase.poNumber}</span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <StatusBadge status={purchase.paymentStatus} />
                     <StatusBadge
                       status={purchase.deliveryStatus}
-                      className={purchase.deliveryStatus === "Partial" ? "bg-blue-100 text-blue-700" : undefined}
+                      className={purchase.deliveryStatus === "Partial" ? "bg-indigo-100 text-indigo-700" : undefined}
                     />
                   </div>
                 </div>
@@ -762,7 +764,7 @@ export default function PurchasesPage() {
                     Paid: {formatCurrency(purchase.amountPaid)}
                   </span>
                   {purchase.balanceDue > 0 && (
-                    <span className="text-xs text-red-600 font-semibold">
+                    <span className="text-xs text-rose-600 font-semibold">
                       Due: {formatCurrency(purchase.balanceDue)}
                     </span>
                   )}
@@ -773,7 +775,7 @@ export default function PurchasesPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 h-8 text-xs gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
+                    className="flex-1 h-8 text-xs gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                     onClick={() => handleView(purchase)}
                   >
                     <Eye className="w-3 h-3" />
@@ -840,3 +842,13 @@ export default function PurchasesPage() {
     </PageWrapper>
   )
 }
+
+
+export default function PurchasesPage() {
+  return (
+    <PermissionGate permission="purchases.view">
+      <PurchasesPageInner />
+    </PermissionGate>
+  )
+}
+

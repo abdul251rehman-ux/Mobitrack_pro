@@ -1,5 +1,6 @@
 ﻿﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import React, { useState, useMemo, useEffect } from "react"
 import { Plus, Eye, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet, Trash2 } from "lucide-react"
 
@@ -18,6 +19,7 @@ import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { DataTable } from "@/components/shared/data-table"
 import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
@@ -53,7 +55,7 @@ const START_OF_WEEK = startOfWeek(TODAY, { weekStartsOn: 1 })
 const START_OF_MONTH = startOfMonth(TODAY)
 const THIS_MONTH_PREFIX = TODAY_STR.substring(0, 7)
 
-export default function SalesPage() {
+function SalesPageInner() {
   const router = useRouter()
 
   // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -348,7 +350,7 @@ export default function SalesPage() {
       accessorKey: "invoiceNumber",
       header: "Invoice #",
       cell: ({ row }) => (
-        <Link href={`/sales/${row.original.id}`} className="font-mono text-blue-600 text-sm font-semibold hover:underline">
+        <Link href={`/sales/${row.original.id}`} className="font-mono text-indigo-600 text-sm font-semibold hover:underline">
           {row.original.invoiceNumber}
         </Link>
       ),
@@ -450,7 +452,7 @@ export default function SalesPage() {
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-8 w-8 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+              className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
               onClick={() => router.push(`/sales/${sale.id}`)}
               title="View details"
             >
@@ -474,7 +476,7 @@ export default function SalesPage() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50"
+                  className="h-8 w-8 text-slate-500 hover:text-rose-600 hover:bg-rose-50"
                   title="Process return / refund"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -486,7 +488,7 @@ export default function SalesPage() {
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+              className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
               onClick={() => setDeleteTarget(sale)}
               title="Delete sale"
             >
@@ -506,7 +508,7 @@ export default function SalesPage() {
         title="Sales"
         description="Manage and track all sales transactions"
         icon={<ShoppingCart />}
-        iconBg="bg-blue-600"
+        iconBg="bg-indigo-600"
         action={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportExcel}>
@@ -525,14 +527,14 @@ export default function SalesPage() {
       />
 
       {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <StatCard
           title="Today's Sales"
           value={formatCurrency(stats.todayTotal)}
           subtext={`${stats.todayCount} transaction${stats.todayCount !== 1 ? "s" : ""}`}
           icon={ShoppingCart}
-          iconBg="bg-blue-100"
-          gradient="from-blue-50 to-blue-100"
+          iconBg="bg-indigo-100"
+          gradient="from-indigo-50 to-indigo-100"
         />
         <StatCard
           title="This Week"
@@ -547,8 +549,8 @@ export default function SalesPage() {
           value={formatCurrency(stats.monthTotal)}
           subtext={`${stats.monthCount} transaction${stats.monthCount !== 1 ? "s" : ""}`}
           icon={Calendar}
-          iconBg="bg-purple-100"
-          gradient="from-purple-50 to-purple-100"
+          iconBg="bg-cyan-100"
+          gradient="from-cyan-50 to-cyan-100"
         />
         <StatCard
           title="Outstanding"
@@ -562,14 +564,14 @@ export default function SalesPage() {
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-col justify-between">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Completion Rate</p>
           <div className="flex items-end gap-1.5">
-            <span className={`text-2xl font-bold leading-none ${stats.completionRate >= 80 ? "text-emerald-600" : stats.completionRate >= 50 ? "text-amber-600" : "text-red-600"}`}>
+            <span className={`text-2xl font-bold leading-none ${stats.completionRate >= 80 ? "text-emerald-600" : stats.completionRate >= 50 ? "text-amber-600" : "text-rose-600"}`}>
               {stats.completionRate}%
             </span>
             <span className="text-xs text-slate-400 mb-0.5">completed</span>
           </div>
           <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${stats.completionRate >= 80 ? "bg-emerald-500" : stats.completionRate >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+              className={`h-full rounded-full transition-all ${stats.completionRate >= 80 ? "bg-emerald-500" : stats.completionRate >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
               style={{ width: `${stats.completionRate}%` }}
             />
           </div>
@@ -579,14 +581,14 @@ export default function SalesPage() {
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-col justify-between">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Collection Rate</p>
           <div className="flex items-end gap-1.5">
-            <span className={`text-2xl font-bold leading-none ${stats.collectionRate >= 80 ? "text-emerald-600" : stats.collectionRate >= 50 ? "text-amber-600" : "text-red-600"}`}>
+            <span className={`text-2xl font-bold leading-none ${stats.collectionRate >= 80 ? "text-emerald-600" : stats.collectionRate >= 50 ? "text-amber-600" : "text-rose-600"}`}>
               {stats.collectionRate}%
             </span>
             <span className="text-xs text-slate-400 mb-0.5">collected</span>
           </div>
           <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${stats.collectionRate >= 80 ? "bg-emerald-500" : stats.collectionRate >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+              className={`h-full rounded-full transition-all ${stats.collectionRate >= 80 ? "bg-emerald-500" : stats.collectionRate >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
               style={{ width: `${stats.collectionRate}%` }}
             />
           </div>
@@ -596,7 +598,7 @@ export default function SalesPage() {
 
       {/* Loading State */}
       {loading ? (
-        <div className="text-center py-12 text-slate-500 text-sm">Loading sales...</div>
+        <PageLoader fullPage={false} />
       ) : (
       <>
 
@@ -650,7 +652,7 @@ export default function SalesPage() {
           </div>
 
           {/* Sale price range */}
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[160px]">
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Sale Amount (Rs)</label>
             <div className="flex items-center gap-1">
               <Input
@@ -659,7 +661,7 @@ export default function SalesPage() {
                 placeholder="Min"
                 value={salePriceMin}
                 onChange={(e) => setSalePriceMin(e.target.value)}
-                className="h-8 text-xs w-20"
+                className="h-8 text-xs flex-1 min-w-0"
               />
               <span className="text-slate-300 text-xs">-</span>
               <Input
@@ -668,18 +670,18 @@ export default function SalesPage() {
                 placeholder="Max"
                 value={salePriceMax}
                 onChange={(e) => setSalePriceMax(e.target.value)}
-                className="h-8 text-xs w-20"
+                className="h-8 text-xs flex-1 min-w-0"
               />
             </div>
           </div>
 
           {/* Date range */}
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[240px]">
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Date Range</label>
             <div className="flex items-center gap-1">
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 text-xs w-32" />
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 text-xs flex-1 min-w-0" />
               <span className="text-slate-300 text-xs">-</span>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 text-xs w-32" />
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 text-xs flex-1 min-w-0" />
             </div>
           </div>
 
@@ -721,7 +723,7 @@ export default function SalesPage() {
           </div>
 
           {/* Reset */}
-          <Button variant="outline" size="sm" className="h-8 self-end text-xs text-slate-600 hover:text-red-600 hover:border-red-300" onClick={handleReset}>
+          <Button variant="outline" size="sm" className="h-8 self-end text-xs text-slate-600 hover:text-rose-600 hover:border-rose-300" onClick={handleReset}>
             <RotateCcw className="w-3 h-3 mr-1" />
             Reset
           </Button>
@@ -739,7 +741,7 @@ export default function SalesPage() {
               ? "bg-emerald-500"
               : sale.status === "Pending"
               ? "bg-amber-400"
-              : "bg-red-400"
+              : "bg-rose-400"
 
           const avatarColors = [
             "bg-blue-600","bg-violet-600","bg-emerald-600","bg-amber-600","bg-rose-600","bg-cyan-600",
@@ -759,7 +761,7 @@ export default function SalesPage() {
               <div className="flex-1 p-3 min-w-0">
                 {/* Row 1: Invoice # + Status */}
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-blue-600 text-sm font-bold">{sale.invoiceNumber}</span>
+                  <span className="font-mono text-indigo-600 text-sm font-bold">{sale.invoiceNumber}</span>
                   <StatusBadge status={sale.status} />
                 </div>
 
@@ -804,7 +806,7 @@ export default function SalesPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 h-8 text-xs gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
+                    className="flex-1 h-8 text-xs gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                     onClick={() => router.push(`/sales/${sale.id}`)}
                   >
                     <Eye className="w-3 h-3" />
@@ -820,7 +822,7 @@ export default function SalesPage() {
                     PDF
                   </Button>
                   {sale.status === "Completed" && (
-                    <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-red-500 border-red-200 hover:bg-red-50" asChild>
+                    <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-rose-500 border-rose-200 hover:bg-rose-50" asChild>
                       <Link href={`/returns?invoice=${encodeURIComponent(sale.invoiceNumber)}`}>
                         <RotateCcw className="w-3 h-3" />
                         Refund
@@ -830,7 +832,7 @@ export default function SalesPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 w-8 text-xs text-slate-400 border-slate-200 hover:text-red-600 hover:bg-red-50 px-0"
+                    className="h-8 w-8 text-xs text-slate-400 border-slate-200 hover:text-rose-600 hover:bg-rose-50 px-0"
                     onClick={() => setDeleteTarget(sale)}
                     title="Delete sale"
                   >
@@ -870,7 +872,7 @@ export default function SalesPage() {
           <DialogFooter className="gap-2 mt-2">
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
             <Button
-              className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+              className="bg-rose-600 hover:bg-rose-700 text-white gap-1.5"
               onClick={handleDeleteSale}
               disabled={deleting}
             >
@@ -883,3 +885,13 @@ export default function SalesPage() {
     </div>
   )
 }
+
+
+export default function SalesPage() {
+  return (
+    <PermissionGate permission="sales.view">
+      <SalesPageInner />
+    </PermissionGate>
+  )
+}
+
