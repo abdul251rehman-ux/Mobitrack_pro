@@ -1,5 +1,6 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import { Plus, Pencil, Trash2, Search, Cpu, Lock } from "lucide-react"
 import { toast } from "sonner"
@@ -10,6 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 import { cn } from "@/lib/utils"
 
 interface RamItem {
@@ -19,7 +22,7 @@ interface RamItem {
   usageCount: number
 }
 
-export default function RamPage() {
+function RamPageInner() {
   const [list, setList] = useState<RamItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -115,41 +118,30 @@ export default function RamPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="space-y-4">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-            <Cpu className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-900 leading-none">RAM Options</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Manage RAM values (4GB, 6GB, 8GB, 12GB...) for Android phones</p>
-          </div>
-        </div>
-        <Button onClick={openAdd} size="sm" className="h-8 text-xs gap-1.5 px-3 bg-indigo-500 hover:bg-indigo-600">
-          <Plus className="w-3.5 h-3.5" />Add RAM
-        </Button>
-      </div>
+      <PageHeader
+        title="RAM Options"
+        description="Manage RAM values (4GB, 6GB, 8GB, 12GB...) for Android phones"
+        icon={<Cpu />}
+        iconBg="bg-indigo-600"
+        action={<Button onClick={openAdd} size="sm" className="gap-1.5"><Plus className="w-3.5 h-3.5" />Add RAM</Button>}
+      />
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {[
           { title: "Total Options",  value: list.length,                                          sub: "In catalog"    },
           { title: "In Use",         value: list.filter(r => r.usageCount > 0).length,            sub: "Used in stock" },
           { title: "Unused",         value: list.filter(r => r.usageCount === 0 && !r.isSystem).length, sub: "Safe to delete" },
         ].map(c => (
           <div key={c.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1">
-            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{c.title}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{c.title}</p>
             <p className="text-lg font-bold text-slate-900 leading-none">{c.value}</p>
             <p className="text-[10px] text-slate-400">{c.sub}</p>
           </div>
@@ -200,7 +192,7 @@ export default function RamPage() {
                   </span>
                 )}
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(r)} className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
+                  <button onClick={() => openEdit(r)} className="p-1 rounded-md hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors" title="Edit">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   {r.isSystem ? (
@@ -209,7 +201,7 @@ export default function RamPage() {
                     <button
                       onClick={() => setDeleteTarget(r)}
                       disabled={r.usageCount > 0}
-                      className={cn("p-1 rounded-md transition-colors", r.usageCount > 0 ? "text-slate-200 cursor-not-allowed" : "hover:bg-red-50 text-slate-400 hover:text-red-500")}
+                      className={cn("p-1 rounded-md transition-colors", r.usageCount > 0 ? "text-slate-200 cursor-not-allowed" : "hover:bg-rose-50 text-slate-400 hover:text-rose-500")}
                       title={r.usageCount > 0 ? `In use by ${r.usageCount} phone(s)` : "Delete"}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -230,16 +222,16 @@ export default function RamPage() {
           </DialogHeader>
           <div className="space-y-2 py-1">
             <div className="space-y-1">
-              <Label className="text-xs">RAM Value <span className="text-red-500">*</span></Label>
+              <Label className="text-xs">RAM Value <span className="text-rose-500">*</span></Label>
               <Input
                 placeholder="e.g. 4GB, 6GB, 8GB, 12GB"
                 value={formName}
                 onChange={e => { setFormName(e.target.value); setFormError("") }}
-                className={cn("h-8 text-xs", formError ? "border-red-400" : "")}
+                className={cn("h-8 text-xs", formError ? "border-rose-400" : "")}
                 autoFocus
                 onKeyDown={e => { if (e.key === "Enter") handleSave() }}
               />
-              {formError && <p className="text-[10px] text-red-500">{formError}</p>}
+              {formError && <p className="text-[10px] text-rose-500">{formError}</p>}
             </div>
             <p className="text-[10px] text-slate-400 bg-slate-50 rounded-md px-2 py-1.5">
               RAM applies to Android phones only. iPhones do not show a RAM field.
@@ -247,7 +239,7 @@ export default function RamPage() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs bg-indigo-500 hover:bg-indigo-600" onClick={handleSave}>
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
               {editTarget ? "Save" : "Add"}
             </Button>
           </DialogFooter>
@@ -264,5 +256,13 @@ export default function RamPage() {
         onConfirm={handleDelete}
       />
     </div>
+  )
+}
+
+export default function RamPage() {
+  return (
+    <PermissionGate permission="catalog.view">
+      <RamPageInner />
+    </PermissionGate>
   )
 }

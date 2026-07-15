@@ -1,10 +1,12 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import { Tag, Smartphone, Package, Layers, ChevronDown, ChevronUp } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { toast } from "sonner"
+import { PageHeader } from "@/components/shared/page-header"
 
 // ─── Hardcoded categories ─────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -31,7 +33,7 @@ interface PhoneRow {
 
 function TypeChip({ type }: { type: string }) {
   const cfg: Record<string, string> = {
-    iPhone:  "bg-blue-50 text-blue-700 border-blue-200",
+    iPhone:  "bg-indigo-50 text-indigo-700 border-indigo-200",
     Android: "bg-emerald-50 text-emerald-700 border-emerald-200",
   }
   return (
@@ -43,7 +45,7 @@ function TypeChip({ type }: { type: string }) {
 
 function StockPill({ stock }: { stock: number }) {
   if (stock <= 0)
-    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Out of Stock</span>
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">Out of Stock</span>
   if (stock <= 3)
     return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Low: {stock}</span>
   return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">{stock} in stock</span>
@@ -56,9 +58,9 @@ function CategoryCard({ cat, phones, loading }: {
 }) {
   const [expanded, setExpanded] = useState(false)
   const isIphone = cat.type === "iPhone"
-  const accentBg   = isIphone ? "bg-blue-50"   : "bg-emerald-50"
-  const accentText = isIphone ? "text-blue-600" : "text-emerald-600"
-  const accentBorder = isIphone ? "border-blue-100" : "border-emerald-100"
+  const accentBg   = isIphone ? "bg-indigo-50"   : "bg-emerald-50"
+  const accentText = isIphone ? "text-indigo-600" : "text-emerald-600"
+  const accentBorder = isIphone ? "border-indigo-100" : "border-emerald-100"
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -75,12 +77,12 @@ function CategoryCard({ cat, phones, loading }: {
           <p className="text-[11px] text-slate-400 mb-2">{cat.description}</p>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              phones.length > 0 ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-400"
+              phones.length > 0 ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-400"
             }`}>
               {loading ? "..." : `${phones.length} model${phones.length !== 1 ? "s" : ""}`}
             </span>
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              phones.reduce((s, p) => s + p.stock, 0) > 0 ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-400"
+              phones.reduce((s, p) => s + p.stock, 0) > 0 ? "bg-cyan-50 text-cyan-700" : "bg-slate-100 text-slate-400"
             }`}>
               {loading ? "..." : `${phones.reduce((s, p) => s + p.stock, 0)} units`}
             </span>
@@ -138,7 +140,7 @@ function CategoryCard({ cat, phones, loading }: {
   )
 }
 
-export default function CategoriesPage() {
+function CategoriesPageInner() {
   const [phones, setPhones] = useState<PhoneRow[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<FilterType>("All")
@@ -184,30 +186,27 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="space-y-4">
 
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-          <Layers className="w-4 h-4 text-white" />
-        </div>
-        <div>
-          <h1 className="text-sm font-bold text-slate-900 leading-none">Categories</h1>
-          <p className="text-[10px] text-slate-400 mt-0.5">Device categories used across purchases and inventory</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Categories"
+        description="Device categories used across purchases and inventory"
+        icon={<Layers />}
+        iconBg="bg-indigo-600"
+      />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-4 gap-3 sm:gap-4">
         {[
-          { title: "Total Categories",   value: stats.total,      sub: `${stats.totalUnits} total units`,  Icon: Layers,     bg: "bg-blue-500"    },
-          { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA - Non-PTA - JV",               Icon: Smartphone, bg: "bg-sky-500"     },
+          { title: "Total Categories",   value: stats.total,      sub: `${stats.totalUnits} total units`,  Icon: Layers,     bg: "bg-indigo-500"  },
+          { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA - Non-PTA - JV",               Icon: Smartphone, bg: "bg-cyan-500"    },
           { title: "Android Categories", value: stats.android,    sub: "PTA - Non-PTA",                    Icon: Smartphone, bg: "bg-emerald-500" },
-          { title: "Total Units",        value: stats.totalUnits, sub: "Across all categories",             Icon: Package,    bg: "bg-violet-500"  },
+          { title: "Total Units",        value: stats.totalUnits, sub: "Across all categories",             Icon: Package,    bg: "bg-slate-500"   },
         ].map(card => (
           <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none">{card.title}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 leading-none">{card.title}</p>
               <div className={`w-6 h-6 rounded-md ${card.bg} flex items-center justify-center shrink-0`}>
                 <card.Icon className="w-3.5 h-3.5 text-white" />
               </div>
@@ -226,8 +225,8 @@ export default function CategoriesPage() {
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
               filter === f
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600"
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"
             }`}
           >
             {f === "All" ? "All Categories" : `${f} Only`}
@@ -248,5 +247,13 @@ export default function CategoriesPage() {
       </div>
 
     </div>
+  )
+}
+
+export default function CategoriesPage() {
+  return (
+    <PermissionGate permission="catalog.view">
+      <CategoriesPageInner />
+    </PermissionGate>
   )
 }
