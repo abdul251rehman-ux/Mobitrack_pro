@@ -1,5 +1,6 @@
 ﻿﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -9,6 +10,14 @@ import { getFinanceAccounts } from "@/lib/api/finance"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { MoneyInput } from "@/components/ui/money-input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
+import { StatCard } from "@/components/shared/stat-card"
+import { DetailDrawer, DetailDrawerHeader, DetailDrawerBody, DetailDrawerFooter } from "@/components/shared/detail-drawer"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { useLanguage } from "@/context/language-context"
 
 type LedgerEntry = {
   id: string
@@ -27,7 +36,8 @@ const PAGE_SIZE = 15
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Easypaisa", "JazzCash", "Cheque", "Other"]
 
-export default function PersonLedgerPage() {
+function PersonLedgerPageInner() {
+  const { t } = useLanguage()
   const [loading, setLoading] = useState(true)
   const [persons, setPersons] = useState<Person[]>([])
   const [transactions, setTransactions] = useState<PersonTransaction[]>([])
@@ -38,6 +48,7 @@ export default function PersonLedgerPage() {
   const [dateTo, setDateTo] = useState("")
   const [page, setPage] = useState(1)
   const [drawerEntry, setDrawerEntry] = useState<LedgerEntry | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<LedgerEntry | null>(null)
 
   // Add transaction form
   const [showAddTx, setShowAddTx] = useState(false)
@@ -139,15 +150,17 @@ export default function PersonLedgerPage() {
   const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : (selectedPerson?.openingBalance ?? 0)
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const displayOrder = useMemo(() => [...filtered].reverse(), [filtered])
+  const paginated = displayOrder.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const accentColor = (type: LedgerEntry["type"]) => {
     if (type === "opening") return "bg-slate-400"
-    if (type === "gave") return "bg-blue-500"
+    if (type === "gave") return "bg-rose-500"
     return "bg-emerald-500"
   }
 
   async function handleAddTransaction() {
+    if (savingTx) return
     if (!selectedPersonId) { toast.error("Select a person first"); return }
     const amount = parseFloat(txForm.amount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
@@ -181,9 +194,15 @@ export default function PersonLedgerPage() {
   }
 
   async function handleDeleteTx(txId: string) {
+    if (deletingTxId) return
     setDeletingTxId(txId)
     try {
-      await deletePersonTransaction(txId)
+      const tx = transactions.find(t => t.id === txId)
+      await deletePersonTransaction(txId, tx ? {
+        reverseAccountId: tx.accountId ?? undefined,
+        reverseAmount: tx.amount,
+        reverseType: tx.type,
+      } : undefined)
       setTransactions(prev => prev.filter(t => t.id !== txId))
       setDrawerEntry(null)
       toast.success("Transaction deleted")
@@ -196,29 +215,31 @@ export default function PersonLedgerPage() {
 
   async function handleExportPDF() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
-    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = ""
+    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = "", shopLogo: string | undefined
     try {
       const { getTenant } = await import("@/lib/api/settings")
       const tenant = await getTenant()
       shopName = tenant.name || shopName
       shopAddress = [tenant.address, tenant.city].filter(Boolean).join(", ")
       shopPhone = tenant.phone || ""
+      shopLogo = tenant.logo || undefined
     } catch { /* defaults */ }
     const personLabel = selectedPerson ? selectedPerson.name : "All Persons"
     const periodLine = dateFrom || dateTo ? `  -  Period: ${dateFrom || "Start"} to ${dateTo || "Now"}` : ""
     const { generateReportPDF } = await import("@/lib/pdf/report")
     generateReportPDF({
-      shopName, shopAddress, shopPhone,
+      shopName, shopAddress, shopPhone, shopLogo,
       title: "Person Ledger",
       subtitle: personLabel + periodLine + `  -  ${filtered.length} entries`,
+      orientation: "landscape",
       columns: [
-        { header: "Date",        dataKey: "date",    width: 22 },
-        ...(!selectedPersonId ? [{ header: "Person", dataKey: "person", width: 30 }] : []),
-        { header: "Reference",   dataKey: "ref",     width: 24 },
-        { header: "Description", dataKey: "desc",    width: 55 },
-        { header: "Gave (Rs)",   dataKey: "debit",   width: 24, halign: "right" as const },
-        { header: "Took (Rs)",   dataKey: "credit",  width: 24, halign: "right" as const },
-        { header: "Balance",     dataKey: "balance", width: 26, halign: "right" as const, bold: true },
+        { header: "Date",        dataKey: "date",    width: 24 },
+        ...(!selectedPersonId ? [{ header: "Person", dataKey: "person", width: 32 }] : []),
+        { header: "Reference",   dataKey: "ref",     width: 28 },
+        { header: "Description", dataKey: "desc" },
+        { header: "Gave (Rs)",   dataKey: "debit",   width: 28, halign: "right" as const },
+        { header: "Took (Rs)",   dataKey: "credit",  width: 28, halign: "right" as const },
+        { header: "Balance",     dataKey: "balance", width: 32, halign: "right" as const, bold: true },
       ],
       rows: filtered.map(e => ({
         date:    e.date,
@@ -277,101 +298,102 @@ export default function PersonLedgerPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Loading person ledger...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-slate-900">Person Ledger</h1>
-          <p className="text-slate-500 text-xs mt-0.5">Track money given to or taken from individuals</p>
-        </div>
-        <div className="flex gap-1.5">
-          {selectedPersonId && (
-            <>
-              <button
-                onClick={() => { const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]; setTxForm(f => ({ ...f, type: "gave", amount: "", notes: "", accountId: def?.id ?? f.accountId })); setShowAddTx(true) }}
-                className="flex items-center gap-1.5 h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-semibold"
-              >
-                <ArrowUpRight className="w-3.5 h-3.5" />
-                Money Out
-              </button>
-              <button
-                onClick={() => { const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]; setTxForm(f => ({ ...f, type: "took", amount: "", notes: "", accountId: def?.id ?? f.accountId })); setShowAddTx(true) }}
-                className="flex items-center gap-1.5 h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-semibold"
-              >
-                <ArrowDownLeft className="w-3.5 h-3.5" />
-                Money In
-              </button>
-            </>
-          )}
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            PDF
-          </button>
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Excel
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title={t("ledger.person.Title")}
+        description={t("ledger.person.Description")}
+        action={
+          <div className="flex gap-1.5">
+            {selectedPersonId && (
+              <>
+                <button
+                  onClick={() => { const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]; setTxForm(f => ({ ...f, type: "gave", amount: "", notes: "", accountId: def?.id ?? f.accountId })); setShowAddTx(true) }}
+                  className="flex items-center gap-1.5 h-8 px-3 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors font-semibold"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                  {t("ledger.person.Money Out")}
+                </button>
+                <button
+                  onClick={() => { const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]; setTxForm(f => ({ ...f, type: "took", amount: "", notes: "", accountId: def?.id ?? f.accountId })); setShowAddTx(true) }}
+                  className="flex items-center gap-1.5 h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-semibold"
+                >
+                  <ArrowDownLeft className="w-3.5 h-3.5" />
+                  {t("ledger.person.Money In")}
+                </button>
+              </>
+            )}
+            <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {t("ledger.person.PDF")}
+            </button>
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {t("ledger.person.Excel")}
+            </button>
+          </div>
+        }
+      />
 
       {/* Filters */}
       <Card>
         <CardContent className="px-3 py-2.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <div className="sm:col-span-2">
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Select Person</label>
-              <select
-                value={selectedPersonId}
-                onChange={e => { setSelectedPersonId(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.Select Person")}</label>
+              <Select
+                value={selectedPersonId || "__all"}
+                onValueChange={v => { setSelectedPersonId(v === "__all" ? "" : v); setPage(1) }}
               >
-                <option value="">All Persons ({persons.length})</option>
-                {persons.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}{p.phone ? ` - ${p.phone}` : ""}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">{t("ledger.person.All Persons")} ({persons.length})</SelectItem>
+                  {persons.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}{p.phone ? ` - ${p.phone}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">From Date</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={e => { setDateFrom(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.From Date")}</label>
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => { setDateFrom(e.target.value); setPage(1) }}
+                  className="w-full h-8 pl-7 pr-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">To Date</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={e => { setDateTo(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.To Date")}</label>
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => { setDateTo(e.target.value); setPage(1) }}
+                  className="w-full h-8 pl-7 pr-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
             </div>
           </div>
           {persons.length === 0 && (
             <p className="mt-2 text-[10px] text-amber-600 bg-amber-50 rounded-lg px-2.5 py-1.5">
-              No persons added yet. Go to <a href="/persons" className="underline font-semibold">Persons</a> page to add people first.
+              {t("ledger.person.No persons")} <a href="/persons" className="underline font-semibold">{t("ledger.person.No persons link")}</a> {t("ledger.person.No persons suffix")}
             </p>
           )}
         </CardContent>
@@ -379,40 +401,24 @@ export default function PersonLedgerPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-2.5">
-        <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Gave</p>
-              <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
-            </div>
-            <p className="text-lg font-bold text-slate-900 leading-none">{formatCurrency(totalDebit)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Money we gave out</p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Took</p>
-              <TrendingDown className="w-3.5 h-3.5 text-emerald-400" />
-            </div>
-            <p className="text-lg font-bold text-slate-900 leading-none">{formatCurrency(totalCredit)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Money we received</p>
-          </CardContent>
-        </Card>
-        <Card className={`border-l-4 ${closingBalance > 0 ? "border-l-amber-500" : closingBalance < 0 ? "border-l-emerald-500" : "border-l-slate-300"}`}>
-          <CardContent className="px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Net Balance</p>
-              {closingBalance > 0 ? <TrendingUp className="w-3.5 h-3.5 text-amber-400" /> : closingBalance < 0 ? <TrendingDown className="w-3.5 h-3.5 text-emerald-400" /> : <Minus className="w-3.5 h-3.5 text-slate-400" />}
-            </div>
-            <p className={`text-lg font-bold leading-none ${closingBalance > 0 ? "text-amber-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-              {formatCurrency(Math.abs(closingBalance))}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-1">
-              {closingBalance > 0 ? "They need to pay us" : closingBalance < 0 ? "We need to pay them" : "Settled"}
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title={t("ledger.person.Total Gave")} value={formatCurrency(totalDebit)}
+          subtext={t("ledger.person.Money we gave out")}
+          icon={TrendingUp} iconBg="bg-rose-100" subtextOnMobile
+        />
+        <StatCard
+          title={t("ledger.person.Total Took")} value={formatCurrency(totalCredit)}
+          subtext={t("ledger.person.Money we received")}
+          icon={TrendingDown} iconBg="bg-emerald-100" subtextOnMobile
+        />
+        <StatCard
+          title={t("ledger.person.Net Balance")} value={formatCurrency(Math.abs(closingBalance))}
+          subtext={closingBalance > 0 ? t("ledger.person.They need to pay us") : closingBalance < 0 ? t("ledger.person.We need to pay them") : t("ledger.person.Settled")}
+          icon={closingBalance > 0 ? TrendingUp : closingBalance < 0 ? TrendingDown : Minus}
+          iconBg={closingBalance > 0 ? "bg-rose-100" : closingBalance < 0 ? "bg-emerald-100" : "bg-slate-100"}
+          valueClassName={closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}
+          subtextOnMobile
+        />
       </div>
 
       {/* Ledger table */}
@@ -420,25 +426,25 @@ export default function PersonLedgerPage() {
         <Card>
           <CardContent className="py-10 text-center">
             <p className="text-xs text-slate-400">
-              {selectedPersonId ? "No transactions found. Click \"Add Transaction\" to record one." : "No transactions found for the selected period."}
+              {selectedPersonId ? t("ledger.person.No tx selected") : t("ledger.person.No tx period")}
             </p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader className="px-3 py-2 border-b border-slate-100">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-slate-800">
-                {selectedPerson ? `${selectedPerson.name} - Account Statement` : "All Persons - Account Statement"}
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-slate-800 truncate min-w-0">
+                {selectedPerson ? `${selectedPerson.name} - ${t("ledger.person.Account Statement")}` : `${t("ledger.person.All Persons Statement")} - ${t("ledger.person.Account Statement")}`}
               </CardTitle>
-              <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
+              <div className="hidden sm:flex items-center gap-2.5 text-[10px] text-slate-400 shrink-0">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-                  Gave (Dr)
+                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                  {t("ledger.person.Gave Dr")}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                  Took (Cr)
+                  {t("ledger.person.Took Cr")}
                 </span>
               </div>
             </div>
@@ -447,43 +453,50 @@ export default function PersonLedgerPage() {
             {/* Mobile */}
             <div className="md:hidden divide-y divide-slate-100">
               {paginated.map(entry => (
-                <div key={entry.id} className="flex">
-                  <div className={`w-1 flex-shrink-0 ${accentColor(entry.type)}`} />
-                  <div className="flex-1 px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] text-slate-400">{formatDate(entry.date)}</p>
-                        <p className={`text-xs font-medium mt-0.5 leading-snug ${entry.type === "opening" ? "text-slate-500 italic" : "text-slate-800"}`}>
-                          {entry.description}
-                        </p>
-                        {!selectedPersonId && entry.personName && (
-                          <p className="text-[10px] text-violet-600 font-medium mt-0.5">{entry.personName}</p>
-                        )}
+                <button
+                  key={entry.id}
+                  onClick={() => setDrawerEntry(entry)}
+                  className="flex w-full text-left hover:bg-slate-50/70 active:bg-slate-100 transition-colors"
+                >
+                  <div className={`w-1 shrink-0 ${accentColor(entry.type)}`} />
+                  <div className="flex-1 min-w-0 px-3 py-2.5 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-slate-400">{formatDate(entry.date)}</p>
+                      {!selectedPersonId && entry.personName && (
+                        <p className="text-[10px] text-indigo-600 font-medium truncate">{entry.personName}</p>
+                      )}
+                    </div>
+                    <p className={`text-xs font-medium leading-snug truncate ${entry.type === "opening" ? "text-slate-500 italic" : "text-slate-800"}`}>
+                      {entry.description}
+                    </p>
+                    <div className="flex items-center justify-between gap-2 pt-1 mt-1 border-t border-slate-50">
+                      <div className="flex items-center gap-2 text-xs font-semibold">
+                        {entry.debit > 0 && <span className="text-rose-600">{t("ledger.person.Gave")} {formatCurrency(entry.debit)}</span>}
+                        {entry.credit > 0 && <span className="text-emerald-600">{t("ledger.person.Took")} {formatCurrency(entry.credit)}</span>}
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        {entry.debit > 0 && <p className="text-xs font-semibold text-blue-600">Gave {formatCurrency(entry.debit)}</p>}
-                        {entry.credit > 0 && <p className="text-xs font-semibold text-emerald-600">Took {formatCurrency(entry.credit)}</p>}
-                        <p className={`text-[10px] font-bold mt-0.5 ${entry.balance > 0 ? "text-amber-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                          Bal: {formatCurrency(Math.abs(entry.balance))}{entry.balance > 0 ? " Dr" : entry.balance < 0 ? " Cr" : ""}
-                        </p>
-                      </div>
+                      <p className={`text-xs font-bold shrink-0 ${entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                        {formatCurrency(Math.abs(entry.balance))}{entry.balance > 0 ? ` ${t("ledger.person.Dr")}` : entry.balance < 0 ? ` ${t("ledger.person.Cr")}` : ""}
+                      </p>
                     </div>
                   </div>
-                </div>
+                  <div className="flex items-center pr-2 shrink-0">
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                  </div>
+                </button>
               ))}
               <div className="px-3 py-2 bg-slate-50 border-t-2 border-slate-200">
                 <div className="flex justify-between text-xs">
-                  <span className="font-semibold text-slate-600">Total Gave</span>
-                  <span className="font-bold text-blue-700">{formatCurrency(totalDebit)}</span>
+                  <span className="font-semibold text-slate-600">{t("ledger.person.Total Gave")}</span>
+                  <span className="font-bold text-rose-700">{formatCurrency(totalDebit)}</span>
                 </div>
                 <div className="flex justify-between text-xs mt-1">
-                  <span className="font-semibold text-slate-600">Total Took</span>
+                  <span className="font-semibold text-slate-600">{t("ledger.person.Total Took")}</span>
                   <span className="font-bold text-emerald-700">{formatCurrency(totalCredit)}</span>
                 </div>
                 <div className="flex justify-between text-xs mt-1 pt-1 border-t border-slate-200">
-                  <span className="font-semibold text-slate-700">Closing Balance</span>
-                  <span className={`font-bold ${closingBalance > 0 ? "text-amber-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                    {formatCurrency(Math.abs(closingBalance))}{closingBalance > 0 ? " Dr" : closingBalance < 0 ? " Cr" : ""}
+                  <span className="font-semibold text-slate-700">{t("ledger.person.Closing Balance")}</span>
+                  <span className={`font-bold ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                    {formatCurrency(Math.abs(closingBalance))}{closingBalance > 0 ? ` ${t("ledger.person.Dr")}` : closingBalance < 0 ? ` ${t("ledger.person.Cr")}` : ""}
                   </span>
                 </div>
               </div>
@@ -494,14 +507,14 @@ export default function PersonLedgerPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80">
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Date</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.person.Date")}</th>
                     {!selectedPersonId && (
-                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Person</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.person.Person")}</th>
                     )}
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Description</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-blue-500 uppercase tracking-wider whitespace-nowrap">Gave (Dr)</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">Took (Cr)</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Balance</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("ledger.person.Description col")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider whitespace-nowrap">{t("ledger.person.Gave Dr")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">{t("ledger.person.Took Cr")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.person.Balance")}</th>
                     <th className="px-3 py-2 w-16" />
                   </tr>
                 </thead>
@@ -510,23 +523,23 @@ export default function PersonLedgerPage() {
                     <tr key={entry.id} className={`hover:bg-slate-50/70 transition-colors ${entry.type === "opening" ? "bg-slate-50 italic" : ""}`}>
                       <td className="px-3 py-2 text-slate-500 whitespace-nowrap text-xs">{formatDate(entry.date)}</td>
                       {!selectedPersonId && (
-                        <td className="px-3 py-2 text-xs font-medium text-violet-700 whitespace-nowrap">{entry.personName || "-"}</td>
+                        <td className="px-3 py-2 text-xs font-medium text-indigo-700 whitespace-nowrap">{entry.personName || "-"}</td>
                       )}
                       <td className="px-3 py-2 text-xs text-slate-700">{entry.description}</td>
-                      <td className="px-3 py-2 text-right text-xs font-medium text-blue-600 whitespace-nowrap">
+                      <td className="px-3 py-2 text-right text-xs font-medium text-rose-600 whitespace-nowrap">
                         {entry.debit > 0 ? formatCurrency(entry.debit) : <span className="text-slate-300">-</span>}
                       </td>
                       <td className="px-3 py-2 text-right text-xs font-medium text-emerald-600 whitespace-nowrap">
                         {entry.credit > 0 ? formatCurrency(entry.credit) : <span className="text-slate-300">-</span>}
                       </td>
-                      <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-amber-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                      <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                         {formatCurrency(Math.abs(entry.balance))}
                         <span className="font-medium ml-0.5">{entry.balance > 0 ? " Dr" : entry.balance < 0 ? " Cr" : ""}</span>
                       </td>
                       <td className="px-2 py-2 text-center">
                         <button
                           onClick={() => setDrawerEntry(entry)}
-                          className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
+                          className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
                           title="View details"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -537,12 +550,12 @@ export default function PersonLedgerPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                    <td colSpan={!selectedPersonId ? 3 : 2} className="px-3 py-2 text-xs text-slate-500 text-right">Totals</td>
-                    <td className="px-3 py-2 text-right text-xs font-bold text-blue-700 whitespace-nowrap">{formatCurrency(totalDebit)}</td>
+                    <td colSpan={!selectedPersonId ? 3 : 2} className="px-3 py-2 text-xs text-slate-500 text-right">{t("ledger.person.Totals")}</td>
+                    <td className="px-3 py-2 text-right text-xs font-bold text-rose-700 whitespace-nowrap">{formatCurrency(totalDebit)}</td>
                     <td className="px-3 py-2 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalCredit)}</td>
-                    <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${closingBalance > 0 ? "text-amber-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                    <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                       {formatCurrency(Math.abs(closingBalance))}
-                      <span className="font-medium ml-0.5">{closingBalance > 0 ? " Dr" : closingBalance < 0 ? " Cr" : ""}</span>
+                      <span className="font-medium ml-0.5">{closingBalance > 0 ? ` ${t("ledger.person.Dr")}` : closingBalance < 0 ? ` ${t("ledger.person.Cr")}` : ""}</span>
                     </td>
                     <td className="px-2 py-2" />
                   </tr>
@@ -586,7 +599,7 @@ export default function PersonLedgerPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                <h2 className="text-sm font-bold text-slate-800">Add Transaction</h2>
+                <h2 className="text-sm font-bold text-slate-800">{t("ledger.person.Add Transaction")}</h2>
                 <button onClick={() => setShowAddTx(false)} className="p-1 rounded-md hover:bg-slate-100 transition-colors">
                   <X className="w-4 h-4 text-slate-500" />
                 </button>
@@ -594,60 +607,59 @@ export default function PersonLedgerPage() {
               <div className="px-4 py-3 space-y-3">
                 {/* Type toggle */}
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Transaction Type</label>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.Transaction Type")}</label>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => setTxForm(f => ({ ...f, type: "gave" }))}
-                      className={`flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-semibold transition-colors border ${txForm.type === "gave" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+                      className={`flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-semibold transition-colors border ${txForm.type === "gave" ? "bg-rose-600 text-white border-rose-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
                     >
                       <ArrowUpRight className="w-3.5 h-3.5" />
-                      Gave Money
+                      {t("ledger.person.Gave Money")}
                     </button>
                     <button
                       onClick={() => setTxForm(f => ({ ...f, type: "took" }))}
                       className={`flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-semibold transition-colors border ${txForm.type === "took" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
                     >
                       <ArrowDownLeft className="w-3.5 h-3.5" />
-                      Took Money
+                      {t("ledger.person.Took Money")}
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    {txForm.type === "gave" ? "We gave money to them — their balance increases (Dr)" : "They gave money to us — their balance decreases (Cr)"}
+                    {txForm.type === "gave" ? t("ledger.person.Gave hint") : t("ledger.person.Took hint")}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Amount (Rs) <span className="text-red-400">*</span></label>
-                  <input
-                    type="number" onWheel={e => e.currentTarget.blur()}
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.Amount")} <span className="text-rose-500">*</span></label>
+                  <MoneyInput
                     value={txForm.amount}
-                    onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))}
+                    onChange={v => setTxForm(f => ({ ...f, amount: v }))}
                     placeholder="0"
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Date</label>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.Date")}</label>
                   <input
                     type="date"
                     value={txForm.date}
                     onChange={e => setTxForm(f => ({ ...f, date: e.target.value }))}
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                    {txForm.type === "gave" ? "Pay From Account" : "Deposit to Account"}
+                    {txForm.type === "gave" ? t("ledger.person.Pay From Account") : t("ledger.person.Deposit to Account")}
                   </label>
                   <select
                     value={txForm.accountId}
                     onChange={e => setTxForm(f => ({ ...f, accountId: e.target.value }))}
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="">Select account</option>
+                    <option value="">{t("ledger.person.Select account")}</option>
                     {financeAccounts.map(a => (
                       <option key={a.id} value={a.id}>
                         {a.name} — {formatCurrency(a.currentBalance)}
@@ -657,24 +669,24 @@ export default function PersonLedgerPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Payment Method</label>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.Payment Method")}</label>
                   <select
                     value={txForm.method}
                     onChange={e => setTxForm(f => ({ ...f, method: e.target.value }))}
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Notes</label>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.person.Notes")}</label>
                   <input
                     type="text"
                     value={txForm.notes}
                     onChange={e => setTxForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="Optional description"
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={t("ledger.person.Notes placeholder")}
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
               </div>
@@ -683,14 +695,14 @@ export default function PersonLedgerPage() {
                   onClick={() => setShowAddTx(false)}
                   className="flex-1 h-8 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
                 >
-                  Cancel
+                  {t("ledger.person.Cancel")}
                 </button>
                 <button
                   onClick={handleAddTransaction}
                   disabled={savingTx}
-                  className={`flex-1 h-8 text-xs disabled:opacity-60 text-white rounded-lg transition-colors font-medium ${txForm.type === "gave" ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                  className={`flex-1 h-8 text-xs disabled:opacity-60 text-white rounded-lg transition-colors font-medium ${txForm.type === "gave" ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
                 >
-                  {savingTx ? "Saving..." : txForm.type === "gave" ? "Record Gave" : "Record Took"}
+                  {savingTx ? t("ledger.person.Saving") : txForm.type === "gave" ? t("ledger.person.Record Gave") : t("ledger.person.Record Took")}
                 </button>
               </div>
             </div>
@@ -698,94 +710,103 @@ export default function PersonLedgerPage() {
         </>
       )}
 
-      {/* Transaction Detail Dialog */}
-      {drawerEntry && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDrawerEntry(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className={`flex items-center justify-between px-4 py-3 rounded-t-2xl ${drawerEntry.type === "gave" ? "bg-blue-50" : drawerEntry.type === "took" ? "bg-emerald-50" : "bg-slate-50"}`}>
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${drawerEntry.type === "gave" ? "bg-blue-100" : drawerEntry.type === "took" ? "bg-emerald-100" : "bg-slate-200"}`}>
-                  {drawerEntry.type === "gave"
-                    ? <ArrowUpRight className="w-4 h-4 text-blue-600" />
-                    : drawerEntry.type === "took"
-                    ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
-                    : <Wallet className="w-4 h-4 text-slate-500" />}
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-800">
-                    {drawerEntry.type === "gave" ? "Gave Money" : drawerEntry.type === "took" ? "Took Money" : "Opening Balance"}
+      {/* Transaction Detail Drawer */}
+      <DetailDrawer open={!!drawerEntry} onOpenChange={(open) => !open && setDrawerEntry(null)}>
+        {drawerEntry && (
+          <>
+            <DetailDrawerHeader
+              icon={drawerEntry.type === "gave" ? <ArrowUpRight /> : drawerEntry.type === "took" ? <ArrowDownLeft /> : <Wallet />}
+              iconBg={drawerEntry.type === "gave" ? "bg-rose-100" : drawerEntry.type === "took" ? "bg-emerald-100" : "bg-slate-200"}
+              iconColor={drawerEntry.type === "gave" ? "text-rose-600" : drawerEntry.type === "took" ? "text-emerald-600" : "text-slate-500"}
+              headerBg={drawerEntry.type === "gave" ? "bg-rose-50" : drawerEntry.type === "took" ? "bg-emerald-50" : "bg-slate-50"}
+              title={drawerEntry.type === "gave" ? t("ledger.person.Gave Money") : drawerEntry.type === "took" ? t("ledger.person.Took Money") : t("ledger.person.Opening Balance")}
+              subtitle={drawerEntry.personName}
+            />
+
+            <DetailDrawerBody>
+              {/* Amount */}
+              <div className="flex gap-3">
+                {drawerEntry.debit > 0 && (
+                  <div className="flex-1 rounded-xl bg-rose-50 border border-rose-100 px-3 py-2.5 text-center">
+                    <p className="text-[10px] font-semibold text-rose-500 uppercase tracking-wide mb-0.5">{t("ledger.person.Gave")}</p>
+                    <p className="text-lg font-bold text-rose-700">{formatCurrency(drawerEntry.debit)}</p>
+                  </div>
+                )}
+                {drawerEntry.credit > 0 && (
+                  <div className="flex-1 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 text-center">
+                    <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide mb-0.5">{t("ledger.person.Took")}</p>
+                    <p className="text-lg font-bold text-emerald-700">{formatCurrency(drawerEntry.credit)}</p>
+                  </div>
+                )}
+                <div className="flex-1 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-center">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{t("ledger.person.Balance")}</p>
+                  <p className={`text-lg font-bold ${drawerEntry.balance > 0 ? "text-rose-600" : drawerEntry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                    {formatCurrency(Math.abs(drawerEntry.balance))}
                   </p>
-                  {drawerEntry.personName && <p className="text-xs text-slate-500">{drawerEntry.personName}</p>}
                 </div>
               </div>
-              <button onClick={() => setDrawerEntry(null)} className="p-1.5 rounded-lg hover:bg-white/70 transition-colors">
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
 
-            {/* Amount */}
-            <div className="px-4 pt-4 pb-3 flex gap-3">
-              {drawerEntry.debit > 0 && (
-                <div className="flex-1 rounded-xl bg-blue-50 border border-blue-100 px-3 py-2.5 text-center">
-                  <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-0.5">Gave</p>
-                  <p className="text-lg font-bold text-blue-700">{formatCurrency(drawerEntry.debit)}</p>
-                </div>
-              )}
-              {drawerEntry.credit > 0 && (
-                <div className="flex-1 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 text-center">
-                  <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide mb-0.5">Took</p>
-                  <p className="text-lg font-bold text-emerald-700">{formatCurrency(drawerEntry.credit)}</p>
-                </div>
-              )}
-              <div className="flex-1 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Balance</p>
-                <p className={`text-lg font-bold ${drawerEntry.balance > 0 ? "text-amber-600" : drawerEntry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                  {formatCurrency(Math.abs(drawerEntry.balance))}
-                </p>
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="px-4 pb-4 space-y-2">
+              {/* Details */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-slate-50 px-3 py-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Date</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.person.Date")}</p>
                   <p className="text-xs font-medium text-slate-700 mt-0.5">{formatDate(drawerEntry.date)}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 px-3 py-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Reference</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.person.Reference")}</p>
                   <p className="text-xs font-mono text-slate-500 mt-0.5 truncate">{drawerEntry.reference}</p>
                 </div>
               </div>
               <div className="rounded-xl bg-slate-50 px-3 py-2">
-                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Description</p>
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.person.Description col")}</p>
                 <p className="text-xs text-slate-700 mt-0.5">{drawerEntry.description}</p>
               </div>
-            </div>
+            </DetailDrawerBody>
 
-            {/* Footer */}
-            <div className="px-4 pb-4 flex gap-2">
-              {drawerEntry.txId && drawerEntry.type !== "opening" && (
+            <DetailDrawerFooter>
+              <div className="flex gap-2">
+                {drawerEntry.txId && drawerEntry.type !== "opening" && (
+                  <button
+                    onClick={() => setDeleteTarget(drawerEntry)}
+                    disabled={deletingTxId === drawerEntry.txId}
+                    className="flex-1 h-9 text-xs font-medium rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingTxId === drawerEntry.txId ? t("ledger.person.Deleting") : t("btn.Delete")}
+                  </button>
+                )}
                 <button
-                  onClick={() => drawerEntry.txId && handleDeleteTx(drawerEntry.txId)}
-                  disabled={deletingTxId === drawerEntry.txId}
-                  className="flex-1 h-9 text-xs font-medium rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  onClick={() => setDrawerEntry(null)}
+                  className="flex-1 h-9 text-xs font-medium rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {deletingTxId === drawerEntry.txId ? "Deleting..." : "Delete"}
+                  {t("btn.Close")}
                 </button>
-              )}
-              <button
-                onClick={() => setDrawerEntry(null)}
-                className="flex-1 h-9 text-xs font-medium rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </div>
+            </DetailDrawerFooter>
+          </>
+        )}
+      </DetailDrawer>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={t("ledger.person.Delete Transaction")}
+        description={`${t("ledger.person.Delete Transaction")}: ${deleteTarget?.type === "gave" ? t("ledger.person.Gave") : t("ledger.person.Took")} ${t("ledger.person.Delete desc suffix")} ${deleteTarget ? formatCurrency(deleteTarget.debit || deleteTarget.credit) : ""}? ${t("ledger.person.Delete desc end")}`}
+        confirmLabel={t("btn.Delete")}
+        cancelLabel={t("btn.Cancel")}
+        variant="destructive"
+        onConfirm={() => { if (deleteTarget?.txId) handleDeleteTx(deleteTarget.txId); setDeleteTarget(null) }}
+        loading={!!deletingTxId}
+      />
     </div>
+  )
+}
+
+export default function PersonLedgerPage() {
+  return (
+    <PermissionGate permission="ledger.view">
+      <PersonLedgerPageInner />
+    </PermissionGate>
   )
 }

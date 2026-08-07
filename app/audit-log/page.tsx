@@ -1,5 +1,6 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import {
   Search, X, Download, Filter, RotateCcw,
@@ -12,8 +13,7 @@ import { toast } from "sonner"
 
 import { getAuditLogs } from "@/lib/api/audit"
 import { AuditLog, AuditAction, AuditModule } from "@/data/types"
-import { cn } from "@/lib/utils"
-import { exportToCSV } from "@/lib/csv-export"
+import { cn, todayPKT } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,8 +51,8 @@ const CRITICAL_ACTIONS: AuditAction[] = ["DELETE", "REFUND", "SETTINGS_CHANGE"]
 
 const ACTION_COLORS: Record<AuditAction, { text: string; bg: string; border: string }> = {
   CREATE:          { text: "text-green-700",   bg: "bg-green-50",   border: "border-green-200"   },
-  UPDATE:          { text: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200"    },
-  DELETE:          { text: "text-red-700",     bg: "bg-red-50",     border: "border-red-200"     },
+  UPDATE:          { text: "text-indigo-700",    bg: "bg-indigo-50",    border: "border-indigo-200"    },
+  DELETE:          { text: "text-rose-700",     bg: "bg-rose-50",     border: "border-rose-200"     },
   LOGIN:           { text: "text-slate-700",   bg: "bg-slate-50",   border: "border-slate-200"   },
   SALE:            { text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
   REFUND:          { text: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200"   },
@@ -68,11 +68,11 @@ const ACTION_COLORS: Record<AuditAction, { text: string; bg: string; border: str
 const MODULE_COLORS: Record<string, { text: string; bg: string; border: string }> = {
   Sales:      { text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
   Purchases:  { text: "text-indigo-700",  bg: "bg-indigo-50",  border: "border-indigo-200"  },
-  Products:   { text: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200"    },
+  Products:   { text: "text-indigo-700",    bg: "bg-indigo-50",    border: "border-indigo-200"    },
   Customers:  { text: "text-violet-700",  bg: "bg-violet-50",  border: "border-violet-200"  },
   Suppliers:  { text: "text-orange-700",  bg: "bg-orange-50",  border: "border-orange-200"  },
   Inventory:  { text: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200"   },
-  Expenses:   { text: "text-red-700",     bg: "bg-red-50",     border: "border-red-200"     },
+  Expenses:   { text: "text-rose-700",     bg: "bg-rose-50",     border: "border-rose-200"     },
   Settings:   { text: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200"    },
   Auth:       { text: "text-slate-700",   bg: "bg-slate-100",  border: "border-slate-200"   },
   Returns:    { text: "text-pink-700",    bg: "bg-pink-50",    border: "border-pink-200"    },
@@ -104,7 +104,7 @@ function tryFormatJSON(value: string | undefined): string {
 
 // ─── Page Component ─────────────────────────────────────────────────────────
 
-export default function AuditLogPage() {
+function AuditLogPageInner() {
   // ── Data state ──────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<AuditLog[]>([])
@@ -214,12 +214,23 @@ export default function AuditLogPage() {
     setPage(1)
   }
 
-  function handleExport() {
+  async function handleExport() {
     if (filtered.length === 0) {
       toast.error("No data to export")
       return
     }
-    exportToCSV(
+    const { exportToExcel } = await import("@/lib/excel-export")
+
+    const filterParts = [
+      search && `Search: "${search}"`,
+      actionFilter !== "all" && "Action: " + actionFilter,
+      moduleFilter !== "all" && "Module: " + moduleFilter,
+      userFilter !== "all" && "User: " + userFilter,
+      dateFrom && "From: " + dateFrom,
+      dateTo && "To: " + dateTo,
+    ].filter(Boolean)
+
+    exportToExcel(
       filtered.map((l) => ({
         timestamp: formatTimestamp(l.timestamp),
         user: l.userName,
@@ -232,19 +243,27 @@ export default function AuditLogPage() {
         newValue: l.newValue ?? "",
         ipAddress: l.ipAddress ?? "",
       })),
-      "audit-log-export",
+      "audit-log-export-" + todayPKT(),
       [
-        { key: "timestamp", header: "Timestamp" },
-        { key: "user", header: "User" },
-        { key: "role", header: "Role" },
-        { key: "action", header: "Action" },
-        { key: "module", header: "Module" },
-        { key: "entity", header: "Entity" },
-        { key: "description", header: "Description" },
-        { key: "oldValue", header: "Old Value" },
-        { key: "newValue", header: "New Value" },
-        { key: "ipAddress", header: "IP Address" },
-      ]
+        { key: "timestamp",   header: "Timestamp",   width: 18 },
+        { key: "user",        header: "User",         width: 18 },
+        { key: "role",        header: "Role",         width: 14 },
+        { key: "action",      header: "Action",       width: 14 },
+        { key: "module",      header: "Module",       width: 16 },
+        { key: "entity",      header: "Entity",       width: 22 },
+        { key: "description", header: "Description",  width: 40 },
+        { key: "oldValue",    header: "Old Value",    width: 24 },
+        { key: "newValue",    header: "New Value",    width: 24 },
+        { key: "ipAddress",   header: "IP Address",   width: 16 },
+      ],
+      {
+        sheetName: "Audit Log",
+        title: "Audit Log Export",
+        subtitle: filterParts.join("  |  ") || undefined,
+        summaryRows: [
+          { label: "Total Entries", value: filtered.length },
+        ],
+      }
     )
     toast.success(`Exported ${filtered.length} log entries`)
   }
@@ -256,7 +275,7 @@ export default function AuditLogPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-slate-500 font-medium">Loading audit log...</p>
         </div>
       </div>
@@ -284,7 +303,7 @@ export default function AuditLogPage() {
           title="Total Activities"
           value={stats.total.toLocaleString()}
           icon={Activity}
-          iconBg="bg-blue-100"
+          iconBg="bg-indigo-100"
           subtext="All time"
         />
         <StatCard
@@ -305,7 +324,7 @@ export default function AuditLogPage() {
           title="Critical Actions"
           value={stats.criticalCount.toLocaleString()}
           icon={ShieldAlert}
-          iconBg="bg-red-100"
+          iconBg="bg-rose-100"
           subtext="Delete, Refund, Settings"
         />
       </div>
@@ -429,7 +448,45 @@ export default function AuditLogPage() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {paginatedLogs.map((log) => {
+                  const actionStyle = ACTION_COLORS[log.action]
+                  const moduleStyle = MODULE_COLORS[log.module] ?? { text: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" }
+                  return (
+                    <div
+                      key={log.id}
+                      onClick={() => setDetailLog(log)}
+                      className={cn(
+                        "px-3 py-2.5 space-y-1.5 cursor-pointer active:bg-slate-50 transition-colors",
+                        CRITICAL_ACTIONS.includes(log.action) && "bg-rose-50/30"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Badge variant="outline" className={cn("text-[10px] font-semibold px-1.5 py-0 shrink-0", actionStyle.text, actionStyle.bg, actionStyle.border)}>
+                            {log.action.replace(/_/g, " ")}
+                          </Badge>
+                          <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 shrink-0", moduleStyle.text, moduleStyle.bg, moduleStyle.border)}>
+                            {log.module}
+                          </Badge>
+                        </div>
+                        <span className="flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
+                          <Clock className="w-3 h-3" />{formatTimestamp(log.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 line-clamp-2">{log.description}</p>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>{log.userName} · {log.userRole}</span>
+                        {log.entityName && <span className="truncate max-w-[120px]">{log.entityName}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/80">
@@ -455,7 +512,7 @@ export default function AuditLogPage() {
                           key={log.id}
                           className={cn(
                             "cursor-pointer hover:bg-slate-50/60 transition-colors",
-                            CRITICAL_ACTIONS.includes(log.action) && "bg-red-50/30"
+                            CRITICAL_ACTIONS.includes(log.action) && "bg-rose-50/30"
                           )}
                           onClick={() => setDetailLog(log)}
                         >
@@ -548,7 +605,7 @@ export default function AuditLogPage() {
                             <div className="flex flex-col sm:flex-row gap-4">
                               <div className="flex-1">
                                 <p className="text-xs font-semibold text-slate-500 mb-1.5">Old Value</p>
-                                <div className="bg-red-50 border border-red-100 rounded-lg p-3 text-sm text-red-700 font-mono whitespace-pre-wrap break-all">
+                                <div className="bg-rose-50 border border-rose-100 rounded-lg p-3 text-sm text-rose-700 font-mono whitespace-pre-wrap break-all">
                                   {tryFormatJSON(log.oldValue) || <span className="text-slate-400 italic">N/A</span>}
                                 </div>
                               </div>
@@ -624,7 +681,7 @@ export default function AuditLogPage() {
 
       {/* Detail Dialog */}
       <Dialog open={!!detailLog} onOpenChange={(open) => { if (!open) setDetailLog(null) }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[96vw] max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-slate-900">Audit Log Detail</DialogTitle>
           </DialogHeader>
@@ -632,7 +689,7 @@ export default function AuditLogPage() {
           {detailLog && (
             <div className="space-y-4 mt-2">
               {/* Meta */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs font-semibold text-slate-400 mb-0.5">Timestamp</p>
                   <p className="text-slate-700">{formatTimestamp(detailLog.timestamp)}</p>
@@ -707,8 +764,8 @@ export default function AuditLogPage() {
                   <p className="text-xs font-semibold text-slate-400 mb-2">Changes</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[11px] font-semibold text-red-500 mb-1">Old Value</p>
-                      <div className="bg-red-50 border border-red-100 rounded-lg p-3 text-sm text-red-700 font-mono whitespace-pre-wrap break-all min-h-[40px]">
+                      <p className="text-[11px] font-semibold text-rose-500 mb-1">Old Value</p>
+                      <div className="bg-rose-50 border border-rose-100 rounded-lg p-3 text-sm text-rose-700 font-mono whitespace-pre-wrap break-all min-h-[40px]">
                         {tryFormatJSON(detailLog.oldValue) || <span className="text-slate-400 italic">N/A</span>}
                       </div>
                     </div>
@@ -728,3 +785,13 @@ export default function AuditLogPage() {
     </div>
   )
 }
+
+
+export default function AuditLogPage() {
+  return (
+    <PermissionGate permission="audit-log.view">
+      <AuditLogPageInner />
+    </PermissionGate>
+  )
+}
+

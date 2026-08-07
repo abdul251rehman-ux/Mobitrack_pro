@@ -23,6 +23,7 @@ import { DataTable } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -168,6 +169,7 @@ export default function CustomerDetailPage() {
   }), [customerSales, customerPayments])
 
   async function handleReceivePayment() {
+    if (paySubmitting) return
     const amount = parseFloat(payAmount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
     if (!customer) return
@@ -482,7 +484,32 @@ export default function CustomerDetailPage() {
               <p className="text-xs">No purchases recorded for this customer</p>
             </div>
           ) : (
-            <DataTable columns={columns} data={customerSales} searchKey="invoiceNumber" searchPlaceholder="Search invoices..." />
+            <DataTable
+              columns={columns}
+              data={customerSales}
+              searchKey="invoiceNumber"
+              searchPlaceholder="Search invoices..."
+              renderCard={(sale) => {
+                const bal = sale.total - sale.amountReceived
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-semibold text-slate-700">{sale.invoiceNumber}</span>
+                      <StatusBadge status={sale.status} />
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                      <CalendarDays className="w-2.5 h-2.5" />{formatDate(sale.date)}
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                      <span className="font-semibold text-slate-900">{formatCurrency(sale.total)}</span>
+                      {bal > 0
+                        ? <span className="font-bold text-red-600">Due {formatCurrency(bal)}</span>
+                        : <span className="text-emerald-600 font-medium">Paid</span>}
+                    </div>
+                  </div>
+                )
+              }}
+            />
           )}
         </div>
       </div>
@@ -518,7 +545,29 @@ export default function CustomerDetailPage() {
               )}
             </div>
           ) : (
-            <DataTable columns={paymentColumns} data={customerPayments} searchKey="referenceNumber" searchPlaceholder="Search payments..." />
+            <DataTable
+              columns={paymentColumns}
+              data={customerPayments}
+              searchKey="referenceNumber"
+              searchPlaceholder="Search payments..."
+              renderCard={(payment) => (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs text-slate-500">{payment.referenceNumber}</span>
+                    <StatusBadge status={payment.status} />
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                    <CalendarDays className="w-2.5 h-2.5" />{formatDate(payment.date)}
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                    <span className="flex items-center gap-1 text-slate-500">
+                      <CreditCard className="w-3 h-3 text-slate-400" />{payment.method}
+                    </span>
+                    <span className="font-bold text-emerald-600">{formatCurrency(payment.amount)}</span>
+                  </div>
+                </div>
+              )}
+            />
           )}
         </div>
       </div>
@@ -577,7 +626,7 @@ export default function CustomerDetailPage() {
             )}
             <div className="space-y-1">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-red-500">*</span></Label>
-              <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)}
+              <MoneyInput value={payAmount} onChange={v => setPayAmount(v)}
                 placeholder="0" className="h-8 text-xs" autoFocus />
             </div>
             <div className="space-y-1">

@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { format, subMonths, subDays, startOfWeek, endOfWeek, subWeeks, addDays, parseISO, differenceInDays } from "date-fns"
+import { useLanguage } from "@/context/language-context"
 
 /* â"€â"€â"€ Custom Tooltips â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 const SparkTooltip = ({ active, payload }: any) => {
@@ -58,7 +59,7 @@ const BarTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="rounded-xl border border-slate-100 bg-white px-3 py-2 shadow-xl text-xs">
       <p className="font-semibold text-slate-700 mb-1 max-w-40 truncate">{label}</p>
-      <p className="font-bold text-blue-600">{payload[0].value} units sold</p>
+      <p className="font-bold text-indigo-600">{payload[0].value} units sold</p>
     </div>
   )
 }
@@ -70,6 +71,7 @@ type Period = "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "y
 /* â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const TODAY = todayPKT()
   const [period, setPeriod] = useState<Period>("month")
   const [dateFrom, setDateFrom] = useState("")
@@ -306,23 +308,23 @@ export default function DashboardPage() {
   const totalPurchasesCount = purchases.length
 
   const periodLabel = {
-    yesterday: "Yesterday",
-    thisWeek: "This Week",
-    lastWeek: "Last Week",
-    month: "This Month",
-    lastMonth: "Last Month",
-    year: "This Year",
-    range: dateFrom && dateTo ? `${dateFrom} -" ${dateTo}` : "Custom Range",
+    yesterday: t("dash.Yesterday"),
+    thisWeek: t("dash.This Week"),
+    lastWeek: t("dash.Last Week"),
+    month: t("dash.This Month"),
+    lastMonth: t("dash.Last Month"),
+    year: t("dash.This Year"),
+    range: dateFrom && dateTo ? `${dateFrom} - ${dateTo}` : t("dash.Custom Range"),
   }[period]
 
   const FILTER_OPTIONS: { value: Period; label: string; icon: React.ElementType; desc: string }[] = [
-    { value: "yesterday", label: "Yesterday",    icon: Clock,        desc: "Sales from yesterday" },
-    { value: "thisWeek",  label: "This Week",    icon: CalendarDays, desc: "Mon - today" },
-    { value: "lastWeek",  label: "Last Week",    icon: CalendarDays, desc: "Mon - Sun, prev week" },
-    { value: "month",     label: "This Month",   icon: Calendar,     desc: format(todayParsed, "MMMM yyyy") },
-    { value: "lastMonth", label: "Last Month",   icon: Calendar,     desc: format(subMonths(todayParsed, 1), "MMMM yyyy") },
-    { value: "year",      label: "This Year",    icon: TrendingUp,   desc: currentYearKey },
-    { value: "range",     label: "Custom Range", icon: CalendarDays, desc: "Pick a date range" },
+    { value: "yesterday", label: t("dash.Yesterday"),    icon: Clock,        desc: t("dash.Sales from yesterday") },
+    { value: "thisWeek",  label: t("dash.This Week"),    icon: CalendarDays, desc: t("dash.Mon to today") },
+    { value: "lastWeek",  label: t("dash.Last Week"),    icon: CalendarDays, desc: t("dash.Mon to Sun prev") },
+    { value: "month",     label: t("dash.This Month"),   icon: Calendar,     desc: format(todayParsed, "MMMM yyyy") },
+    { value: "lastMonth", label: t("dash.Last Month"),   icon: Calendar,     desc: format(subMonths(todayParsed, 1), "MMMM yyyy") },
+    { value: "year",      label: t("dash.This Year"),    icon: TrendingUp,   desc: currentYearKey },
+    { value: "range",     label: t("dash.Custom Range"), icon: CalendarDays, desc: t("dash.Pick a date range") },
   ]
 
   if (loading) {
@@ -330,7 +332,7 @@ export default function DashboardPage() {
       <PageWrapper>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
             <p className="text-sm text-slate-500 font-medium">Loading dashboard...</p>
           </div>
         </div>
@@ -342,26 +344,26 @@ export default function DashboardPage() {
     <PageWrapper>
 
       {/* â"€â"€ Welcome Banner â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="relative overflow-hidden rounded-xl bg-linear-to-r from-blue-600 via-blue-700 to-indigo-700 px-5 py-3.5 mb-4 shadow-md shadow-blue-200/50">
+      <div className="relative overflow-hidden rounded-xl bg-linear-to-r from-indigo-600 via-indigo-700 to-indigo-700 px-5 py-3.5 mb-4 shadow-md shadow-indigo-200/50">
         <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/5" />
         <div className="absolute right-16 -bottom-10 w-24 h-24 rounded-full bg-white/5" />
         <div className="absolute right-6 top-2 w-12 h-12 rounded-full bg-white/8" />
         <div className="relative flex items-center justify-between">
           <div>
-            <p className="text-blue-200 text-xs font-medium">Welcome back,</p>
+            <p className="text-indigo-200 text-xs font-medium">{t("dash.Welcome back")}</p>
             <h1 className="text-white text-lg sm:text-xl font-bold tracking-tight leading-tight">{user?.name || "User"}</h1>
-            <p className="text-blue-200 text-xs mt-0.5">{formatDate(TODAY)} - {shopName}</p>
+            <p className="text-indigo-200 text-xs mt-0.5">{formatDate(TODAY)} - {shopName}</p>
           </div>
           <div className="hidden md:flex items-center gap-4">
             <div className="text-right">
-              <p className="text-blue-200 text-[11px]">Today's Sales</p>
+              <p className="text-indigo-200 text-[11px]">{t("dash.Today Sales")}</p>
               <p className="text-white text-lg font-bold leading-tight">
                 {formatCurrency(sales.filter(s => s.date === TODAY).reduce((s, x) => s + x.total, 0))}
               </p>
             </div>
             <div className="w-px h-8 bg-white/20" />
             <div className="text-right">
-              <p className="text-blue-200 text-[11px]">Transactions</p>
+              <p className="text-indigo-200 text-[11px]">{t("dash.Transactions")}</p>
               <p className="text-white text-lg font-bold leading-tight">
                 {sales.filter(s => s.date === TODAY).length}
               </p>
@@ -373,12 +375,12 @@ export default function DashboardPage() {
       {/* â"€â"€ Quick Actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
         {[
-          { href: "/sales/new",            icon: Plus,        label: "New Sale",     bg: "from-blue-500 to-blue-600",       shadow: "shadow-blue-200"   },
-          { href: "/purchases/new",        icon: ShoppingBag, label: "New Purchase", bg: "from-violet-500 to-violet-600",   shadow: "shadow-violet-200" },
-          { href: "/products/mobiles",     icon: Smartphone,  label: "Add Mobile",   bg: "from-emerald-500 to-emerald-600", shadow: "shadow-emerald-200"},
-          { href: "/products/accessories", icon: Package,     label: "Accessories",  bg: "from-amber-500 to-amber-600",     shadow: "shadow-amber-200"  },
-          { href: "/customers",            icon: Users,       label: "Customers",    bg: "from-rose-500 to-rose-600",       shadow: "shadow-rose-200"   },
-          { href: "/reports",              icon: BarChart2,   label: "Reports",      bg: "from-cyan-500 to-cyan-600",       shadow: "shadow-cyan-200"   },
+          { href: "/sales/new",            icon: Plus,        label: t("action.New Sale"),     bg: "from-indigo-500 to-indigo-600",       shadow: "shadow-indigo-200"   },
+          { href: "/purchases/new",        icon: ShoppingBag, label: t("action.New Purchase"), bg: "from-violet-500 to-violet-600",   shadow: "shadow-violet-200" },
+          { href: "/products/mobiles",     icon: Smartphone,  label: t("dash.Add Mobile"),   bg: "from-emerald-500 to-emerald-600", shadow: "shadow-emerald-200"},
+          { href: "/products/accessories", icon: Package,     label: t("nav.Accessories"),  bg: "from-amber-500 to-amber-600",     shadow: "shadow-amber-200"  },
+          { href: "/customers",            icon: Users,       label: t("nav.Customers"),    bg: "from-rose-500 to-rose-600",       shadow: "shadow-rose-200"   },
+          { href: "/reports",              icon: BarChart2,   label: t("dash.Reports"),      bg: "from-cyan-500 to-cyan-600",       shadow: "shadow-cyan-200"   },
         ].map(({ href, icon: Icon, label, bg, shadow }) => (
           <Link key={href} href={href}>
             <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white border border-slate-100 p-2.5 sm:p-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer text-center group shadow-sm">
@@ -401,9 +403,9 @@ export default function DashboardPage() {
           <div className="relative">
             <button
               onClick={() => setShowFilterMenu(v => !v)}
-              className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-blue-300 hover:shadow-md transition-all min-w-[130px]"
+              className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all min-w-[130px]"
             >
-              <Calendar className="w-3 h-3 text-blue-500 shrink-0" />
+              <Calendar className="w-3 h-3 text-indigo-500 shrink-0" />
               <span className="flex-1 text-left truncate">{periodLabel}</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform shrink-0 ${showFilterMenu ? "rotate-180" : ""}`} />
             </button>
@@ -416,19 +418,19 @@ export default function DashboardPage() {
                     key={opt.value}
                     onClick={() => { setPeriod(opt.value); if (opt.value !== "range") setShowFilterMenu(false) }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors ${
-                      period === opt.value ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-600 hover:bg-slate-50"
+                      period === opt.value ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    <opt.icon className={`w-3 h-3 ${period === opt.value ? "text-blue-500" : "text-slate-400"}`} />
+                    <opt.icon className={`w-3 h-3 ${period === opt.value ? "text-indigo-500" : "text-slate-400"}`} />
                     {opt.label}
                   </button>
                 ))}
                 {period === "range" && (
                   <div className="px-3 pb-2 pt-1 border-t border-slate-100 space-y-1.5">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                   </div>
                 )}
               </div>
@@ -440,7 +442,7 @@ export default function DashboardPage() {
             <div className="sm:hidden fixed inset-0 z-[9999] flex flex-col justify-end" onClick={() => setShowFilterMenu(false)}>
               <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
               <div
-                className="relative bg-white rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto"
+                className="relative bg-white rounded-t-3xl shadow-2xl max-h-[85dvh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}
               >
                 <div className="flex justify-center pt-3 pb-1">
@@ -462,18 +464,18 @@ export default function DashboardPage() {
                       onClick={() => { setPeriod(opt.value); if (opt.value !== "range") setShowFilterMenu(false) }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all ${
                         period === opt.value
-                          ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
                           : "bg-slate-50 text-slate-700 hover:bg-slate-100"
                       }`}
                     >
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                         period === opt.value ? "bg-white/20" : "bg-white shadow-sm"
                       }`}>
-                        <opt.icon className={`w-4 h-4 ${period === opt.value ? "text-white" : "text-blue-500"}`} />
+                        <opt.icon className={`w-4 h-4 ${period === opt.value ? "text-white" : "text-indigo-500"}`} />
                       </div>
                       <div className="flex-1 text-left">
                         <p className={`text-sm font-semibold leading-tight ${period === opt.value ? "text-white" : "text-slate-800"}`}>{opt.label}</p>
-                        <p className={`text-[10px] mt-0.5 ${period === opt.value ? "text-blue-100" : "text-slate-400"}`}>{opt.desc}</p>
+                        <p className={`text-[10px] mt-0.5 ${period === opt.value ? "text-indigo-100" : "text-slate-400"}`}>{opt.desc}</p>
                       </div>
                       {period === opt.value && <CheckCircle2 className="w-4 h-4 text-white shrink-0" />}
                     </button>
@@ -486,17 +488,17 @@ export default function DashboardPage() {
                       <div className="flex-1">
                         <label className="text-[10px] text-slate-500 font-medium block mb-1">From</label>
                         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       </div>
                       <div className="flex-1">
                         <label className="text-[10px] text-slate-500 font-medium block mb-1">To</label>
                         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                       </div>
                     </div>
                     <button
                       onClick={() => setShowFilterMenu(false)}
-                      className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-semibold text-sm shadow-md shadow-blue-200 active:scale-95 transition-transform"
+                      className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm shadow-md shadow-indigo-200 active:scale-95 transition-transform"
                     >
                       Apply Range
                     </button>
@@ -513,20 +515,20 @@ export default function DashboardPage() {
         <div className="sm:hidden space-y-2">
           {([
             {
-              label: "Sales Revenue", value: formatCurrency(periodRevenue),
-              sub: `${filteredSales.length} transactions`,
-              icon: ShoppingCart, grad: "from-blue-500 to-blue-600",
-              shadow: "shadow-blue-200/60",
+              label: t("dash.Sales Revenue"), value: formatCurrency(periodRevenue),
+              sub: `${filteredSales.length} ${t("dash.transactions")}`,
+              icon: ShoppingCart, grad: "from-indigo-500 to-indigo-600",
+              shadow: "shadow-indigo-200/60",
             },
             {
-              label: "Purchases", value: formatCurrency(periodPurchases),
-              sub: `${filteredPurchases.length} orders`,
+              label: t("dash.Purchases"), value: formatCurrency(periodPurchases),
+              sub: `${filteredPurchases.length} ${t("dash.orders")}`,
               icon: TrendingUp, grad: "from-violet-500 to-violet-600",
               shadow: "shadow-violet-200/60",
             },
             {
-              label: "Gross Profit", value: formatCurrency(Math.max(0, Math.round(periodProfit))),
-              sub: `${periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% margin`,
+              label: t("dash.Gross Profit"), value: formatCurrency(Math.max(0, Math.round(periodProfit))),
+              sub: `${periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% ${t("dash.margin")}`,
               icon: DollarSign, grad: "from-emerald-500 to-emerald-600",
               shadow: "shadow-emerald-200/60",
             },
@@ -550,20 +552,20 @@ export default function DashboardPage() {
         {/* â"€â"€ DESKTOP: gradient cards with sparklines â"€â"€ */}
         <div className="hidden sm:grid sm:grid-cols-3 gap-3">
           {/* Sales Card */}
-          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-500 to-blue-700 p-4 shadow-md shadow-blue-200/50">
+          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 p-4 shadow-md shadow-indigo-200/50">
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-blue-200 text-xs font-medium">Sales Revenue</p>
-                  <p className="text-blue-100 text-[10px]">{periodLabel}</p>
+                  <p className="text-indigo-200 text-xs font-medium">Sales Revenue</p>
+                  <p className="text-indigo-100 text-[10px]">{periodLabel}</p>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
                   <ShoppingCart className="w-3.5 h-3.5 text-white" />
                 </div>
               </div>
               <p className="text-white text-xl font-bold tracking-tight leading-tight mb-0.5">{formatCurrency(periodRevenue)}</p>
-              <p className="text-blue-200 text-[11px]">{filteredSales.length} transactions</p>
+              <p className="text-indigo-200 text-[11px]">{filteredSales.length} transactions</p>
               <div className="mt-2 h-10">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={salesSparkData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
@@ -652,18 +654,18 @@ export default function DashboardPage() {
       {/* â"€â"€ Stat Counters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
         {([
-          { label: "Total Products",  value: totalProducts,       icon: Package,      color: "text-blue-600",    bg: "bg-blue-50",    border: "border-blue-100",    href: "/products/mobiles" },
-          { label: "Customers",       value: customers.length,    icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100",  href: "/customers"        },
-          { label: "Suppliers",       value: suppliers.length,    icon: Truck,        color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100", href: "/suppliers"        },
-          { label: "Total Sales",     value: totalSalesCount,     icon: ShoppingCart, color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-100",   href: "/sales"            },
-          { label: "Total Purchases", value: totalPurchasesCount, icon: TrendingUp,   color: "text-rose-600",    bg: "bg-rose-50",    border: "border-rose-100",    href: "/purchases"        },
-        ] as const).map(({ label, value, icon: Icon, color, bg, border, href }, idx) => (
+          { label: t("dash.Total Products"),  value: totalProducts,       icon: Package,      color: "text-indigo-600",    bg: "bg-indigo-50",    border: "border-indigo-100",    href: "/products/mobiles" },
+          { label: t("nav.Customers"),        value: customers.length,    icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100",  href: "/customers"        },
+          { label: t("dash.Suppliers"),       value: suppliers.length,    icon: Truck,        color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100", href: "/suppliers"        },
+          { label: t("dash.Total Sales"),     value: totalSalesCount,     icon: ShoppingCart, color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-100",   href: "/sales"            },
+          { label: t("fin.Total Purchases"),  value: totalPurchasesCount, icon: TrendingUp,   color: "text-rose-600",    bg: "bg-rose-50",    border: "border-rose-100",    href: "/purchases"        },
+        ]).map(({ label, value, icon: Icon, color, bg, border, href }, idx) => (
           <Link key={href} href={href} className={idx === 4 ? "col-span-2 sm:col-span-1" : ""}>
-            <div className={`flex items-center gap-3 rounded-xl bg-white border ${border} px-3 py-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer shadow-sm h-full`}>
+            <div className={`flex items-center gap-3 rounded-xl bg-white border ${border} px-3 py-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer shadow-sm h-full ${idx === 4 ? "justify-center sm:justify-start" : ""}`}>
               <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
-              <div className="min-w-0">
+              <div className={`min-w-0 ${idx === 4 ? "text-center sm:text-left" : ""}`}>
                 <p className="text-xl font-bold text-slate-800 leading-none">{value}</p>
                 <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">{label}</p>
               </div>
@@ -682,7 +684,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />Revenue
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />Revenue
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />Profit
@@ -732,7 +734,7 @@ export default function DashboardPage() {
           <CardHeader className="px-4 py-3 border-b border-slate-50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-200">
+                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm shadow-indigo-200">
                   <ShoppingCart className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div>
@@ -740,7 +742,7 @@ export default function DashboardPage() {
                   <p className="text-[10px] text-slate-400">Latest transactions</p>
                 </div>
               </div>
-              <Link href="/sales" className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
+              <Link href="/sales" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -749,19 +751,26 @@ export default function DashboardPage() {
             {/* Mobile card list */}
             <div className="divide-y divide-slate-50 md:hidden">
               {recentSales.map(sale => (
-                <div key={sale.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50/70 transition-colors gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="font-mono text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">{sale.invoiceNumber}</span>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-800 text-xs truncate">{sale.customerName}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(sale.date)}</p>
+                <Link key={sale.id} href={`/sales/${sale.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50/70 active:bg-slate-100 transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-indigo-700 text-xs font-bold">
+                      {sale.customerName.trim().split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-slate-800 text-sm truncate">{sale.customerName}</p>
+                      <span className="font-bold text-slate-800 text-sm shrink-0">{formatCurrency(sale.total)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="font-mono text-[10px] text-slate-400 truncate">{sale.invoiceNumber}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-slate-400">{formatDate(sale.date)}</span>
+                        <StatusBadge status={sale.status} />
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-bold text-slate-800 text-xs">{formatCurrency(sale.total)}</span>
-                    <StatusBadge status={sale.status} />
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
             {/* Desktop table */}
@@ -779,7 +788,7 @@ export default function DashboardPage() {
                   {recentSales.map(sale => (
                     <tr key={sale.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="px-4 py-2 whitespace-nowrap">
-                        <span className="font-mono text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{sale.invoiceNumber}</span>
+                        <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{sale.invoiceNumber}</span>
                       </td>
                       <td className="px-3 py-2">
                         <p className="font-semibold text-slate-800 text-xs truncate max-w-28">{sale.customerName}</p>
@@ -812,7 +821,7 @@ export default function DashboardPage() {
                   <p className="text-[10px] text-slate-400">Latest purchase orders</p>
                 </div>
               </div>
-              <Link href="/purchases" className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
+              <Link href="/purchases" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -821,19 +830,26 @@ export default function DashboardPage() {
             {/* Mobile card list */}
             <div className="divide-y divide-slate-50 md:hidden">
               {recentPurchases.map(p => (
-                <div key={p.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50/70 transition-colors gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="font-mono text-[10px] font-bold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded shrink-0">{p.poNumber}</span>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-800 text-xs truncate">{p.supplierName}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(p.date)}</p>
+                <Link key={p.id} href={`/purchases/${p.id}/edit`} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50/70 active:bg-slate-100 transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-violet-700 text-xs font-bold">
+                      {p.supplierName.trim().split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-slate-800 text-sm truncate">{p.supplierName}</p>
+                      <span className="font-bold text-slate-800 text-sm shrink-0">{formatCurrency(p.total)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="font-mono text-[10px] text-slate-400 truncate">{p.poNumber}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-slate-400">{formatDate(p.date)}</span>
+                        <StatusBadge status={p.paymentStatus} />
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-bold text-slate-800 text-xs">{formatCurrency(p.total)}</span>
-                    <StatusBadge status={p.paymentStatus} />
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
             {/* Desktop table */}
@@ -883,7 +899,7 @@ export default function DashboardPage() {
                 <CardTitle className="text-sm font-bold text-slate-800">Top Selling Products</CardTitle>
                 <p className="text-[11px] text-slate-400">By units sold - all time</p>
               </div>
-              <Link href="/products/mobiles" className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1">
+              <Link href="/products/mobiles" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -955,8 +971,8 @@ export default function DashboardPage() {
             ) : (
               lowStockItems.map(item => (
                 <div key={item.id} className="flex items-center gap-2.5 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 hover:bg-amber-50/40 transition-colors">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${item.stock === 0 ? "bg-red-100" : "bg-amber-100"}`}>
-                    <Package className={`w-3.5 h-3.5 ${item.stock === 0 ? "text-red-600" : "text-amber-600"}`} />
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${item.stock === 0 ? "bg-rose-100" : "bg-amber-100"}`}>
+                    <Package className={`w-3.5 h-3.5 ${item.stock === 0 ? "text-rose-600" : "text-amber-600"}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>
@@ -964,7 +980,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="shrink-0 text-right">
                     {item.stock === 0 ? (
-                      <span className="text-[10px] font-bold text-white bg-red-500 px-2 py-0.5 rounded-full">OUT</span>
+                      <span className="text-[10px] font-bold text-white bg-rose-500 px-2 py-0.5 rounded-full">OUT</span>
                     ) : (
                       <span className="text-sm font-bold text-amber-600">{item.stock} <span className="text-[10px] text-slate-400 font-normal">left</span></span>
                     )}

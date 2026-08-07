@@ -1,5 +1,6 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -19,6 +20,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -42,6 +44,7 @@ const supplierSchema = z.object({
   email:         z.string().email("Valid email").optional().or(z.literal("")),
   address:       z.string().min(5, "Address required"),
   city:          z.string().min(1, "City required"),
+  openingBalance: z.string().optional(),
   notes:         z.string().optional(),
   status:        z.enum(["Active","Inactive"]),
 })
@@ -77,10 +80,10 @@ function SupplierCard({
 
   // Generate a consistent gradient from company name
   const gradients = [
-    "from-blue-500 to-indigo-600", "from-violet-500 to-purple-600",
+    "from-indigo-500 to-indigo-600", "from-violet-500 to-purple-600",
     "from-emerald-500 to-teal-600", "from-amber-500 to-orange-500",
-    "from-rose-500 to-pink-600",   "from-cyan-500 to-blue-600",
-    "from-indigo-500 to-blue-700", "from-teal-500 to-emerald-600",
+    "from-rose-500 to-pink-600",   "from-cyan-500 to-indigo-600",
+    "from-indigo-500 to-indigo-700", "from-teal-500 to-emerald-600",
   ]
   const gradientIdx = supplier.companyName.charCodeAt(0) % gradients.length
   const headerGradient = gradients[gradientIdx]
@@ -110,16 +113,16 @@ function SupplierCard({
       <div className="px-3 py-2.5 border-b border-slate-100">
         <div className="grid grid-cols-2 gap-1.5 mb-1.5">
           <button onClick={() => copyToClipboard(supplier.phone, "Phone")}
-            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-md px-1.5 py-1.5 transition-colors group min-w-0">
-            <div className="w-5 h-5 rounded bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center shrink-0">
-              <Phone className="w-2.5 h-2.5 text-slate-500 group-hover:text-blue-600" />
+            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-md px-1.5 py-1.5 transition-colors group min-w-0">
+            <div className="w-5 h-5 rounded bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center shrink-0">
+              <Phone className="w-2.5 h-2.5 text-slate-500 group-hover:text-indigo-600" />
             </div>
             <span className="truncate font-medium">{supplier.phone}</span>
           </button>
           <button onClick={() => copyToClipboard(supplier.email, "Email")}
-            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-md px-1.5 py-1.5 transition-colors group min-w-0">
-            <div className="w-5 h-5 rounded bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center shrink-0">
-              <Mail className="w-2.5 h-2.5 text-slate-500 group-hover:text-blue-600" />
+            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-md px-1.5 py-1.5 transition-colors group min-w-0">
+            <div className="w-5 h-5 rounded bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center shrink-0">
+              <Mail className="w-2.5 h-2.5 text-slate-500 group-hover:text-indigo-600" />
             </div>
             <span className="truncate">{supplier.email || "-"}</span>
           </button>
@@ -140,7 +143,7 @@ function SupplierCard({
         </div>
         <div>
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Outstanding</p>
-          <p className={`text-sm font-bold ${supplier.outstandingBalance > 0 ? "text-red-600" : "text-slate-400"}`}>
+          <p className={`text-sm font-bold ${supplier.outstandingBalance > 0 ? "text-rose-600" : "text-slate-400"}`}>
             {supplier.outstandingBalance > 0 ? formatCurrency(supplier.outstandingBalance) : "-"}
           </p>
         </div>
@@ -151,16 +154,16 @@ function SupplierCard({
         <StarRating rating={supplier.rating} />
         <div className="flex items-center gap-1 shrink-0">
           <Link href={`/suppliers/${supplier.id}`}>
-            <button className="flex items-center gap-1 h-7 px-2.5 text-[10px] font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 rounded-lg transition-colors">
+            <button className="flex items-center gap-1 h-7 px-2.5 text-[10px] font-semibold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded-lg transition-colors">
               <Eye className="w-3 h-3" />View
             </button>
           </Link>
           <button onClick={() => onEdit(supplier)} title="Edit"
-            className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+            className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
             <Pencil className="w-3 h-3" />
           </button>
           <button onClick={() => onDelete(supplier)} title="Delete"
-            className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+            className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors">
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
@@ -197,6 +200,7 @@ function SupplierFormDialog({
       email:         editing?.email         ?? "",
       address:       editing?.address       ?? "",
       city:          (editing?.city as SupplierForm["city"]) ?? "Lahore",
+      openingBalance: editing?.openingBalance ? String(editing.openingBalance) : "",
       notes:         editing?.notes         ?? "",
       status:        editing?.status        ?? "Active",
     },
@@ -211,6 +215,7 @@ function SupplierFormDialog({
       email:         editing?.email         ?? "",
       address:       editing?.address       ?? "",
       city:          (editing?.city as SupplierForm["city"]) ?? "Lahore",
+      openingBalance: editing?.openingBalance ? String(editing.openingBalance) : "",
       notes:         editing?.notes         ?? "",
       status:        editing?.status        ?? "Active",
     })
@@ -218,6 +223,7 @@ function SupplierFormDialog({
 
   const statusValue = watch("status")
   const cityValue   = watch("city")
+  const openingBalanceValue = watch("openingBalance")
 
   // When editing a supplier whose city isn't in the preset list, treat as "Other"
   const [customCity, setCustomCity] = useState("")
@@ -241,7 +247,7 @@ function SupplierFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-slate-900">
             {editing ? "Edit Supplier" : "Add New Supplier"}
@@ -253,39 +259,39 @@ function SupplierFormDialog({
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 mt-1">
           <div className="space-y-1">
-            <Label className="text-xs" htmlFor="companyName">Company Name <span className="text-red-500">*</span></Label>
-            <Input id="companyName" placeholder="e.g. Cell City Electronics" {...register("companyName")} className={`h-8 text-xs ${errors.companyName ? "border-red-400" : ""}`} />
-            {errors.companyName && <p className="text-xs text-red-500">{errors.companyName.message}</p>}
+            <Label className="text-xs" htmlFor="companyName">Company Name <span className="text-rose-500">*</span></Label>
+            <Input id="companyName" placeholder="e.g. Cell City Electronics" {...register("companyName")} className={`h-8 text-xs ${errors.companyName ? "border-rose-400" : ""}`} />
+            {errors.companyName && <p className="text-xs text-rose-500">{errors.companyName.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label className="text-xs" htmlFor="contactPerson">Contact Person <span className="text-red-500">*</span></Label>
-            <Input id="contactPerson" placeholder="e.g. Muhammad Tariq" {...register("contactPerson")} className={`h-8 text-xs ${errors.contactPerson ? "border-red-400" : ""}`} />
-            {errors.contactPerson && <p className="text-xs text-red-500">{errors.contactPerson.message}</p>}
+            <Label className="text-xs" htmlFor="contactPerson">Contact Person <span className="text-rose-500">*</span></Label>
+            <Input id="contactPerson" placeholder="e.g. Muhammad Tariq" {...register("contactPerson")} className={`h-8 text-xs ${errors.contactPerson ? "border-rose-400" : ""}`} />
+            {errors.contactPerson && <p className="text-xs text-rose-500">{errors.contactPerson.message}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs" htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
-              <Input id="phone" placeholder="+92 300 1234567" {...register("phone")} className={`h-8 text-xs ${errors.phone ? "border-red-400" : ""}`} />
-              {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
+              <Label className="text-xs" htmlFor="phone">Phone <span className="text-rose-500">*</span></Label>
+              <Input id="phone" placeholder="+92 300 1234567" {...register("phone")} className={`h-8 text-xs ${errors.phone ? "border-rose-400" : ""}`} />
+              {errors.phone && <p className="text-xs text-rose-500">{errors.phone.message}</p>}
             </div>
             <div className="space-y-1">
               <Label className="text-xs" htmlFor="email">Email <span className="text-slate-400 text-[10px]">(optional)</span></Label>
-              <Input id="email" type="email" placeholder="contact@company.pk" {...register("email")} className={`h-8 text-xs ${errors.email ? "border-red-400" : ""}`} />
-              {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
+              <Input id="email" type="email" placeholder="contact@company.pk" {...register("email")} className={`h-8 text-xs ${errors.email ? "border-rose-400" : ""}`} />
+              {errors.email && <p className="text-xs text-rose-500">{errors.email.message}</p>}
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs" htmlFor="address">Address <span className="text-red-500">*</span></Label>
-            <Input id="address" placeholder="Shop 14, Hall Road Electronics Market" {...register("address")} className={`h-8 text-xs ${errors.address ? "border-red-400" : ""}`} />
-            {errors.address && <p className="text-xs text-red-500">{errors.address.message}</p>}
+            <Label className="text-xs" htmlFor="address">Address <span className="text-rose-500">*</span></Label>
+            <Input id="address" placeholder="Shop 14, Hall Road Electronics Market" {...register("address")} className={`h-8 text-xs ${errors.address ? "border-rose-400" : ""}`} />
+            {errors.address && <p className="text-xs text-rose-500">{errors.address.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">City <span className="text-red-500">*</span></Label>
+            <Label className="text-xs">City <span className="text-rose-500">*</span></Label>
             <Select value={cityValue} onValueChange={(v) => { setValue("city", v, { shouldValidate: true }); if (v !== "Other") setCustomCity("") }}>
-              <SelectTrigger className={`h-8 text-xs ${errors.city ? "border-red-400" : ""}`}><SelectValue placeholder="Select city" /></SelectTrigger>
+              <SelectTrigger className={`h-8 text-xs ${errors.city ? "border-rose-400" : ""}`}><SelectValue placeholder="Select city" /></SelectTrigger>
               <SelectContent className="max-h-60">
                 {CITIES.map((c) => (
-                  <SelectItem key={c} value={c} className={c === "Other" ? "font-medium text-blue-600 border-t border-slate-100 mt-1 pt-1" : ""}>{c}</SelectItem>
+                  <SelectItem key={c} value={c} className={c === "Other" ? "font-medium text-indigo-600 border-t border-slate-100 mt-1 pt-1" : ""}>{c}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -298,7 +304,14 @@ function SupplierFormDialog({
                 autoFocus
               />
             )}
-            {errors.city && <p className="text-xs text-red-500">{errors.city.message}</p>}
+            {errors.city && <p className="text-xs text-rose-500">{errors.city.message}</p>}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="openingBalance">Opening Balance <span className="text-slate-400 text-[10px]">(if we already owed them)</span></Label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Rs</span>
+              <MoneyInput id="openingBalance" value={openingBalanceValue ?? ""} onChange={v => setValue("openingBalance", v)} placeholder="0" className="pl-8 h-8 text-xs" />
+            </div>
           </div>
           <div className="space-y-1">
             <Label className="text-xs" htmlFor="notes">Notes</Label>
@@ -316,7 +329,7 @@ function SupplierFormDialog({
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" size="sm" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[100px]">
+            <Button type="submit" size="sm" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[100px]">
               {editing ? "Save Changes" : "Add Supplier"}
             </Button>
           </div>
@@ -327,7 +340,7 @@ function SupplierFormDialog({
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function SuppliersPage() {
+function SuppliersPageInner() {
   const [supplierList, setSupplierList] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -379,6 +392,7 @@ export default function SuppliersPage() {
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [deleteTarget,   setDeleteTarget]   = useState<Supplier | null>(null)
   const [deleteOpen,     setDeleteOpen]     = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
 
   // ── Derived / filtered list ───────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -426,6 +440,7 @@ export default function SuppliersPage() {
 
   const handleSave = async (data: SupplierForm, id?: string) => {
     try {
+      const openingBalance = data.openingBalance ? parseFloat(data.openingBalance) : undefined
       if (id) {
         const updated = await updateSupplier(id, {
           companyName:   data.companyName,
@@ -434,6 +449,7 @@ export default function SuppliersPage() {
           email:         data.email,
           address:       data.address,
           city:          data.city,
+          openingBalance,
           notes:         data.notes,
           status:        data.status,
         })
@@ -451,6 +467,7 @@ export default function SuppliersPage() {
           city:               data.city,
           totalPurchases:     0,
           outstandingBalance: 0,
+          openingBalance,
           rating:             0,
           status:             data.status,
           notes:              data.notes,
@@ -466,13 +483,16 @@ export default function SuppliersPage() {
   }
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
     try {
       await deleteSupplier(deleteTarget.id)
       setSupplierList((prev) => prev.filter((s) => s.id !== deleteTarget.id))
       toast.success(`${deleteTarget.companyName} deleted`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete supplier")
+    } finally {
+      setDeleting(false)
     }
     setDeleteOpen(false)
     setDeleteTarget(null)
@@ -488,7 +508,7 @@ export default function SuppliersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     )
   }
@@ -502,29 +522,29 @@ export default function SuppliersPage() {
             <Building2 className="w-3.5 h-3.5 text-white" />
           </div>
           <h1 className="text-base font-bold text-slate-900">Suppliers</h1>
-          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">{supplierList.length}</span>
+          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold">{supplierList.length}</span>
         </div>
-        <button onClick={handleAddClick} className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm">
+        <button onClick={handleAddClick} className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm">
           <Plus className="w-3.5 h-3.5" />Add Supplier
         </button>
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
         <StatCard title="Active Suppliers" value={String(supplierStats.active)} icon={CheckCircle2} iconBg="bg-emerald-100" subtext={`${supplierList.length - supplierStats.active} inactive`} />
-        <StatCard title="Total Purchases" value={formatCurrency(supplierStats.totalPurchases)} icon={TrendingUp} iconBg="bg-blue-100" subtext="All time" />
-        <StatCard title="Outstanding Balance" value={formatCurrency(supplierStats.totalOutstanding)} icon={AlertCircle} iconBg="bg-red-100" subtext="Payable to suppliers" />
+        <StatCard title="Total Purchases" value={formatCurrency(supplierStats.totalPurchases)} icon={TrendingUp} iconBg="bg-indigo-100" subtext="All time" />
+        <StatCard title="Outstanding Balance" value={formatCurrency(supplierStats.totalOutstanding)} icon={AlertCircle} iconBg="bg-rose-100" subtext="Payable to suppliers" />
       </div>
 
       {/* Filter Bar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-slate-200">
-        <div className="relative shrink-0 w-48">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-white rounded-xl border border-slate-200">
+        <div className="relative w-full sm:w-48 shrink-0">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
           <Input placeholder="Search suppliers..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-xs" />
+            className="pl-8 h-8 text-xs w-full" />
         </div>
         <Select value={cityFilter} onValueChange={setCityFilter}>
-          <SelectTrigger className="w-32 h-8 text-xs shrink-0">
+          <SelectTrigger className="flex-1 min-w-[100px] h-8 text-xs">
             <SelectValue placeholder="All Cities" />
           </SelectTrigger>
           <SelectContent>
@@ -533,7 +553,7 @@ export default function SuppliersPage() {
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-28 h-8 text-xs shrink-0">
+          <SelectTrigger className="flex-1 min-w-[90px] h-8 text-xs">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -543,7 +563,7 @@ export default function SuppliersPage() {
           </SelectContent>
         </Select>
         <Select value={ratingFilter} onValueChange={setRatingFilter}>
-          <SelectTrigger className="w-32 h-8 text-xs shrink-0">
+          <SelectTrigger className="flex-1 min-w-[100px] h-8 text-xs">
             <SelectValue placeholder="Rating" />
           </SelectTrigger>
           <SelectContent>
@@ -563,7 +583,7 @@ export default function SuppliersPage() {
           <h3 className="text-sm font-semibold text-slate-500 mb-1">No suppliers found</h3>
           <p className="text-xs text-slate-400">
             Try adjusting your filters or{" "}
-            <button onClick={handleAddClick} className="text-blue-600 hover:underline font-medium">add a new supplier</button>
+            <button onClick={handleAddClick} className="text-indigo-600 hover:underline font-medium">add a new supplier</button>
           </p>
         </div>
       ) : (
@@ -588,7 +608,18 @@ export default function SuppliersPage() {
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={handleConfirmDelete}
+        loading={deleting}
       />
     </div>
   )
 }
+
+
+export default function SuppliersPage() {
+  return (
+    <PermissionGate permission="suppliers.view">
+      <SuppliersPageInner />
+    </PermissionGate>
+  )
+}
+

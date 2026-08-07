@@ -1,10 +1,10 @@
 "use client"
 import {
   ColumnDef, flexRender, getCoreRowModel, useReactTable, getSortedRowModel, SortingState,
-  getFilteredRowModel, ColumnFiltersState, getPaginationRowModel, VisibilityState
+  getFilteredRowModel, ColumnFiltersState, getPaginationRowModel, VisibilityState, Row
 } from "@tanstack/react-table"
 import { useState } from "react"
-import { ChevronUp, ChevronDown, ChevronsUpDown, Settings2, ChevronLeft, ChevronRight, Search } from "lucide-react"
+import { ChevronUp, ChevronDown, ChevronsUpDown, Settings2, ChevronLeft, ChevronRight, Search, ChevronRight as ChevronRightIcon } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,9 +22,17 @@ interface DataTableProps<TData, TValue> {
   searchKey?: string
   searchPlaceholder?: string
   toolbar?: React.ReactNode
+  /**
+   * Renders one mobile card for a row (title, badge, key fields - keep it short).
+   * Shown below `md`, replacing the table. Omit to fall back to a generic
+   * label/value stack built from the first few visible columns.
+   */
+  renderCard?: (row: TData) => React.ReactNode
+  /** Called when a mobile card is tapped - e.g. open a detail drawer or navigate. Adds a chevron affordance when set. */
+  onCardTap?: (row: TData) => void
 }
 
-export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlaceholder = "Search...", toolbar }: DataTableProps<TData, TValue>) {
+export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlaceholder = "Search...", toolbar, renderCard, onCardTap }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
@@ -61,7 +69,7 @@ export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlace
           </div>
         )}
         {toolbar}
-        <div className={cn("flex items-center gap-2 ml-auto shrink-0")}>
+        <div className={cn("hidden md:flex items-center gap-2 ml-auto shrink-0")}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs px-3">
@@ -86,8 +94,21 @@ export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlace
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-2">
+        {table.getRowModel().rows?.length ? (
+          table.getRowModel().rows.map(row => (
+            <MobileRowCard key={row.id} row={row} renderCard={renderCard} onTap={onCardTap} />
+          ))
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <EmptyState />
+          </div>
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block rounded-xl border border-slate-200 bg-white overflow-x-auto">
         <Table className="min-w-full">
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
@@ -176,6 +197,59 @@ export function DataTable<TData, TValue>({ columns, data, searchKey, searchPlace
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Mobile card fallback ───────────────────────────────────────────────────
+// When a page doesn't pass renderCard, build a generic label/value stack from
+// the first few real (non-decorative) columns so nothing is left unhandled.
+
+function MobileRowCard<TData>({
+  row, renderCard, onTap,
+}: {
+  row: Row<TData>
+  renderCard?: (row: TData) => React.ReactNode
+  onTap?: (row: TData) => void
+}) {
+  const content = renderCard
+    ? renderCard(row.original)
+    : <GenericCardBody row={row} />
+
+  return (
+    <div
+      onClick={onTap ? () => onTap(row.original) : undefined}
+      className={cn(
+        "rounded-xl border border-slate-200 bg-white p-3",
+        onTap && "cursor-pointer active:bg-slate-50 transition-colors"
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">{content}</div>
+        {onTap && <ChevronRightIcon className="w-4 h-4 text-slate-300 shrink-0" />}
+      </div>
+    </div>
+  )
+}
+
+function GenericCardBody<TData>({ row }: { row: Row<TData> }) {
+  const cells = row.getVisibleCells().filter(cell => {
+    const id = cell.column.id
+    const header = cell.column.columnDef.header
+    // Skip decorative columns (avatars, action-button clusters) - no header text and no accessor-driven label
+    return id !== "actions" && id !== "select" && typeof header === "string" && header.trim().length > 0
+  }).slice(0, 4)
+
+  if (cells.length === 0) return null
+
+  return (
+    <div className="space-y-1">
+      {cells.map((cell, i) => (
+        <div key={cell.id} className={cn("flex items-center justify-between gap-3 text-xs", i === 0 && "text-sm font-semibold text-slate-900")}>
+          {i > 0 && <span className="text-slate-400 shrink-0">{String(cell.column.columnDef.header)}</span>}
+          <span className={cn("min-w-0", i > 0 && "text-right")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</span>
+        </div>
+      ))}
     </div>
   )
 }

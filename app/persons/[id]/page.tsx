@@ -15,6 +15,9 @@ import {
 import { getFinanceAccounts } from "@/lib/api/finance"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
+import { MoneyInput } from "@/components/ui/money-input"
+import { PageLoader } from "@/components/shared/page-loader"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card"]
 
@@ -131,6 +134,7 @@ export default function PersonDetailPage() {
   }
 
   async function handleSave() {
+    if (saving) return
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return }
     if (!accountId) { toast.error("Select a finance account"); return }
@@ -156,10 +160,14 @@ export default function PersonDetailPage() {
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     setDeleting(true)
     try {
-      await deletePersonTransaction(deleteTarget.id)
+      await deletePersonTransaction(deleteTarget.id, {
+        reverseAccountId: deleteTarget.accountId ?? undefined,
+        reverseAmount: deleteTarget.amount,
+        reverseType: deleteTarget.type,
+      })
       setTransactions(prev => prev.filter(t => t.id !== deleteTarget.id))
       setDeleteTarget(null)
       toast.success("Transaction deleted")
@@ -171,11 +179,7 @@ export default function PersonDetailPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   if (!person) return null
@@ -211,7 +215,7 @@ export default function PersonDetailPage() {
         {/* Action buttons */}
         <div className="flex gap-2 shrink-0">
           <button onClick={() => openDialog("gave")}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
+            className="flex items-center gap-1.5 h-8 px-3 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium transition-colors">
             <Minus className="w-3.5 h-3.5" />Give Money
           </button>
           <button onClick={() => openDialog("took")}
@@ -223,17 +227,17 @@ export default function PersonDetailPage() {
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <StatCard label="Total Given" value={formatCurrency(totalGave)} sub="Money lent out" color="bg-red-500" Icon={TrendingDown} />
+        <StatCard label="Total Given" value={formatCurrency(totalGave)} sub="Money lent out" color="bg-rose-500" Icon={TrendingDown} />
         <StatCard label="Total Received" value={formatCurrency(totalTook)} sub="Money taken back" color="bg-emerald-500" Icon={TrendingUp} />
-        <StatCard label="Transactions" value={String(transactions.length)} sub="All time" color="bg-blue-500" Icon={CircleDollarSign} />
-        <div className={`bg-white rounded-xl border px-3 py-2.5 flex flex-col gap-1 ${isTheyOwe ? "border-amber-200" : "border-emerald-200"}`}>
+        <StatCard label="Transactions" value={String(transactions.length)} sub="All time" color="bg-indigo-500" Icon={CircleDollarSign} />
+        <div className={`bg-white rounded-xl border px-3 py-2.5 flex flex-col gap-1 ${isTheyOwe ? "border-rose-200" : "border-emerald-200"}`}>
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
               {isTheyOwe ? "They Need to Pay Us" : "We Need to Pay Them"}
             </p>
-            <Wallet className={`w-4 h-4 ${isTheyOwe ? "text-amber-500" : "text-emerald-500"}`} />
+            <Wallet className={`w-4 h-4 ${isTheyOwe ? "text-rose-500" : "text-emerald-500"}`} />
           </div>
-          <p className={`text-base font-bold leading-tight ${isTheyOwe ? "text-amber-600" : "text-emerald-600"}`}>
+          <p className={`text-base font-bold leading-tight ${isTheyOwe ? "text-rose-600" : "text-emerald-600"}`}>
             {formatCurrency(balance)}
           </p>
           <p className="text-[10px] text-slate-400">{isTheyOwe ? "They need to pay us" : "We need to pay them"}</p>
@@ -242,9 +246,9 @@ export default function PersonDetailPage() {
 
       {/* ── Balance banner ── */}
       {balance > 0 && (
-        <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${isTheyOwe ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
-          <AlertCircle className={`w-4 h-4 shrink-0 ${isTheyOwe ? "text-amber-500" : "text-emerald-500"}`} />
-          <p className={`text-sm font-medium ${isTheyOwe ? "text-amber-700" : "text-emerald-700"}`}>
+        <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${isTheyOwe ? "bg-rose-50 border-rose-200" : "bg-emerald-50 border-emerald-200"}`}>
+          <AlertCircle className={`w-4 h-4 shrink-0 ${isTheyOwe ? "text-rose-500" : "text-emerald-500"}`} />
+          <p className={`text-sm font-medium ${isTheyOwe ? "text-rose-700" : "text-emerald-700"}`}>
             {isTheyOwe
               ? `${person.name} needs to pay you ${formatCurrency(balance)}`
               : `You need to pay ${person.name} ${formatCurrency(balance)}`}
@@ -256,7 +260,7 @@ export default function PersonDetailPage() {
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-800">Transaction Ledger</h2>
-          <span className="text-[10px] text-slate-400">{transactions.length} entries</span>
+          <span className="text-[10px] text-slate-400">{transactions.length + (person.openingBalance !== 0 ? 1 : 0)} entries</span>
         </div>
 
         {ledgerRows.length === 0 ? (
@@ -267,36 +271,15 @@ export default function PersonDetailPage() {
           </div>
         ) : (
           <>
-            {/* Opening balance row */}
-            {(person.openingBalance !== 0) && (
-              <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                <div className="w-7 h-7 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
-                  <Wallet className="w-3.5 h-3.5 text-slate-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-600">Opening Balance</p>
-                  <p className="text-[10px] text-slate-400">Starting balance</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className={`text-xs font-bold ${person.openingBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                    {person.openingBalance > 0 ? "+" : ""}{formatCurrency(Math.abs(person.openingBalance))}
-                  </p>
-                  <p className={`text-[10px] font-semibold ${person.openingBalance > 0 ? "text-amber-500" : "text-emerald-500"}`}>
-                    {formatCurrency(Math.abs(person.openingBalance))} {person.openingBalance > 0 ? "Dr" : "Cr"}
-                  </p>
-                </div>
-              </div>
-            )}
-
             <div className="divide-y divide-slate-100">
-              {ledgerRows.map(txn => {
+              {[...ledgerRows].reverse().map(txn => {
                 const isGave = txn.type === "gave"
                 const theyOweNow = txn.runningBalance >= 0
                 return (
                   <div key={txn.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors group">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${isGave ? "bg-red-50" : "bg-emerald-50"}`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${isGave ? "bg-rose-50" : "bg-emerald-50"}`}>
                       {isGave
-                        ? <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+                        ? <TrendingDown className="w-3.5 h-3.5 text-rose-500" />
                         : <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -313,16 +296,16 @@ export default function PersonDetailPage() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={`text-sm font-bold ${isGave ? "text-red-600" : "text-emerald-600"}`}>
+                      <p className={`text-sm font-bold ${isGave ? "text-rose-600" : "text-emerald-600"}`}>
                         {isGave ? "−" : "+"}{formatCurrency(txn.amount)}
                       </p>
-                      <p className={`text-[10px] font-semibold ${theyOweNow ? "text-amber-500" : "text-emerald-500"}`}>
+                      <p className={`text-[10px] font-semibold ${theyOweNow ? "text-rose-500" : "text-emerald-500"}`}>
                         {formatCurrency(Math.abs(txn.runningBalance))} {theyOweNow ? "Dr" : "Cr"}
                       </p>
                     </div>
                     <button
                       onClick={() => setDeleteTarget(txn)}
-                      className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all ml-1 shrink-0">
+                      className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-all ml-1 shrink-0">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -330,12 +313,33 @@ export default function PersonDetailPage() {
               })}
             </div>
 
+            {/* Opening balance row */}
+            {(person.openingBalance !== 0) && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border-t border-slate-100">
+                <div className="w-7 h-7 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                  <Wallet className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-600">Opening Balance</p>
+                  <p className="text-[10px] text-slate-400">Starting balance</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-xs font-bold ${person.openingBalance > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {person.openingBalance > 0 ? "+" : ""}{formatCurrency(Math.abs(person.openingBalance))}
+                  </p>
+                  <p className={`text-[10px] font-semibold ${person.openingBalance > 0 ? "text-rose-500" : "text-emerald-500"}`}>
+                    {formatCurrency(Math.abs(person.openingBalance))} {person.openingBalance > 0 ? "Dr" : "Cr"}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Footer balance */}
-            <div className={`px-4 py-3 border-t flex items-center justify-between ${isTheyOwe ? "bg-amber-50 border-amber-100" : "bg-emerald-50 border-emerald-100"}`}>
-              <span className={`text-sm font-bold ${isTheyOwe ? "text-amber-700" : "text-emerald-700"}`}>
+            <div className={`px-4 py-3 border-t flex items-center justify-between ${isTheyOwe ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100"}`}>
+              <span className={`text-sm font-bold ${isTheyOwe ? "text-rose-700" : "text-emerald-700"}`}>
                 Current Balance
               </span>
-              <span className={`text-sm font-bold ${isTheyOwe ? "text-amber-700" : "text-emerald-700"}`}>
+              <span className={`text-sm font-bold ${isTheyOwe ? "text-rose-700" : "text-emerald-700"}`}>
                 {formatCurrency(balance)} {isTheyOwe ? "Dr" : "Cr"}
               </span>
             </div>
@@ -351,9 +355,9 @@ export default function PersonDetailPage() {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${dialogType === "gave" ? "bg-red-100" : "bg-emerald-100"}`}>
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${dialogType === "gave" ? "bg-rose-100" : "bg-emerald-100"}`}>
                     {dialogType === "gave"
-                      ? <Minus className="w-4 h-4 text-red-600" />
+                      ? <Minus className="w-4 h-4 text-rose-600" />
                       : <Plus className="w-4 h-4 text-emerald-600" />}
                   </div>
                   <h2 className="text-sm font-bold text-slate-800">
@@ -371,14 +375,13 @@ export default function PersonDetailPage() {
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
                     Amount (Rs) *
                   </label>
-                  <input
-                    type="number" onWheel={e => e.currentTarget.blur()}
+                  <MoneyInput
                     min={1}
                     value={amount}
-                    onChange={e => setAmount(e.target.value)}
+                    onChange={v => setAmount(v)}
                     placeholder="0"
                     autoFocus
-                    className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
@@ -388,12 +391,12 @@ export default function PersonDetailPage() {
                     Finance Account *
                   </label>
                   {accounts.length === 0 ? (
-                    <p className="text-xs text-red-500">No finance accounts found. Add one in Finance first.</p>
+                    <p className="text-xs text-rose-500">No finance accounts found. Add one in Finance first.</p>
                   ) : (
                     <select
                       value={accountId}
                       onChange={e => setAccountId(e.target.value)}
-                      className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       {accounts.map(a => (
                         <option key={a.id} value={a.id}>{a.name} - {formatCurrency(a.currentBalance ?? 0)}</option>
@@ -408,7 +411,7 @@ export default function PersonDetailPage() {
                   <div className="flex flex-wrap gap-1.5">
                     {PAYMENT_METHODS.map(m => (
                       <button key={m} onClick={() => setMethod(m)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${method === m ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-600 hover:border-blue-300"}`}>
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${method === m ? "bg-indigo-600 text-white border-indigo-600" : "border-slate-200 text-slate-600 hover:border-indigo-300"}`}>
                         {m}
                       </button>
                     ))}
@@ -422,7 +425,7 @@ export default function PersonDetailPage() {
                     type="date"
                     value={date}
                     onChange={e => setDate(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
@@ -434,14 +437,14 @@ export default function PersonDetailPage() {
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     placeholder="Reason, reference..."
-                    className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
                 {/* Summary */}
                 {amount && parseFloat(amount) > 0 && (
-                  <div className={`rounded-lg px-3 py-2.5 border ${dialogType === "gave" ? "bg-red-50 border-red-100" : "bg-emerald-50 border-emerald-100"}`}>
-                    <p className={`text-xs font-semibold ${dialogType === "gave" ? "text-red-700" : "text-emerald-700"}`}>
+                  <div className={`rounded-lg px-3 py-2.5 border ${dialogType === "gave" ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100"}`}>
+                    <p className={`text-xs font-semibold ${dialogType === "gave" ? "text-rose-700" : "text-emerald-700"}`}>
                       {dialogType === "gave"
                         ? `Rs ${parseFloat(amount).toLocaleString()} will be deducted from ${accounts.find(a => a.id === accountId)?.name ?? "account"}`
                         : `Rs ${parseFloat(amount).toLocaleString()} will be added to ${accounts.find(a => a.id === accountId)?.name ?? "account"}`}
@@ -456,7 +459,7 @@ export default function PersonDetailPage() {
                   Cancel
                 </button>
                 <button onClick={handleSave} disabled={saving}
-                  className={`flex-1 h-9 text-xs text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 ${dialogType === "gave" ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>
+                  className={`flex-1 h-9 text-xs text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 ${dialogType === "gave" ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>
                   {saving
                     ? <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                     : <Check className="w-3.5 h-3.5" />}
@@ -469,33 +472,17 @@ export default function PersonDetailPage() {
       )}
 
       {/* ── Delete confirm ── */}
-      {deleteTarget && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-[1px]" onClick={() => setDeleteTarget(null)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-5 text-center">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
-                <Trash2 className="w-5 h-5 text-red-500" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-800 mb-1">Delete Transaction?</h3>
-              <p className="text-xs text-slate-500 mb-4">
-                {deleteTarget.type === "gave" ? "Gave" : "Received"} {formatCurrency(deleteTarget.amount)} on {formatDate(deleteTarget.date)}.
-                This cannot be undone.
-              </p>
-              <div className="flex gap-2">
-                <button onClick={() => setDeleteTarget(null)}
-                  className="flex-1 h-8 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
-                  Cancel
-                </button>
-                <button onClick={handleDelete} disabled={deleting}
-                  className="flex-1 h-8 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-lg transition-colors font-medium">
-                  {deleting ? "Deleting..." : "Delete"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete Transaction"
+        description={deleteTarget ? `${deleteTarget.type === "gave" ? "Gave" : "Received"} ${formatCurrency(deleteTarget.amount)} on ${formatDate(deleteTarget.date)}. This cannot be undone.` : ""}
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   )
 }

@@ -1,16 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
-import { Plus, Pencil, Trash2, ShieldCheck, User, Phone, Mail, Lock, Eye, EyeOff } from "lucide-react"
+import {
+  Plus, Pencil, Trash2, ShieldCheck, User, Phone, Mail, Lock,
+  Eye, EyeOff, Check, X, ChevronDown, ChevronUp, Save,
+} from "lucide-react"
 
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { createAuditLog } from "@/lib/api/audit"
-import { useAuth, type UserRole } from "@/context/auth-context"
+import { useAuth, type UserRole, ALL_MODULES, ROLE_PERMISSION_TEMPLATES } from "@/context/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { PageHeader } from "@/components/shared/page-header"
+import { PermissionGate } from "@/components/shared/permission-gate"
+import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,9 +31,10 @@ interface StaffMember {
   name: string
   email: string
   phone: string
-  role: UserRole
+  role: string
   status: string
   createdAt: string
+  permissions: string[] | null
 }
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -37,7 +43,7 @@ const addSchema = z.object({
   name:     z.string().min(2, "Name required"),
   email:    z.string().email("Valid email required"),
   phone:    z.string().min(7, "Phone required"),
-  role:     z.enum(["Admin", "Manager", "Cashier"] as const),
+  role:     z.string().min(1, "Role required"),
   password: z.string().min(6, "Min 6 characters"),
 })
 type AddForm = z.infer<typeof addSchema>
@@ -45,41 +51,157 @@ type AddForm = z.infer<typeof addSchema>
 const editSchema = z.object({
   name:     z.string().min(2, "Name required"),
   phone:    z.string().min(7, "Phone required"),
-  role:     z.enum(["Admin", "Manager", "Cashier"] as const),
+  role:     z.string().min(1, "Role required"),
   status:   z.enum(["Active", "Inactive"] as const),
   password: z.string().optional(),
 })
 type EditForm = z.infer<typeof editSchema>
 
-// ── Role config ───────────────────────────────────────────────────────────────
+// ── Permission Matrix ──────────────────────────────────────────────────────────
 
-const ROLE_CONFIG: Record<UserRole, { color: string; bg: string; border: string; desc: string }> = {
-  Admin:   { color: "text-violet-700", bg: "bg-violet-50",  border: "border-violet-200", desc: "Full access to everything" },
-  Manager: { color: "text-blue-700",   bg: "bg-blue-50",    border: "border-blue-200",   desc: "All except settings & staff" },
-  Cashier: { color: "text-emerald-700",bg: "bg-emerald-50", border: "border-emerald-200",desc: "Sales & basic inventory only" },
+const ACTION_LABELS: Record<string, string> = {
+  view: "View", create: "Create", edit: "Edit", delete: "Delete", general: "Access",
 }
 
-const PERMISSION_SUMMARY: Record<UserRole, string[]> = {
-  Admin:   ["Full system access", "Manage staff & settings", "All reports & finance", "Delete anything"],
-  Manager: ["Sales, Purchases, Returns", "Inventory & products", "Customers & suppliers", "Ledger & expenses", "Reports"],
-  Cashier: ["Create & view sales", "View products & inventory", "Add customers"],
+function permKey(moduleKey: string, action: string) {
+  return `${moduleKey}.${action}`
 }
 
-function RoleBadge({ role }: { role: UserRole }) {
-  const c = ROLE_CONFIG[role]
+function PermissionMatrix({
+  permissions,
+  onChange,
+  disabled,
+}: {
+  permissions: string[]
+  onChange: (perms: string[]) => void
+  disabled?: boolean
+}) {
+  const toggle = (key: string) => {
+    if (disabled) return
+    onChange(
+      permissions.includes(key)
+        ? permissions.filter(p => p !== key)
+        : [...permissions, key]
+    )
+  }
+
+  const toggleModule = (moduleKey: string, actions: readonly string[]) => {
+    if (disabled) return
+    const keys = actions.map(a => permKey(moduleKey, a))
+    const allChecked = keys.every(k => permissions.includes(k))
+    if (allChecked) {
+      onChange(permissions.filter(p => !keys.includes(p)))
+    } else {
+      const next = [...permissions]
+      keys.forEach(k => { if (!next.includes(k)) next.push(k) })
+      onChange(next)
+    }
+  }
+
+  const selectAll = () => {
+    if (disabled) return
+    const all: string[] = []
+    ALL_MODULES.forEach(m => m.actions.forEach(a => all.push(permKey(m.key, a))))
+    onChange(all)
+  }
+
+  const clearAll = () => {
+    if (disabled) return
+    onChange([])
+  }
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${c.color} ${c.bg} ${c.border}`}>
-      <ShieldCheck className="w-3 h-3" />
-      {role}
-    </span>
+    <div className="space-y-2">
+      {!disabled && (
+        <div className="flex items-center gap-2 mb-1">
+          <button type="button" onClick={selectAll} className="text-[11px] text-indigo-600 hover:underline font-medium">Select All</button>
+          <span className="text-slate-300">·</span>
+          <button type="button" onClick={clearAll} className="text-[11px] text-slate-500 hover:underline">Clear All</button>
+          <span className="ml-auto text-[11px] text-slate-400">{permissions.length} permissions selected</span>
+        </div>
+      )}
+      <div className="rounded-lg border border-slate-200 overflow-x-auto">
+        <table className="w-full min-w-[480px] text-[12px]">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="text-left px-3 py-2 font-semibold text-slate-600">Module</th>
+              {["view","create","edit","delete","general"].map(a => (
+                <th key={a} className="px-2 py-2 text-center font-semibold text-slate-500 capitalize w-16">{ACTION_LABELS[a]}</th>
+              ))}
+              <th className="px-2 py-2 text-center font-semibold text-slate-400 w-14">All</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {ALL_MODULES.map((mod) => {
+              const allKeys = mod.actions.map(a => permKey(mod.key, a))
+              const allChecked = allKeys.every(k => permissions.includes(k))
+              const someChecked = allKeys.some(k => permissions.includes(k))
+              return (
+                <tr key={mod.key} className={cn("transition-colors", someChecked && "bg-indigo-50/30")}>
+                  <td className="px-3 py-2 font-medium text-slate-700">{mod.label}</td>
+                  {["view","create","edit","delete","general"].map(action => {
+                    const hasAction = (mod.actions as readonly string[]).includes(action)
+                    const key = permKey(mod.key, action)
+                    const checked = permissions.includes(key)
+                    return (
+                      <td key={action} className="px-2 py-2 text-center">
+                        {hasAction ? (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => toggle(key)}
+                            className={cn(
+                              "w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-all",
+                              checked
+                                ? "bg-indigo-600 border-indigo-600 text-white"
+                                : "border-slate-300 hover:border-indigo-400",
+                              disabled && "cursor-default opacity-60"
+                            )}
+                          >
+                            {checked && <Check className="w-3 h-3" />}
+                          </button>
+                        ) : (
+                          <span className="block w-5 h-5 mx-auto" />
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => toggleModule(mod.key, mod.actions)}
+                      className={cn(
+                        "w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-all",
+                        allChecked
+                          ? "bg-emerald-600 border-emerald-600 text-white"
+                          : someChecked
+                          ? "bg-amber-400 border-amber-400 text-white"
+                          : "border-slate-300 hover:border-emerald-400",
+                        disabled && "cursor-default opacity-60"
+                      )}
+                    >
+                      {allChecked && <Check className="w-3 h-3" />}
+                      {someChecked && !allChecked && <span className="block w-1.5 h-0.5 bg-white rounded" />}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getInitials(name: string) {
   return name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
 }
 
-const avatarColors = ["bg-blue-600","bg-violet-600","bg-emerald-600","bg-amber-600","bg-rose-600","bg-cyan-600"]
+const avatarColors = ["bg-indigo-600","bg-violet-600","bg-emerald-600","bg-amber-600","bg-rose-600","bg-cyan-600"]
 
 function Avatar({ name, id }: { name: string; id: string }) {
   const idx = id.charCodeAt(0) % avatarColors.length
@@ -90,31 +212,48 @@ function Avatar({ name, id }: { name: string; id: string }) {
   )
 }
 
+function RoleBadge({ role, permissions }: { role: string; permissions: string[] | null }) {
+  const isAdmin = role === "Admin"
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border",
+      isAdmin
+        ? "bg-violet-50 text-violet-700 border-violet-200"
+        : "bg-indigo-50 text-indigo-700 border-indigo-200"
+    )}>
+      <ShieldCheck className="w-3 h-3" />
+      {role}
+    </span>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function StaffPage() {
+function StaffPageInner() {
   const { user: currentUser, hasPermission } = useAuth()
-  const [staff, setStaff]         = useState<StaffMember[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [showAdd, setShowAdd]     = useState(false)
-  const [editTarget, setEditTarget] = useState<StaffMember | null>(null)
+  const [staff, setStaff]             = useState<StaffMember[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [showAdd, setShowAdd]         = useState(false)
+  const [editTarget, setEditTarget]   = useState<StaffMember | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<StaffMember | null>(null)
-  const [deleting, setDeleting]   = useState(false)
+  const [deleting, setDeleting]       = useState(false)
+  const [expandedPerms, setExpandedPerms] = useState<string | null>(null)
 
   async function fetchStaff() {
     try {
       const tenantId = await getTenantId()
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, name, email, phone, role, status, created_at")
+        .select("id, name, email, phone, role, status, created_at, permissions")
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: true })
       if (error) throw error
       setStaff((data ?? []).map((r: any) => ({
         id: r.id, name: r.name, email: r.email, phone: r.phone,
         role: r.role, status: r.status, createdAt: r.created_at,
+        permissions: Array.isArray(r.permissions) ? r.permissions : null,
       })))
-    } catch (err) {
+    } catch {
       toast.error("Failed to load staff")
     } finally {
       setLoading(false)
@@ -124,7 +263,7 @@ export default function StaffPage() {
   useEffect(() => { fetchStaff() }, [])
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     setDeleting(true)
     try {
       const tenantId = await getTenantId()
@@ -155,7 +294,7 @@ export default function StaffPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     )
   }
@@ -166,38 +305,13 @@ export default function StaffPage() {
     <div className="space-y-4">
       <PageHeader
         title="Staff"
-        description="Manage staff accounts and their access roles"
+        description="Manage staff accounts and their access permissions"
         action={isAdmin ? (
           <Button onClick={() => setShowAdd(true)} className="h-9 gap-1.5 text-sm">
             <Plus className="w-4 h-4" /> Add Staff
           </Button>
         ) : undefined}
       />
-
-      {/* Role legend */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {(["Admin", "Manager", "Cashier"] as UserRole[]).map(role => {
-          const c = ROLE_CONFIG[role]
-          const count = staff.filter(s => s.role === role).length
-          return (
-            <div key={role} className={`rounded-xl border p-3.5 ${c.bg} ${c.border}`}>
-              <div className="flex items-center justify-between mb-2">
-                <span className={`text-xs font-bold uppercase tracking-wide ${c.color}`}>{role}</span>
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${c.bg} ${c.color} border ${c.border}`}>{count} staff</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mb-2">{ROLE_CONFIG[role].desc}</p>
-              <ul className="space-y-0.5">
-                {PERMISSION_SUMMARY[role].map(p => (
-                  <li key={p} className="text-[11px] text-slate-600 flex items-center gap-1.5">
-                    <span className={`w-1 h-1 rounded-full shrink-0 ${c.color.replace("text-","bg-")}`} />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )
-        })}
-      </div>
 
       {/* Staff list */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -208,72 +322,211 @@ export default function StaffPage() {
             {isAdmin && <p className="text-xs mt-1">Click "Add Staff" to get started</p>}
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Staff Member</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Contact</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Role</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Status</th>
-                {isAdmin && <th className="px-4 py-3" />}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {staff.map(member => (
-                <tr key={member.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={member.name} id={member.id} />
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-                          {member.name}
-                          {member.id === currentUser?.id && (
-                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">You</span>
-                          )}
-                        </p>
-                        <p className="text-xs text-slate-400">{member.email}</p>
-                      </div>
+          <>
+          {/* Mobile cards */}
+          <div className="sm:hidden divide-y divide-slate-100">
+            {staff.map(member => {
+              const effectivePerms = member.role === "Admin"
+                ? "*"
+                : (member.permissions ?? ROLE_PERMISSION_TEMPLATES[member.role] ?? []) as string[] | "*"
+              const permCount = effectivePerms === "*" ? "All" : `${(effectivePerms as string[]).length}`
+              const isExpanded = expandedPerms === member.id
+              return (
+                <div key={member.id} className="p-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={member.name} id={member.id} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5 truncate">
+                        {member.name}
+                        {member.id === currentUser?.id && (
+                          <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-medium shrink-0">You</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate">{member.email}</p>
                     </div>
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    <p className="text-xs text-slate-600">{member.phone}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <RoleBadge role={member.role} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                      member.status === "Active"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-slate-100 text-slate-500 border-slate-200"
-                    }`}>
-                      {member.status}
-                    </span>
-                  </td>
-                  {isAdmin && (
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-blue-600"
+                    {isAdmin && (
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600"
                           onClick={() => setEditTarget(member)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
                         {member.id !== currentUser?.id && (
-                          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-red-600"
+                          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600"
                             onClick={() => setDeleteTarget(member)}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
                       </div>
-                    </td>
+                    )}
+                  </div>
+                  {member.phone && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-slate-400" /> {member.phone}
+                    </p>
                   )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <RoleBadge role={member.role} permissions={member.permissions} />
+                    <span className={cn(
+                      "text-xs font-medium px-2 py-0.5 rounded-full border",
+                      member.status === "Active"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200"
+                    )}>
+                      {member.status}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedPerms(isExpanded ? null : member.id)}
+                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 transition-colors"
+                  >
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-semibold",
+                      effectivePerms === "*" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600"
+                    )}>
+                      {permCount}
+                    </span>
+                    <span className="text-[11px]">permissions</span>
+                    {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                  {isExpanded && (
+                    effectivePerms === "*" ? (
+                      <p className="text-xs text-violet-700 font-medium">Full access to everything — Admin</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(effectivePerms as string[]).map(p => (
+                          <span key={p} className="text-[10px] bg-slate-50 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                            {p}
+                          </span>
+                        ))}
+                        {(effectivePerms as string[]).length === 0 && (
+                          <span className="text-xs text-slate-400">No permissions assigned</span>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Staff Member</th>
+                  <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Contact</th>
+                  <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Role</th>
+                  <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Status</th>
+                  <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-4 py-3 hidden md:table-cell">Permissions</th>
+                  {isAdmin && <th className="px-4 py-3" />}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {staff.map(member => {
+                  const effectivePerms = member.role === "Admin"
+                    ? "*"
+                    : (member.permissions ?? ROLE_PERMISSION_TEMPLATES[member.role] ?? []) as string[] | "*"
+                  const permCount = effectivePerms === "*" ? "All" : `${(effectivePerms as string[]).length}`
+                  const isExpanded = expandedPerms === member.id
+
+                  return (
+                    <React.Fragment key={member.id}>
+                      <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={member.name} id={member.id} />
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                                {member.name}
+                                {member.id === currentUser?.id && (
+                                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-medium">You</span>
+                                )}
+                              </p>
+                              <p className="text-xs text-slate-400">{member.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          <p className="text-xs text-slate-600">{member.phone}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <RoleBadge role={member.role} permissions={member.permissions} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn(
+                            "text-xs font-medium px-2 py-0.5 rounded-full border",
+                            member.status === "Active"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-slate-100 text-slate-500 border-slate-200"
+                          )}>
+                            {member.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedPerms(isExpanded ? null : member.id)}
+                            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 transition-colors"
+                          >
+                            <span className={cn(
+                              "px-1.5 py-0.5 rounded text-[10px] font-semibold",
+                              effectivePerms === "*" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600"
+                            )}>
+                              {permCount}
+                            </span>
+                            <span className="text-[11px]">permissions</span>
+                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                        </td>
+                        {isAdmin && (
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600"
+                                onClick={() => setEditTarget(member)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              {member.id !== currentUser?.id && (
+                                <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600"
+                                  onClick={() => setDeleteTarget(member)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-slate-50/70">
+                          <td colSpan={isAdmin ? 6 : 5} className="px-4 py-3">
+                            {effectivePerms === "*" ? (
+                              <p className="text-xs text-violet-700 font-medium">Full access to everything — Admin</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {(effectivePerms as string[]).map(p => (
+                                  <span key={p} className="text-[10px] bg-white border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                                    {p}
+                                  </span>
+                                ))}
+                                {(effectivePerms as string[]).length === 0 && (
+                                  <span className="text-xs text-slate-400">No permissions assigned</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          </>
         )}
       </div>
 
-      {/* Add Dialog */}
       {isAdmin && (
         <AddStaffDialog
           open={showAdd}
@@ -283,7 +536,6 @@ export default function StaffPage() {
         />
       )}
 
-      {/* Edit Dialog */}
       {isAdmin && editTarget && (
         <EditStaffDialog
           member={editTarget}
@@ -296,7 +548,6 @@ export default function StaffPage() {
         />
       )}
 
-      {/* Delete Confirm */}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={v => { if (!v) setDeleteTarget(null) }}
@@ -305,12 +556,15 @@ export default function StaffPage() {
         confirmLabel={deleting ? "Removing..." : "Remove"}
         onConfirm={handleDelete}
         variant="destructive"
+        loading={deleting}
       />
     </div>
   )
 }
 
 // ── Add Staff Dialog ──────────────────────────────────────────────────────────
+
+const PRESET_ROLES = ["Admin", "Manager", "Cashier", "Custom"]
 
 function AddStaffDialog({ open, onClose, onAdded, actor }: {
   open: boolean
@@ -320,19 +574,42 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
 }) {
   const [showPass, setShowPass] = useState(false)
   const [saving, setSaving] = useState(false)
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<AddForm>({
+  const [selectedRole, setSelectedRole] = useState("Cashier")
+  const [permissions, setPermissions] = useState<string[]>([])
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<AddForm>({
     resolver: zodResolver(addSchema),
     defaultValues: { role: "Cashier" },
   })
 
-  useEffect(() => { if (open) reset({ role: "Cashier" }) }, [open, reset])
+  useEffect(() => {
+    if (open) {
+      reset({ role: "Cashier" })
+      setSelectedRole("Cashier")
+      const tmpl = ROLE_PERMISSION_TEMPLATES["Cashier"]
+      setPermissions(tmpl === "*" ? [] : tmpl as string[])
+    }
+  }, [open, reset])
+
+  function handleRoleChange(role: string) {
+    setSelectedRole(role)
+    if (role !== "Custom") {
+      const tmpl = ROLE_PERMISSION_TEMPLATES[role]
+      setPermissions(tmpl === "*" ? [] : (tmpl as string[]) ?? [])
+    }
+  }
 
   async function onSubmit(data: AddForm) {
+    if (saving) return
     setSaving(true)
     try {
       const tenantId = await getTenantId()
       const { data: existing } = await supabase.from("profiles").select("id").eq("email", data.email.toLowerCase().trim()).single()
       if (existing) { toast.error("Email already registered"); return }
+
+      const isAdminRole = selectedRole === "Admin"
+      const finalPerms = isAdminRole ? null : permissions
+      // "Custom" is a UI label only — store as "Cashier" in DB to satisfy the CHECK constraint
+      const dbRole = selectedRole === "Custom" ? "Cashier" : selectedRole
 
       const { data: created, error } = await supabase.from("profiles").insert({
         id: crypto.randomUUID(),
@@ -340,13 +617,14 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
         name: data.name.trim(),
         email: data.email.toLowerCase().trim(),
         phone: data.phone.trim(),
-        role: data.role,
+        role: dbRole,
         password: data.password,
         status: "Active",
+        permissions: finalPerms,
       }).select().single()
 
       if (error) throw error
-      toast.success(`${data.name} added as ${data.role}`)
+      toast.success(`${data.name} added`)
       await createAuditLog({
         timestamp: new Date().toISOString(),
         userId: actor?.id ?? "system",
@@ -356,10 +634,14 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
         module: "Settings",
         entityId: created.id,
         entityName: created.name,
-        description: `Added new staff member ${created.name} as ${data.role}`,
-        newValue: JSON.stringify({ name: created.name, email: created.email, role: data.role }),
+        description: `Added new staff member ${created.name} as ${selectedRole}`,
+        newValue: JSON.stringify({ name: created.name, email: created.email, role: selectedRole, permissions: finalPerms }),
       })
-      onAdded({ id: created.id, name: created.name, email: created.email, phone: created.phone, role: created.role, status: created.status, createdAt: created.created_at })
+      onAdded({
+        id: created.id, name: created.name, email: created.email, phone: created.phone,
+        role: created.role, status: created.status, createdAt: created.created_at,
+        permissions: Array.isArray(created.permissions) ? created.permissions : null,
+      })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add staff")
     } finally {
@@ -367,26 +649,25 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
     }
   }
 
-  const selectedRole = watch("role")
-
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[96vw] max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
-            <Plus className="w-4 h-4 text-blue-600" /> Add Staff Member
+            <Plus className="w-4 h-4 text-indigo-600" /> Add Staff Member
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">Create login credentials and assign a role</DialogDescription>
+          <DialogDescription className="text-xs text-slate-500">Create login credentials and set permissions</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 pt-1">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1 min-w-0">
+          {/* Basic info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Full Name *</Label>
               <div className="relative">
                 <User className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
                 <Input {...register("name")} placeholder="e.g. Ali Hassan" className="pl-8 h-9 text-sm" />
               </div>
-              {errors.name && <p className="text-[11px] text-red-500">{errors.name.message}</p>}
+              {errors.name && <p className="text-[11px] text-rose-500">{errors.name.message}</p>}
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Phone *</Label>
@@ -394,65 +675,72 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
                 <Phone className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
                 <Input {...register("phone")} placeholder="03001234567" className="pl-8 h-9 text-sm" />
               </div>
-              {errors.phone && <p className="text-[11px] text-red-500">{errors.phone.message}</p>}
+              {errors.phone && <p className="text-[11px] text-rose-500">{errors.phone.message}</p>}
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold text-slate-600">Email (Login ID) *</Label>
-            <div className="relative">
-              <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-              <Input {...register("email")} placeholder="ali@yourshop.com" className="pl-8 h-9 text-sm" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-slate-600">Email (Login ID) *</Label>
+              <div className="relative">
+                <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                <Input {...register("email")} placeholder="ali@shop.com" className="pl-8 h-9 text-sm" />
+              </div>
+              {errors.email && <p className="text-[11px] text-rose-500">{errors.email.message}</p>}
             </div>
-            {errors.email && <p className="text-[11px] text-red-500">{errors.email.message}</p>}
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold text-slate-600">Password *</Label>
-            <div className="relative">
-              <Lock className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-              <Input {...register("password")} type={showPass ? "text" : "password"} placeholder="Min 6 characters" className="pl-8 pr-9 h-9 text-sm" />
-              <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-slate-600">Password *</Label>
+              <div className="relative">
+                <Lock className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                <Input {...register("password")} type={showPass ? "text" : "password"} placeholder="Min 6 chars" className="pl-8 pr-9 h-9 text-sm" />
+                <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                  {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+              {errors.password && <p className="text-[11px] text-rose-500">{errors.password.message}</p>}
             </div>
-            {errors.password && <p className="text-[11px] text-red-500">{errors.password.message}</p>}
           </div>
 
+          {/* Role template picker */}
           <div className="space-y-1">
-            <Label className="text-xs font-semibold text-slate-600">Role *</Label>
-            <Select value={selectedRole} onValueChange={v => setValue("role", v as UserRole)}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(["Admin","Manager","Cashier"] as UserRole[]).map(r => (
-                  <SelectItem key={r} value={r}>
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className={`w-3.5 h-3.5 ${ROLE_CONFIG[r].color}`} />
-                      <span>{r}</span>
-                      <span className="text-[11px] text-slate-400">— {ROLE_CONFIG[r].desc}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs font-semibold text-slate-600">Role Template</Label>
+            <div className="flex gap-2 flex-wrap">
+              {PRESET_ROLES.map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => handleRoleChange(r)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all",
+                    selectedRole === r
+                      ? "bg-indigo-600 border-indigo-600 text-white"
+                      : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
+                  )}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {selectedRole === "Admin" && (
+              <p className="text-[11px] text-violet-600 font-medium mt-1">Admin has full access to everything — no restrictions</p>
+            )}
+            {selectedRole === "Custom" && (
+              <p className="text-[11px] text-amber-600 font-medium mt-1">Manually select which actions this staff can perform</p>
+            )}
           </div>
 
-          {selectedRole && (
-            <div className={`rounded-lg border px-3 py-2 ${ROLE_CONFIG[selectedRole as UserRole].bg} ${ROLE_CONFIG[selectedRole as UserRole].border}`}>
-              <p className={`text-[11px] font-semibold mb-1 ${ROLE_CONFIG[selectedRole as UserRole].color}`}>Permissions for {selectedRole}:</p>
-              <ul className="space-y-0.5">
-                {PERMISSION_SUMMARY[selectedRole as UserRole].map(p => (
-                  <li key={p} className="text-[11px] text-slate-600 flex items-center gap-1.5">
-                    <span className="w-1 h-1 rounded-full bg-slate-400 shrink-0" />{p}
-                  </li>
-                ))}
-              </ul>
+          {/* Permission matrix (hidden for Admin) */}
+          {selectedRole !== "Admin" && (
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-slate-600">Permissions</Label>
+              <PermissionMatrix permissions={permissions} onChange={setPermissions} />
             </div>
           )}
 
           <DialogFooter className="gap-2 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="h-9 text-sm">Cancel</Button>
-            <Button type="submit" disabled={saving} className="h-9 text-sm">
+            <Button type="submit" disabled={saving} className="h-9 text-sm gap-1.5">
+              <Save className="w-3.5 h-3.5" />
               {saving ? "Adding..." : "Add Staff"}
             </Button>
           </DialogFooter>
@@ -472,19 +760,50 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
 }) {
   const [showPass, setShowPass] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [selectedRole, setSelectedRole] = useState(member.role)
+  const [permissions, setPermissions] = useState<string[]>([])
+
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<EditForm>({
     resolver: zodResolver(editSchema),
   })
 
   useEffect(() => {
     reset({ name: member.name, phone: member.phone, role: member.role, status: member.status as any, password: "" })
+    setSelectedRole(member.role)
+    if (member.role === "Admin") {
+      setPermissions([])
+    } else if (Array.isArray(member.permissions) && member.permissions.length > 0) {
+      setPermissions(member.permissions)
+    } else {
+      const tmpl = ROLE_PERMISSION_TEMPLATES[member.role]
+      setPermissions(tmpl === "*" ? [] : (tmpl as string[]) ?? [])
+    }
   }, [member, reset])
 
+  function handleRoleChange(role: string) {
+    setSelectedRole(role)
+    if (role !== "Custom" && role !== member.role) {
+      const tmpl = ROLE_PERMISSION_TEMPLATES[role]
+      setPermissions(tmpl === "*" ? [] : (tmpl as string[]) ?? [])
+    }
+  }
+
   async function onSubmit(data: EditForm) {
+    if (saving) return
     setSaving(true)
     try {
       const tenantId = await getTenantId()
-      const update: any = { name: data.name.trim(), phone: data.phone.trim(), role: data.role, status: data.status }
+      const isAdminRole = selectedRole === "Admin"
+      const finalPerms = isAdminRole ? null : permissions
+      const dbRole = selectedRole === "Custom" ? "Cashier" : selectedRole
+
+      const update: any = {
+        name: data.name.trim(),
+        phone: data.phone.trim(),
+        role: dbRole,
+        status: data.status,
+        permissions: finalPerms,
+      }
       if (data.password && data.password.length >= 6) update.password = data.password
 
       const { error } = await supabase.from("profiles").update(update).eq("id", member.id).eq("tenant_id", tenantId)
@@ -499,11 +818,18 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
         module: "Settings",
         entityId: member.id,
         entityName: data.name.trim(),
-        description: `Updated staff member ${data.name.trim()} — role: ${member.role}→${data.role}, status: ${member.status}→${data.status}`,
+        description: `Updated staff member ${data.name.trim()} — role: ${member.role}→${selectedRole}`,
         oldValue: JSON.stringify({ name: member.name, role: member.role, status: member.status }),
-        newValue: JSON.stringify({ name: data.name.trim(), role: data.role, status: data.status }),
+        newValue: JSON.stringify({ name: data.name.trim(), role: selectedRole, status: data.status, permissions: finalPerms }),
       })
-      onUpdated({ ...member, name: data.name.trim(), phone: data.phone.trim(), role: data.role, status: data.status })
+      onUpdated({
+        ...member,
+        name: data.name.trim(),
+        phone: data.phone.trim(),
+        role: selectedRole,
+        status: data.status,
+        permissions: Array.isArray(finalPerms) ? finalPerms : null,
+      })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update staff")
     } finally {
@@ -511,43 +837,30 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
     }
   }
 
-  const selectedRole = watch("role")
-
   return (
     <Dialog open={true} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[96vw] max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
-            <Pencil className="w-4 h-4 text-blue-600" /> Edit Staff Member
+            <Pencil className="w-4 h-4 text-indigo-600" /> Edit Staff Member
           </DialogTitle>
           <DialogDescription className="text-xs text-slate-500">{member.email}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 pt-1">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Full Name *</Label>
               <Input {...register("name")} className="h-9 text-sm" />
-              {errors.name && <p className="text-[11px] text-red-500">{errors.name.message}</p>}
+              {errors.name && <p className="text-[11px] text-rose-500">{errors.name.message}</p>}
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Phone *</Label>
               <Input {...register("phone")} className="h-9 text-sm" />
-              {errors.phone && <p className="text-[11px] text-red-500">{errors.phone.message}</p>}
+              {errors.phone && <p className="text-[11px] text-rose-500">{errors.phone.message}</p>}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-slate-600">Role *</Label>
-              <Select value={selectedRole} onValueChange={v => setValue("role", v as UserRole)}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(["Admin","Manager","Cashier"] as UserRole[]).map(r => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Status *</Label>
               <Select value={watch("status")} onValueChange={v => setValue("status", v as any)}>
@@ -558,27 +871,67 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold text-slate-600">New Password <span className="text-slate-400 font-normal">(leave blank to keep current)</span></Label>
-            <div className="relative">
-              <Lock className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-              <Input {...register("password")} type={showPass ? "text" : "password"} placeholder="Leave blank to keep current" className="pl-8 pr-9 h-9 text-sm" />
-              <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-slate-600">New Password <span className="text-slate-400 font-normal">(optional)</span></Label>
+              <div className="relative">
+                <Lock className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                <Input {...register("password")} type={showPass ? "text" : "password"} placeholder="Leave blank to keep" className="pl-8 pr-9 h-9 text-sm" />
+                <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                  {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* Role template picker */}
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-slate-600">Role Template</Label>
+            <div className="flex gap-2 flex-wrap">
+              {PRESET_ROLES.map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => handleRoleChange(r)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all",
+                    selectedRole === r
+                      ? "bg-indigo-600 border-indigo-600 text-white"
+                      : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
+                  )}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {selectedRole === "Admin" && (
+              <p className="text-[11px] text-violet-600 font-medium mt-1">Admin has full access to everything</p>
+            )}
+          </div>
+
+          {selectedRole !== "Admin" && (
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-slate-600">Permissions</Label>
+              <PermissionMatrix permissions={permissions} onChange={setPermissions} />
+            </div>
+          )}
+
           <DialogFooter className="gap-2 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="h-9 text-sm">Cancel</Button>
-            <Button type="submit" disabled={saving} className="h-9 text-sm">
+            <Button type="submit" disabled={saving} className="h-9 text-sm gap-1.5">
+              <Save className="w-3.5 h-3.5" />
               {saving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+export default function StaffPage() {
+  return (
+    <PermissionGate permission="settings.general">
+      <StaffPageInner />
+    </PermissionGate>
   )
 }

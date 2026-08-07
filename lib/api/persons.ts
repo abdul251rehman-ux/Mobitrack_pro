@@ -126,6 +126,8 @@ export async function createPersonTransaction(
   t: Omit<PersonTransaction, 'id' | 'tenantId' | 'createdAt'>
 ): Promise<PersonTransaction> {
   const tenantId = await getTenantId()
+
+  // 1. Insert the person_transactions record
   const { data, error } = await supabase
     .from('person_transactions')
     .insert({
@@ -136,37 +138,45 @@ export async function createPersonTransaction(
       amount: t.amount,
       method: t.method,
       notes: t.notes || null,
+      account_id: t.accountId || null,
     })
     .select()
     .single()
   if (error) throw new Error(error.message)
 
-  // Full double-entry: update account balance + insert finance_transactions audit row
+  // 2. Finance double-entry — only when an account is selected
   if (t.accountId) {
-    const { data: acc } = await supabase
+    // Read fresh balance from DB (never use stale React state)
+    const { data: acc, error: accReadErr } = await supabase
       .from('finance_accounts')
       .select('current_balance')
       .eq('id', t.accountId)
       .single()
-    if (acc) {
-      const delta = t.type === 'gave' ? -t.amount : t.amount
-      const newBalance = (acc as { current_balance: number }).current_balance + delta
-      await supabase
-        .from('finance_accounts')
-        .update({ current_balance: newBalance })
-        .eq('id', t.accountId)
-    }
-    // Audit trail in finance_transactions so Finance page shows this movement
-    await supabase.from('finance_transactions').insert({
+    if (accReadErr || !acc) throw new Error('Could not read account balance — transaction aborted')
+
+    const delta = t.type === 'gave' ? -t.amount : t.amount
+    const newBalance = (acc as { current_balance: number }).current_balance + delta
+
+    // Update balance
+    const { error: balErr } = await supabase
+      .from('finance_accounts')
+      .update({ current_balance: newBalance })
+      .eq('id', t.accountId)
+    if (balErr) throw new Error(`Failed to update account balance: ${balErr.message}`)
+
+    // Audit row in finance_transactions — reference_id holds the FK, reference_number holds the human label
+    const { error: ftErr } = await supabase.from('finance_transactions').insert({
       tenant_id: tenantId,
       date: t.date,
       type: t.type === 'gave' ? 'person_gave' : 'person_took',
       account_id: t.accountId,
       amount: t.amount,
       reference_type: 'Person',
-      reference_number: data.id,
+      reference_id: data.id,          // correct FK column
+      reference_number: data.id,      // human-readable fallback for display
       description: `${t.type === 'gave' ? 'Gave to' : 'Took from'} person${t.notes ? ` — ${t.notes}` : ''}`,
     })
+    if (ftErr) throw new Error(`Finance audit failed: ${ftErr.message}`)
   }
 
   return {
@@ -183,8 +193,34 @@ export async function createPersonTransaction(
   }
 }
 
-export async function deletePersonTransaction(id: string): Promise<void> {
+export async function deletePersonTransaction(
+  id: string,
+  opts?: { reverseAccountId?: string; reverseAmount?: number; reverseType?: 'gave' | 'took' }
+): Promise<void> {
   const tenantId = await getTenantId()
+
+  // Reverse the account balance before deleting
+  if (opts?.reverseAccountId && opts?.reverseAmount && opts?.reverseType) {
+    const { data: acc } = await supabase
+      .from('finance_accounts')
+      .select('current_balance')
+      .eq('id', opts.reverseAccountId)
+      .single()
+    if (acc) {
+      // Reverse: gave was a debit (negative), so reversal is positive; took was credit, reversal is negative
+      const reverseDelta = opts.reverseType === 'gave' ? opts.reverseAmount : -opts.reverseAmount
+      const newBalance = (acc as { current_balance: number }).current_balance + reverseDelta
+      await supabase.from('finance_accounts')
+        .update({ current_balance: newBalance })
+        .eq('id', opts.reverseAccountId)
+    }
+    // Remove the finance_transactions audit row too
+    await supabase.from('finance_transactions')
+      .delete()
+      .eq('reference_id', id)
+      .eq('tenant_id', tenantId)
+  }
+
   const { error } = await supabase
     .from('person_transactions')
     .delete()

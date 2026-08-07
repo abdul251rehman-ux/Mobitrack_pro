@@ -24,7 +24,16 @@ function gradientRule(doc: jsPDF, x: number, y: number, w: number, h: number) {
   }
 }
 
-function headerBand(doc: jsPDF, W: number, shopName: string, shopAddress: string, shopPhone: string) {
+function detectImageFormat(dataUrl: string): "PNG" | "JPEG" | "WEBP" | null {
+  const m = /^data:image\/(png|jpe?g|webp);base64,/i.exec(dataUrl)
+  if (!m) return null
+  const ext = m[1].toLowerCase()
+  if (ext === "png") return "PNG"
+  if (ext === "webp") return "WEBP"
+  return "JPEG"
+}
+
+function headerBand(doc: jsPDF, W: number, shopName: string, shopAddress: string, shopPhone: string, shopLogo?: string) {
   const H = 32
   // gradient fill
   const steps = 80
@@ -37,28 +46,48 @@ function headerBand(doc: jsPDF, W: number, shopName: string, shopAddress: string
     doc.rect((i / steps) * W, 0, W / steps + 0.5, H, "F")
   }
   const M = 14
+
+  // Logo (if present) - white rounded plate on the left, name text shifts right to make room
+  let textX = M
+  let logoDrawn = false
+  if (shopLogo) {
+    const format = detectImageFormat(shopLogo)
+    if (format) {
+      try {
+        const logoSize = 20
+        const logoY = (H - logoSize) / 2
+        doc.setFillColor(...WHITE)
+        doc.roundedRect(M, logoY, logoSize, logoSize, 2.5, 2.5, "F")
+        doc.addImage(shopLogo, format, M + 1.5, logoY + 1.5, logoSize - 3, logoSize - 3)
+        textX = M + logoSize + 6
+        logoDrawn = true
+      } catch {
+        // Corrupt/unsupported image data - fall back to text-only header
+        logoDrawn = false
+      }
+    }
+  }
+
   // Shop name left
   doc.setFont("helvetica", "bold")
   doc.setFontSize(14)
   doc.setTextColor(...WHITE)
-  doc.text(shopName, M, 14)
+  doc.text(shopName, textX, logoDrawn ? 16 : 14)
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7.5)
   doc.setGState(new (doc as any).GState({ opacity: 0.6 }))
   doc.setTextColor(...WHITE)
-  doc.text("MANAGEMENT SYSTEM", M, 20)
+  doc.text("MANAGEMENT SYSTEM", textX, logoDrawn ? 22 : 20)
   doc.setGState(new (doc as any).GState({ opacity: 1 }))
 
   // contact right
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(10)
-  doc.setTextColor(...WHITE)
-  doc.text(shopName, W - M, 12, { align: "right" })
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
-  doc.setGState(new (doc as any).GState({ opacity: 0.65 }))
-  if (shopPhone)   doc.text(shopPhone,   W - M, 18, { align: "right" })
-  if (shopAddress) doc.text(shopAddress, W - M, 24, { align: "right" })
+  doc.setGState(new (doc as any).GState({ opacity: 0.75 }))
+  doc.setTextColor(...WHITE)
+  let cy = shopPhone && shopAddress ? 14 : 17
+  if (shopPhone)   { doc.text(shopPhone,   W - M, cy, { align: "right" }); cy += 6 }
+  if (shopAddress) { doc.text(shopAddress, W - M, cy, { align: "right" }) }
   doc.setGState(new (doc as any).GState({ opacity: 1 }))
   return H
 }
@@ -80,6 +109,7 @@ export interface ReportOptions {
   shopName:    string
   shopAddress: string
   shopPhone:   string
+  shopLogo?:   string
   title:       string
   subtitle?:   string
   columns:     ReportColumn[]
@@ -91,7 +121,7 @@ export interface ReportOptions {
 }
 
 export function generateReportPDF(opts: ReportOptions): void {
-  const { shopName, shopAddress, shopPhone, title, subtitle, columns, rows, summary, filename } = opts
+  const { shopName, shopAddress, shopPhone, shopLogo, title, subtitle, columns, rows, summary, filename } = opts
   const action      = opts.action      ?? "save"
   const orientation = opts.orientation ?? "portrait"
 
@@ -100,7 +130,7 @@ export function generateReportPDF(opts: ReportOptions): void {
   const M = 12
 
   // Header
-  let y = headerBand(doc, W, shopName, shopAddress, shopPhone)
+  let y = headerBand(doc, W, shopName, shopAddress, shopPhone, shopLogo)
 
   // Doc title strip
   const stripH = 13
@@ -114,23 +144,43 @@ export function generateReportPDF(opts: ReportOptions): void {
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9.5)
   doc.setTextColor(...NAVY)
-  doc.text(title.toUpperCase(), M, y + 8.5)
+  const titleText = title.toUpperCase()
+  doc.text(titleText, M, y + 8.5)
 
   if (subtitle) {
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(...SLATE5)
-    doc.text(subtitle, W - M, y + 8.5, { align: "right" })
+    // Reserve space for the title on the left so a long subtitle can't collide with it
+    const titleW = doc.getTextWidth(titleText)
+    const maxSubtitleW = W - 2 * M - titleW - 8
+    const fitted = doc.splitTextToSize(subtitle, Math.max(maxSubtitleW, 40))[0] as string
+    const truncated = fitted !== subtitle ? fitted.replace(/\s+\S*$/, "") + "..." : fitted
+    doc.text(truncated, W - M, y + 8.5, { align: "right" })
   }
 
   y += stripH
   gradientRule(doc, 0, y, W, 1.5)
   y += 1.5 + 5
 
+  // Guard against caller-supplied widths exceeding the page: jspdf-autotable treats
+  // an explicit numeric cellWidth as fixed and never shrinks it, so if the fixed
+  // columns alone sum past the usable width, the table silently overflows the page
+  // and the rightmost column(s) get clipped off the edge. Scale fixed widths down
+  // proportionally so the table always fits, no matter what a caller passes in.
+  const usableWidth = W - 2 * M
+  const fixedWidthSum = columns.reduce((s, c) => s + (c.width ?? 0), 0)
+  const hasFlexColumn = columns.some(c => c.width === undefined)
+  // Leave room for at least one flex ("auto") column if one exists; otherwise the
+  // fixed columns may use the full usable width.
+  const budget = hasFlexColumn ? usableWidth * 0.7 : usableWidth
+  const scale = fixedWidthSum > budget ? budget / fixedWidthSum : 1
+
   // Table
   autoTable(doc, {
     startY: y,
     margin: { left: M, right: M },
+    tableWidth: "auto",
     head: [columns.map(c => c.header)],
     body: rows.map(row => columns.map(c => row[c.dataKey] ?? "")),
     headStyles: {
@@ -152,7 +202,7 @@ export function generateReportPDF(opts: ReportOptions): void {
     columnStyles: Object.fromEntries(
       columns.map((c, i) => [i, {
         halign: c.halign ?? "left",
-        cellWidth: c.width ?? "auto",
+        cellWidth: c.width !== undefined ? c.width * scale : "auto",
         fontStyle: c.bold ? "bold" : "normal",
         overflow: "ellipsize",
       }])

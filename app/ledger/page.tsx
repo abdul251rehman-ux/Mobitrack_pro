@@ -7,12 +7,12 @@ const ledgers = [
   {
     href: "/ledger/customers",
     icon: UserCheck,
-    color: "bg-blue-600",
-    gradient: "from-blue-50 to-white",
-    border: "border-blue-100 hover:border-blue-300",
-    iconRing: "ring-blue-200",
-    arrow: "group-hover:text-blue-500",
-    badge: "bg-blue-50 text-blue-600",
+    color: "bg-indigo-600",
+    gradient: "from-indigo-50 to-white",
+    border: "border-indigo-100 hover:border-indigo-300",
+    iconRing: "ring-indigo-200",
+    arrow: "group-hover:text-indigo-500",
+    badge: "bg-indigo-50 text-indigo-600",
     badgeIcon: Users,
     badgeLabel: "Customers",
     title: "Customer Ledger",
@@ -22,12 +22,12 @@ const ledgers = [
   {
     href: "/ledger/suppliers",
     icon: Building2,
-    color: "bg-orange-600",
-    gradient: "from-orange-50 to-white",
-    border: "border-orange-100 hover:border-orange-300",
-    iconRing: "ring-orange-200",
-    arrow: "group-hover:text-orange-500",
-    badge: "bg-orange-50 text-orange-600",
+    color: "bg-cyan-600",
+    gradient: "from-cyan-50 to-white",
+    border: "border-cyan-100 hover:border-cyan-300",
+    iconRing: "ring-cyan-200",
+    arrow: "group-hover:text-cyan-500",
+    badge: "bg-cyan-50 text-cyan-600",
     badgeIcon: Truck,
     badgeLabel: "Suppliers",
     title: "Supplier Ledger",
@@ -37,12 +37,12 @@ const ledgers = [
   {
     href: "/ledger/persons",
     icon: UserRound,
-    color: "bg-violet-600",
-    gradient: "from-violet-50 to-white",
-    border: "border-violet-100 hover:border-violet-300",
-    iconRing: "ring-violet-200",
-    arrow: "group-hover:text-violet-500",
-    badge: "bg-violet-50 text-violet-600",
+    color: "bg-slate-600",
+    gradient: "from-slate-50 to-white",
+    border: "border-slate-200 hover:border-slate-300",
+    iconRing: "ring-slate-200",
+    arrow: "group-hover:text-slate-500",
+    badge: "bg-slate-100 text-slate-600",
     badgeIcon: DollarSign,
     badgeLabel: "Persons",
     title: "Person Ledger",
@@ -56,8 +56,8 @@ export default function LedgerIndexPage() {
     <div className="space-y-4 max-w-2xl">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-sm">
-          <BookOpen className="w-4.5 h-4.5 text-white" />
+        <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
+          <BookOpen className="w-4 h-4 text-white" />
         </div>
         <div>
           <h1 className="text-base font-bold text-slate-900 leading-none">Ledger</h1>

@@ -1,17 +1,23 @@
-"use client"
+﻿"use client"
 
-import { useState } from "react"
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useRouter } from "next/navigation"
 import { NewPurchaseSheet } from "@/app/purchases/new-purchase-sheet"
 
-export default function NewPurchasePage() {
+function NewPurchasePageInner() {
   const router = useRouter()
-  const [open, setOpen] = useState(true)
   return (
     <NewPurchaseSheet
-      open={open}
-      onClose={() => { setOpen(false); router.push("/purchases") }}
+      onClose={() => router.push("/purchases")}
       onCreated={() => router.push("/purchases")}
     />
+  )
+}
+
+export default function NewPurchasePage() {
+  return (
+    <PermissionGate permission="purchases.create">
+      <NewPurchasePageInner />
+    </PermissionGate>
   )
 }

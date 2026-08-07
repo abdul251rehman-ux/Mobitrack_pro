@@ -6,8 +6,7 @@ import { Wallet } from "lucide-react"
 export default function PaymentsRedirect() {
   const router = useRouter()
   useEffect(() => {
-    const t = setTimeout(() => router.replace("/finance"), 1500)
-    return () => clearTimeout(t)
+    router.replace("/finance")
   }, [router])
   return (
     <div className="flex items-center justify-center h-64">

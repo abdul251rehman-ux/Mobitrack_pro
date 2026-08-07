@@ -1,13 +1,23 @@
 ﻿﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Pencil, Trash2, Users, Phone, StickyNote, Wallet, X, Check, ChevronRight } from "lucide-react"
+import { Plus, Pencil, Trash2, Users, Phone, StickyNote, Wallet, Check, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
-import { getPersons, createPerson, updatePerson, deletePerson } from "@/lib/api/persons"
+import { getPersons, getPersonTransactions, createPerson, updatePerson, deletePerson } from "@/lib/api/persons"
 import type { Person } from "@/lib/api/persons"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { MoneyInput } from "@/components/ui/money-input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 
 const EMPTY: Omit<Person, "id" | "tenantId" | "createdAt"> = {
   name: "",
@@ -17,9 +27,10 @@ const EMPTY: Omit<Person, "id" | "tenantId" | "createdAt"> = {
   status: "Active",
 }
 
-export default function PersonsPage() {
+function PersonsPageInner() {
   const router = useRouter()
   const [persons, setPersons] = useState<Person[]>([])
+  const [balances, setBalances] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -35,8 +46,15 @@ export default function PersonsPage() {
 
   async function load() {
     try {
-      const data = await getPersons()
+      const [data, transactions] = await Promise.all([getPersons(), getPersonTransactions()])
       setPersons(data)
+      const net: Record<string, number> = {}
+      for (const p of data) net[p.id] = p.openingBalance ?? 0
+      for (const t of transactions) {
+        if (!(t.personId in net)) continue
+        net[t.personId] += t.type === "gave" ? t.amount : -t.amount
+      }
+      setBalances(net)
     } catch (err) {
       toast.error("Failed to load persons")
       console.error(err)
@@ -70,18 +88,18 @@ export default function PersonsPage() {
   }
 
   async function handleSave() {
+    if (saving) return
     if (!form.name.trim()) { toast.error("Name is required"); return }
     setSaving(true)
     try {
       if (editingId) {
         await updatePerson(editingId, form)
-        setPersons(p => p.map(x => x.id === editingId ? { ...x, ...form } : x))
         toast.success("Person updated")
       } else {
-        const created = await createPerson(form)
-        setPersons(p => [...p, created].sort((a, b) => a.name.localeCompare(b.name)))
+        await createPerson(form)
         toast.success("Person added")
       }
+      await load()
       closeForm()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
@@ -91,7 +109,7 @@ export default function PersonsPage() {
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     setDeleting(true)
     try {
       await deletePerson(deleteTarget.id)
@@ -111,42 +129,34 @@ export default function PersonsPage() {
   )
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Loading...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-slate-900">Persons</h1>
-          <p className="text-slate-500 text-xs mt-0.5">Manage people for informal money transactions</p>
-        </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-1.5 h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add Person
-        </button>
-      </div>
+      <PageHeader
+        title="Persons"
+        description="Manage people for informal money transactions"
+        icon={<Users />}
+        iconBg="bg-indigo-600"
+        action={
+          <Button onClick={openAdd} size="sm" className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" />
+            Add Person
+          </Button>
+        }
+      />
 
       {/* Search */}
       <Card>
         <CardContent className="px-3 py-2.5">
-          <input
+          <Input
             type="text"
             placeholder="Search by name or phone..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="h-8 text-xs"
           />
         </CardContent>
       </Card>
@@ -160,7 +170,7 @@ export default function PersonsPage() {
               {search ? "No persons match your search" : "No persons added yet"}
             </p>
             {!search && (
-              <button onClick={openAdd} className="mt-3 text-xs text-blue-600 hover:underline">
+              <button onClick={openAdd} className="mt-3 text-xs text-indigo-600 hover:underline">
                 Add your first person
               </button>
             )}
@@ -178,8 +188,8 @@ export default function PersonsPage() {
               {filtered.map(p => (
                 <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => router.push(`/persons/${p.id}`)}>
-                  <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-violet-700 text-xs font-bold">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-indigo-700 text-xs font-bold">
                       {p.name.trim().split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
                     </span>
                   </div>
@@ -201,12 +211,12 @@ export default function PersonsPage() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0 mr-2">
-                    {p.openingBalance !== 0 && (
+                    {(balances[p.id] ?? p.openingBalance) !== 0 && (
                       <div className="flex items-center gap-1">
                         <Wallet className="w-2.5 h-2.5 text-slate-400" />
-                        <span className={`text-[10px] font-semibold ${p.openingBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                          {formatCurrency(Math.abs(p.openingBalance))}
-                          <span className="font-medium ml-0.5">{p.openingBalance > 0 ? " Dr" : " Cr"}</span>
+                        <span className={`text-[10px] font-semibold ${(balances[p.id] ?? p.openingBalance) > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                          {formatCurrency(Math.abs(balances[p.id] ?? p.openingBalance))}
+                          <span className="font-medium ml-0.5">{(balances[p.id] ?? p.openingBalance) > 0 ? " Dr" : " Cr"}</span>
                         </span>
                       </div>
                     )}
@@ -217,13 +227,13 @@ export default function PersonsPage() {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={e => { e.stopPropagation(); openEdit(p) }}
-                      className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
+                      className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); setDeleteTarget(p) }}
-                      className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                      className="p-1 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -237,135 +247,108 @@ export default function PersonsPage() {
       )}
 
       {/* Add / Edit modal */}
-      {showForm && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-[1px]" onClick={closeForm} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                <h2 className="text-sm font-bold text-slate-800">
-                  {editingId ? "Edit Person" : "Add Person"}
-                </h2>
-                <button onClick={closeForm} className="p-1 rounded-md hover:bg-slate-100 transition-colors">
-                  <X className="w-4 h-4 text-slate-500" />
-                </button>
-              </div>
-              <div className="px-4 py-3 space-y-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                    Name <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="e.g. Ahmad Bhai"
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    value={form.phone}
-                    onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                    placeholder="03xx-xxxxxxx"
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                    Opening Balance (â‚¨)
-                  </label>
-                  <input
-                    type="number" onWheel={e => e.currentTarget.blur()}
-                    value={form.openingBalance}
-                    onChange={e => setForm(f => ({ ...f, openingBalance: Number(e.target.value) }))}
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Positive = they need to pay us · Negative = we need to pay them</p>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Notes</label>
-                  <input
-                    type="text"
-                    value={form.notes}
-                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="Optional notes"
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Status</label>
-                  <select
-                    value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value as Person["status"] }))}
-                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option>Active</option>
-                    <option>Inactive</option>
-                  </select>
-                </div>
-              </div>
-              <div className="px-4 py-3 border-t border-slate-100 flex gap-2">
-                <button
-                  onClick={closeForm}
-                  className="flex-1 h-8 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex-1 h-8 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5 font-medium"
-                >
-                  {saving ? (
-                    <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                  {saving ? "Saving..." : "Save"}
-                </button>
-              </div>
+      <Dialog open={showForm} onOpenChange={open => !open && closeForm()}>
+        <DialogContent className="sm:max-w-sm p-0 gap-0">
+          <DialogHeader className="px-4 py-3 border-b border-slate-100">
+            <DialogTitle className="text-sm font-bold text-slate-800">
+              {editingId ? "Edit Person" : "Add Person"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-4 py-3 space-y-3">
+            <div className="space-y-1">
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                Name <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                type="text"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Ahmad Bhai"
+                className="h-8 text-xs"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Phone</Label>
+              <Input
+                type="tel"
+                value={form.phone}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="03xx-xxxxxxx"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                Opening Balance (Rs)
+              </Label>
+              <MoneyInput
+                value={form.openingBalance}
+                onChange={v => setForm(f => ({ ...f, openingBalance: Number(v) }))}
+                className="h-8 text-xs"
+                placeholder="0"
+              />
+              <p className="text-[10px] text-slate-400 mt-0.5">Positive = they need to pay us · Negative = we need to pay them</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Notes</Label>
+              <Input
+                type="text"
+                value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Optional notes"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Status</Label>
+              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as Person["status"] }))}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        </>
-      )}
+          <DialogFooter className="px-4 py-3 border-t border-slate-100 gap-2">
+            <Button variant="outline" size="sm" onClick={closeForm} className="flex-1 sm:flex-none">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={saving} className="flex-1 sm:flex-none gap-1.5">
+              {saving ? (
+                <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirm */}
-      {deleteTarget && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-[1px]" onClick={() => setDeleteTarget(null)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-5 text-center">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
-                <Trash2 className="w-5 h-5 text-red-500" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-800 mb-1">Delete Person?</h3>
-              <p className="text-xs text-slate-500 mb-4">
-                This will delete <span className="font-semibold text-slate-700">{deleteTarget.name}</span> and all their transactions. This cannot be undone.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setDeleteTarget(null)}
-                  className="flex-1 h-8 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="flex-1 h-8 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-lg transition-colors font-medium"
-                >
-                  {deleting ? "Deleting..." : "Delete"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete Person"
+        description={`This will delete "${deleteTarget?.name}" and all their transactions. This cannot be undone.`}
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   )
 }
+
+
+export default function PersonsPage() {
+  return (
+    <PermissionGate permission="ledger.view">
+      <PersonsPageInner />
+    </PermissionGate>
+  )
+}
+

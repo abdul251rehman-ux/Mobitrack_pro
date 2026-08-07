@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -99,7 +100,7 @@ const TD = ({ children, right, className }: { children: React.ReactNode; right?:
   <td className={`text-xs px-3 py-1.5 ${right ? "text-right" : ""} ${className ?? ""}`}>{children}</td>
 )
 
-export default function ReportsPage() {
+function ReportsPageInner() {
   const [loading, setLoading]           = useState(true)
   const [sales, setSales]               = useState<Sale[]>([])
   const [purchases, setPurchases]       = useState<Purchase[]>([])
@@ -135,11 +136,15 @@ export default function ReportsPage() {
     const dailyChartData = dailyEntries.map(([date, amount]) => ({ date: format(parseISO(date), "dd MMM"), Sales: amount }))
     const days = dailyEntries.length || 1
     const highestDay = dailyEntries.reduce((max, [, v]) => Math.max(max, v), 0)
+    // Group by name + type, not productId - each Mobile unit (IMEI) has its own productId,
+    // so grouping by productId would list "Xiaomi realme c5" as 9 separate one-unit rows
+    // instead of a single row with 9 units. Accessories share one productId per SKU already.
     const productMap: Record<string, { name: string; type: string; units: number; revenue: number }> = {}
     filtered.forEach((s) => s.items.forEach((item) => {
-      if (!productMap[item.productId]) productMap[item.productId] = { name: item.productName, type: item.productType, units: 0, revenue: 0 }
-      productMap[item.productId].units += item.quantity
-      productMap[item.productId].revenue += item.lineTotal
+      const key = `${item.productType}::${item.productName}`
+      if (!productMap[key]) productMap[key] = { name: item.productName, type: item.productType, units: 0, revenue: 0 }
+      productMap[key].units += item.quantity
+      productMap[key].revenue += item.lineTotal
     }))
     const topProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
     const pmMap: Record<string, number> = {}
@@ -239,7 +244,7 @@ export default function ReportsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -247,18 +252,18 @@ export default function ReportsPage() {
   return (
     <div className="p-4 space-y-3">
       {/* â"€â"€ Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
             <BarChart3 className="w-3.5 h-3.5 text-white" />
           </div>
           <h1 className="text-base font-bold text-slate-900">Reports & Analytics</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 px-3">
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 px-3 flex-1 sm:flex-none">
             <FileText className="w-3.5 h-3.5" />Generate PDF
           </Button>
-          <Button size="sm" className="h-8 text-xs gap-1.5 px-3 bg-blue-600 hover:bg-blue-700">
+          <Button size="sm" className="h-8 text-xs gap-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 flex-1 sm:flex-none">
             <Download className="w-3.5 h-3.5" />Export All
           </Button>
         </div>
@@ -266,9 +271,9 @@ export default function ReportsPage() {
 
       {/* â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Tabs defaultValue="sales" className="space-y-3">
-        <TabsList className="bg-white border border-slate-200 p-0.5 rounded-xl shadow-sm h-8 overflow-x-auto">
+        <TabsList className="flex w-full max-w-full overflow-x-auto bg-white border border-slate-200 p-0.5 rounded-xl shadow-sm h-8 justify-start">
           {[["sales","Sales Report"],["purchases","Purchase Report"],["pl","Profit & Loss"],["inventory","Inventory Report"],["suppliers","Supplier Performance"]].map(([v, l]) => (
-            <TabsTrigger key={v} value={v} className="h-7 text-xs px-3 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white">{l}</TabsTrigger>
+            <TabsTrigger key={v} value={v} className="h-7 text-xs px-3 rounded-lg shrink-0 data-[state=active]:bg-indigo-600 data-[state=active]:text-white">{l}</TabsTrigger>
           ))}
         </TabsList>
 
@@ -276,11 +281,11 @@ export default function ReportsPage() {
         <TabsContent value="sales" className="space-y-3 mt-0">
           <DateBar from={salesFrom} to={salesTo} onFrom={setSalesFrom} onTo={setSalesTo} />
 
-          <div className="grid grid-cols-4 gap-2.5">
-            <StatCard title="Total Sales"       value={formatCurrency(salesData.totalSales)}           subtext="Excl. refunded orders" icon={DollarSign}  iconBg="bg-blue-100"   trend={12} />
-            <StatCard title="Avg Daily Sale"    value={formatCurrency(Math.round(salesData.avgDaily))} subtext="Over selected period"  icon={TrendingUp}  iconBg="bg-blue-100" />
-            <StatCard title="Highest Single Day" value={formatCurrency(salesData.highestDay)}          subtext="Peak revenue day"      icon={BarChart2}   iconBg="bg-blue-100" />
-            <StatCard title="Transactions"      value={salesData.numTx.toString()}                    subtext="Completed + Pending"   icon={ShoppingCart} iconBg="bg-blue-100" />
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <StatCard title="Total Sales"       value={formatCurrency(salesData.totalSales)}           subtext="Excl. refunded orders" icon={DollarSign}  iconBg="bg-indigo-100"   trend={12} />
+            <StatCard title="Avg Daily Sale"    value={formatCurrency(Math.round(salesData.avgDaily))} subtext="Over selected period"  icon={TrendingUp}  iconBg="bg-indigo-100" />
+            <StatCard title="Highest Single Day" value={formatCurrency(salesData.highestDay)}          subtext="Peak revenue day"      icon={BarChart2}   iconBg="bg-indigo-100" />
+            <StatCard title="Transactions"      value={salesData.numTx.toString()}                    subtext="Completed + Pending"   icon={ShoppingCart} iconBg="bg-indigo-100" />
           </div>
 
           <SectionCard title="Daily Sales Over Period">
@@ -289,7 +294,7 @@ export default function ReportsPage() {
                 <LineChart data={salesData.dailyChartData} margin={{ top: 4, right: 16, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={44} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `Rs${(v/1000).toFixed(0)}K`} width={44} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                   <Line type="monotone" dataKey="Sales" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
@@ -300,7 +305,26 @@ export default function ReportsPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
             <SectionCard title="Top 10 Selling Products" className="xl:col-span-2">
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-50">
+                {salesData.topProducts.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2">
+                    {i < 3
+                      ? <span className={`shrink-0 inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${i===0?"bg-indigo-600 text-white":i===1?"bg-indigo-400 text-white":"bg-indigo-100 text-indigo-700"}`}>{i+1}</span>
+                      : <span className="shrink-0 text-slate-400 text-[10px] w-5 text-center">{i+1}</span>}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{p.name}</p>
+                      <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border mt-0.5 ${p.type==="Mobile"?"text-indigo-600 border-indigo-200 bg-indigo-50":"text-slate-600 border-slate-200 bg-slate-50"}`}>{p.type}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-indigo-600">{formatCurrency(p.revenue)}</p>
+                      <p className="text-[10px] text-slate-400">{p.units} units</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead><tr className="bg-slate-50 border-b border-slate-100">
                     <TH>#</TH><TH>Product</TH><TH>Type</TH><TH right>Units</TH><TH right>Revenue</TH>
@@ -310,15 +334,15 @@ export default function ReportsPage() {
                       <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
                         <TD>
                           {i < 3
-                            ? <span className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${i===0?"bg-blue-600 text-white":i===1?"bg-blue-400 text-white":"bg-blue-100 text-blue-700"}`}>{i+1}</span>
+                            ? <span className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${i===0?"bg-indigo-600 text-white":i===1?"bg-indigo-400 text-white":"bg-indigo-100 text-indigo-700"}`}>{i+1}</span>
                             : <span className="text-slate-400 text-[10px] pl-0.5">{i+1}</span>}
                         </TD>
                         <TD className="font-semibold text-slate-800">{p.name}</TD>
                         <TD>
-                          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border ${p.type==="Mobile"?"text-blue-600 border-blue-200 bg-blue-50":"text-slate-600 border-slate-200 bg-slate-50"}`}>{p.type}</span>
+                          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border ${p.type==="Mobile"?"text-indigo-600 border-indigo-200 bg-indigo-50":"text-slate-600 border-slate-200 bg-slate-50"}`}>{p.type}</span>
                         </TD>
                         <TD right className="font-semibold text-slate-700">{p.units}</TD>
-                        <TD right className="font-semibold text-blue-600">{formatCurrency(p.revenue)}</TD>
+                        <TD right className="font-semibold text-indigo-600">{formatCurrency(p.revenue)}</TD>
                       </tr>
                     ))}
                   </tbody>
@@ -345,11 +369,11 @@ export default function ReportsPage() {
         <TabsContent value="purchases" className="space-y-3 mt-0">
           <DateBar from={purchasesFrom} to={purchasesTo} onFrom={setPurchasesFrom} onTo={setPurchasesTo} />
 
-          <div className="grid grid-cols-4 gap-2.5">
-            <StatCard title="Total Spend"       value={formatCurrency(purchasesData.totalSpend)}                    subtext="All purchase orders"       icon={DollarSign}   iconBg="bg-red-100" />
-            <StatCard title="Unique Suppliers"  value={purchasesData.uniqueSuppliers.toString()}                   subtext="Active in period"          icon={Package}      iconBg="bg-blue-100" />
-            <StatCard title="Avg Order Value"   value={formatCurrency(Math.round(purchasesData.avgOrderValue))}     subtext="Per purchase order"        icon={ShoppingCart} iconBg="bg-blue-100" />
-            <StatCard title="Pending Payments"  value={formatCurrency(purchasesData.pendingPayments)}               subtext="Balance due to suppliers"  icon={TrendingDown} iconBg="bg-blue-100" />
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <StatCard title="Total Spend"       value={formatCurrency(purchasesData.totalSpend)}                    subtext="All purchase orders"       icon={DollarSign}   iconBg="bg-rose-100" />
+            <StatCard title="Unique Suppliers"  value={purchasesData.uniqueSuppliers.toString()}                   subtext="Active in period"          icon={Package}      iconBg="bg-indigo-100" />
+            <StatCard title="Avg Order Value"   value={formatCurrency(Math.round(purchasesData.avgOrderValue))}     subtext="Per purchase order"        icon={ShoppingCart} iconBg="bg-indigo-100" />
+            <StatCard title="Pending Payments"  value={formatCurrency(purchasesData.pendingPayments)}               subtext="Balance due to suppliers"  icon={TrendingDown} iconBg="bg-indigo-100" />
           </div>
 
           <SectionCard title="Monthly Purchase Spend">
@@ -364,7 +388,7 @@ export default function ReportsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={44} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `Rs${(v/1000).toFixed(0)}K`} width={44} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                   <Area type="monotone" dataKey="Spend" stroke="#ef4444" fill="url(#spendGrad)" strokeWidth={2} />
@@ -375,7 +399,24 @@ export default function ReportsPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
             <SectionCard title="Supplier-wise Breakdown" className="xl:col-span-2">
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-50">
+                {purchasesData.supplierRows.map((row, i) => (
+                  <div key={i} className="px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-slate-800 truncate">{row.name}</span>
+                      <span className="text-xs font-semibold text-rose-600 shrink-0">{formatCurrency(row.spent)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 shrink-0">{row.orders} orders</span>
+                      <div className="flex-1 bg-slate-100 rounded-full h-1"><div className="bg-rose-400 h-1 rounded-full" style={{ width: `${row.pct}%` }} /></div>
+                      <span className="text-[10px] font-medium text-slate-600 shrink-0">{row.pct}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead><tr className="bg-slate-50 border-b border-slate-100">
                     <TH>Supplier</TH><TH right>Orders</TH><TH right>Total Spent</TH><TH right>% of Total</TH>
@@ -385,10 +426,10 @@ export default function ReportsPage() {
                       <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
                         <TD className="font-medium text-slate-800">{row.name}</TD>
                         <TD right className="text-slate-600">{row.orders}</TD>
-                        <TD right className="font-semibold text-red-600">{formatCurrency(row.spent)}</TD>
+                        <TD right className="font-semibold text-rose-600">{formatCurrency(row.spent)}</TD>
                         <TD right>
                           <div className="flex items-center justify-end gap-2">
-                            <div className="w-14 bg-slate-100 rounded-full h-1"><div className="bg-red-400 h-1 rounded-full" style={{ width: `${row.pct}%` }} /></div>
+                            <div className="w-14 bg-slate-100 rounded-full h-1"><div className="bg-rose-400 h-1 rounded-full" style={{ width: `${row.pct}%` }} /></div>
                             <span className="text-[10px] font-medium text-slate-600">{row.pct}%</span>
                           </div>
                         </TD>
@@ -404,7 +445,7 @@ export default function ReportsPage() {
                   <BarChart data={purchasesData.categoryBarData} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="category" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={40} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `Rs${(v/1000).toFixed(0)}K`} width={40} />
                     <Tooltip content={<ChartTooltip />} />
                     <Bar dataKey="Spend" radius={[4,4,0,0]}>
                       {purchasesData.categoryBarData.map((_, i) => <Cell key={i} fill={i===0?"#2563EB":"#60a5fa"} />)}
@@ -418,11 +459,11 @@ export default function ReportsPage() {
 
         {/* â•â• PROFIT & LOSS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="pl" className="space-y-3 mt-0">
-          <div className="grid grid-cols-4 gap-2.5">
-            <StatCard title="Gross Revenue"  value={formatCurrency(plData.grossRevenue)}                     subtext="Last 6 months"      icon={DollarSign}  iconBg="bg-blue-100" />
-            <StatCard title="Total Cost"     value={formatCurrency(plData.totalCost)}                        subtext="COGS - last 6 months" icon={TrendingDown} iconBg="bg-red-100" />
-            <StatCard title="Gross Profit"   value={formatCurrency(plData.grossProfit)}                      subtext="Revenue minus cost"  icon={TrendingUp}  iconBg="bg-blue-100" trend={parseFloat(plData.profitMargin.toFixed(1))} />
-            <StatCard title="Profit Margin"  value={`${plData.profitMargin.toFixed(1)}%`}                   subtext="Gross margin"        icon={BarChart2}   iconBg="bg-blue-100" />
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <StatCard title="Gross Revenue"  value={formatCurrency(plData.grossRevenue)}                     subtext="Last 6 months"      icon={DollarSign}  iconBg="bg-indigo-100" />
+            <StatCard title="Total Cost"     value={formatCurrency(plData.totalCost)}                        subtext="COGS - last 6 months" icon={TrendingDown} iconBg="bg-rose-100" />
+            <StatCard title="Gross Profit"   value={formatCurrency(plData.grossProfit)}                      subtext="Revenue minus cost"  icon={TrendingUp}  iconBg="bg-indigo-100" trend={parseFloat(plData.profitMargin.toFixed(1))} />
+            <StatCard title="Profit Margin"  value={`${plData.profitMargin.toFixed(1)}%`}                   subtext="Gross margin"        icon={BarChart2}   iconBg="bg-indigo-100" />
           </div>
 
           <SectionCard title="Monthly Revenue vs Cost - Last 6 Months">
@@ -431,7 +472,7 @@ export default function ReportsPage() {
                 <BarChart data={plData.monthlyRows} margin={{ top: 4, right: 16, left: 4, bottom: 0 }} barGap={4}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `â‚¨${(v/1000).toFixed(0)}K`} width={44} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `Rs${(v/1000).toFixed(0)}K`} width={44} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                   <Bar dataKey="Revenue" fill="#2563EB" radius={[4,4,0,0]} />
@@ -442,7 +483,32 @@ export default function ReportsPage() {
           </SectionCard>
 
           <SectionCard title="Month-over-Month Analysis">
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-slate-50">
+              {plData.tableRows.map((row, i) => (
+                <div key={i} className="px-3 py-2 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-700">{row.month}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border text-indigo-600 border-indigo-200 bg-indigo-50">{row.margin.toFixed(1)}%</span>
+                      {row.momChange !== null && (
+                        <span className={`flex items-center gap-0.5 text-[10px] font-semibold ${row.momChange>=0?"text-emerald-600":"text-rose-500"}`}>
+                          {row.momChange>=0?<TrendingUp className="w-3 h-3"/>:<TrendingDown className="w-3 h-3"/>}
+                          {Math.abs(row.momChange).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-indigo-600 font-medium">Rev {formatCurrency(row.Revenue)}</span>
+                    <span className="text-rose-500 font-medium">Cost {formatCurrency(row.Cost)}</span>
+                    <span className="font-bold text-emerald-600">Profit {formatCurrency(row.Profit)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
                   <TH>Month</TH><TH right>Revenue</TH><TH right>Cost</TH><TH right>Profit</TH><TH right>Margin</TH><TH right>MoM Change</TH>
@@ -451,15 +517,15 @@ export default function ReportsPage() {
                   {plData.tableRows.map((row, i) => (
                     <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
                       <TD className="font-semibold text-slate-700">{row.month}</TD>
-                      <TD right className="text-blue-600 font-medium">{formatCurrency(row.Revenue)}</TD>
-                      <TD right className="text-red-500 font-medium">{formatCurrency(row.Cost)}</TD>
+                      <TD right className="text-indigo-600 font-medium">{formatCurrency(row.Revenue)}</TD>
+                      <TD right className="text-rose-500 font-medium">{formatCurrency(row.Cost)}</TD>
                       <TD right className="font-bold text-emerald-600">{formatCurrency(row.Profit)}</TD>
                       <TD right>
-                        <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border text-blue-600 border-blue-200 bg-blue-50">{row.margin.toFixed(1)}%</span>
+                        <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border text-indigo-600 border-indigo-200 bg-indigo-50">{row.margin.toFixed(1)}%</span>
                       </TD>
                       <TD right>
                         {row.momChange === null ? <span className="text-slate-400">-</span> : (
-                          <span className={`flex items-center justify-end gap-0.5 text-[10px] font-semibold ${row.momChange>=0?"text-emerald-600":"text-red-500"}`}>
+                          <span className={`flex items-center justify-end gap-0.5 text-[10px] font-semibold ${row.momChange>=0?"text-emerald-600":"text-rose-500"}`}>
                             {row.momChange>=0?<TrendingUp className="w-3 h-3"/>:<TrendingDown className="w-3 h-3"/>}
                             {Math.abs(row.momChange).toFixed(1)}%
                           </span>
@@ -475,10 +541,10 @@ export default function ReportsPage() {
 
         {/* â•â• INVENTORY REPORT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="inventory" className="space-y-3 mt-0">
-          <div className="grid grid-cols-3 gap-2.5">
-            <StatCard title="Total Products"   value={inventoryData.totalProducts.toString()}             subtext={`${mobiles.length} mobiles, ${accessories.length} accessories`} icon={Package}  iconBg="bg-blue-100" />
-            <StatCard title="Total Stock Value" value={formatCurrency(inventoryData.totalStockValue)}    subtext="At purchase cost"   icon={DollarSign} iconBg="bg-blue-100" />
-            <StatCard title="Avg Product Value" value={formatCurrency(Math.round(inventoryData.avgProductValue))} subtext="Per unit in stock" icon={BarChart2}  iconBg="bg-blue-100" />
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
+            <StatCard title="Total Products"   value={inventoryData.totalProducts.toString()}             subtext={`${mobiles.length} mobiles, ${accessories.length} accessories`} icon={Package}  iconBg="bg-indigo-100" />
+            <StatCard title="Total Stock Value" value={formatCurrency(inventoryData.totalStockValue)}    subtext="At purchase cost"   icon={DollarSign} iconBg="bg-indigo-100" />
+            <StatCard title="Avg Product Value" value={formatCurrency(Math.round(inventoryData.avgProductValue))} subtext="Per unit in stock" icon={BarChart2}  iconBg="bg-indigo-100" />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -512,8 +578,23 @@ export default function ReportsPage() {
           </div>
 
           <SectionCard title="Low Stock / Reorder Alert"
-            badge={<span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">{inventoryData.lowStockItems.length} items</span>}>
-            <div className="overflow-x-auto">
+            badge={<span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">{inventoryData.lowStockItems.length} items</span>}>
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-slate-50">
+              {inventoryData.lowStockItems.length === 0
+                ? <p className="text-center py-8 text-xs text-slate-400">No low stock items</p>
+                : inventoryData.lowStockItems.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span className="text-xs font-medium text-slate-800 truncate">{item.name}</span>
+                    <div className="text-right shrink-0">
+                      <p className={`text-xs font-bold ${item.stock===0?"text-rose-600":"text-amber-600"}`}>{item.stock===0?"Out of Stock":item.stock}</p>
+                      <p className="text-[10px] font-semibold text-emerald-600">+{item.suggested} suggested</p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
                   <TH>Product Name</TH><TH right>Current Stock</TH><TH right>Suggested Reorder</TH>
@@ -524,7 +605,7 @@ export default function ReportsPage() {
                     : inventoryData.lowStockItems.map((item, i) => (
                       <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
                         <TD className="font-medium text-slate-800">{item.name}</TD>
-                        <TD right className={`font-bold ${item.stock===0?"text-red-600":"text-amber-600"}`}>{item.stock===0?"Out of Stock":item.stock}</TD>
+                        <TD right className={`font-bold ${item.stock===0?"text-rose-600":"text-amber-600"}`}>{item.stock===0?"Out of Stock":item.stock}</TD>
                         <TD right className="font-semibold text-emerald-600">{item.suggested} units</TD>
                       </tr>
                     ))}
@@ -537,7 +618,36 @@ export default function ReportsPage() {
         {/* â•â• SUPPLIER PERFORMANCE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="suppliers" className="space-y-3 mt-0">
           <SectionCard title="Supplier Rankings">
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-slate-50">
+              {supplierPerf.supplierRows.map((s) => {
+                const orders = purchases.filter((p) => p.supplierId === s.id).length
+                return (
+                  <div key={s.id} className="px-3 py-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      {s.rank<=3
+                        ? <span className={`shrink-0 inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${s.rank===1?"bg-indigo-600 text-white":s.rank===2?"bg-indigo-400 text-white":"bg-indigo-100 text-indigo-700"}`}>{s.rank}</span>
+                        : <span className="shrink-0 text-slate-400 text-[10px] font-medium w-5 text-center">{s.rank}</span>}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 truncate">{s.companyName}</p>
+                        <p className="text-[10px] text-slate-400">{s.city}</p>
+                      </div>
+                      <StatusBadge status={s.status} />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] pl-7">
+                      <Stars rating={s.rating} />
+                      <span className="text-slate-500">{orders} orders</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs pl-7">
+                      <span className="font-semibold text-indigo-600">{formatCurrency(s.totalPurchases)}</span>
+                      {s.outstandingBalance > 0 && <span className="font-semibold text-rose-500">Due {formatCurrency(s.outstandingBalance)}</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
                   <TH>Rank</TH><TH>Supplier</TH><TH right>Orders</TH><TH right>Total Value</TH><TH right>Outstanding</TH><TH>Rating</TH><TH>Status</TH>
@@ -549,13 +659,13 @@ export default function ReportsPage() {
                       <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50">
                         <TD>
                           {s.rank<=3
-                            ? <span className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${s.rank===1?"bg-blue-600 text-white":s.rank===2?"bg-blue-400 text-white":"bg-blue-100 text-blue-700"}`}>{s.rank}</span>
+                            ? <span className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${s.rank===1?"bg-indigo-600 text-white":s.rank===2?"bg-indigo-400 text-white":"bg-indigo-100 text-indigo-700"}`}>{s.rank}</span>
                             : <span className="text-slate-400 text-[10px] font-medium pl-0.5">{s.rank}</span>}
                         </TD>
                         <TD><p className="font-semibold text-slate-800">{s.companyName}</p><p className="text-[10px] text-slate-400">{s.city}</p></TD>
                         <TD right className="font-medium text-slate-700">{orders}</TD>
-                        <TD right className="font-semibold text-blue-600">{formatCurrency(s.totalPurchases)}</TD>
-                        <TD right className="font-semibold text-red-500">{formatCurrency(s.outstandingBalance)}</TD>
+                        <TD right className="font-semibold text-indigo-600">{formatCurrency(s.totalPurchases)}</TD>
+                        <TD right className="font-semibold text-rose-500">{formatCurrency(s.outstandingBalance)}</TD>
                         <TD><Stars rating={s.rating} /></TD>
                         <TD><StatusBadge status={s.status} /></TD>
                       </tr>
@@ -572,10 +682,10 @@ export default function ReportsPage() {
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={supplierPerf.top5} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `â‚¨${(v/1_000_000).toFixed(1)}M`} />
+                    <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `Rs${(v/1_000_000).toFixed(1)}M`} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={90} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="Volume" name="Volume (â‚¨)" fill="#2563EB" radius={[0,4,4,0]}>
+                    <Bar dataKey="Volume" name="Volume (Rs)" fill="#2563EB" radius={[0,4,4,0]}>
                       {supplierPerf.top5.map((_, i) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
                     </Bar>
                   </BarChart>
@@ -604,3 +714,13 @@ export default function ReportsPage() {
     </div>
   )
 }
+
+
+export default function ReportsPage() {
+  return (
+    <PermissionGate permission="reports.view">
+      <ReportsPageInner />
+    </PermissionGate>
+  )
+}
+

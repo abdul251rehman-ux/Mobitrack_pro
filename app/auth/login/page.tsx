@@ -63,7 +63,8 @@ export default function LoginPage() {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "An unexpected error occurred"
-      toast.error("Login failed", { description: msg })
+      const isOffline = err instanceof Error && /offline|reach the server/i.test(err.message)
+      toast.error(isOffline ? "You're offline" : "Login failed", { description: msg })
     } finally {
       setIsLoading(false)
     }

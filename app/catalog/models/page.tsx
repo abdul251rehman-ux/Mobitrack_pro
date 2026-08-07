@@ -1,5 +1,6 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect, useRef } from "react"
 import { Plus, Pencil, Trash2, Search, Smartphone, Lock, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
@@ -10,6 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 import { cn } from "@/lib/utils"
 
 interface PhoneModel {
@@ -24,7 +27,7 @@ interface PhoneModel {
 interface Brand { id: string; name: string }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function ModelsPage() {
+function ModelsPageInner() {
   const [models, setModels] = useState<PhoneModel[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,6 +41,8 @@ export default function ModelsPage() {
   const [formName, setFormName] = useState("")
   const [formBrand, setFormBrand] = useState("")
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function fetchAll() {
     setLoading(true)
@@ -127,7 +132,9 @@ export default function ModelsPage() {
   }
 
   async function handleSave() {
+    if (saving) return
     if (!validate()) return
+    setSaving(true)
     try {
       const tenantId = await getTenantId()
       const selectedBrand = brands.find(b => b.name.toLowerCase() === formBrand.trim().toLowerCase())
@@ -158,12 +165,15 @@ export default function ModelsPage() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save model")
+    } finally {
+      setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     if (deleteTarget.isSystem) { toast.error("System models cannot be deleted"); return }
+    setDeleting(true)
     try {
       const realId = deleteTarget.id.replace(/^(iphone|android)-/, "")
       const table = deleteTarget.deviceType === "iphone" ? "iphone_models" : "android_models"
@@ -174,48 +184,38 @@ export default function ModelsPage() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete model")
+    } finally {
+      setDeleting(false)
     }
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="space-y-4">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center shrink-0">
-            <Smartphone className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-900 leading-none">Phone Models</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Manage models per brand - used in purchases &amp; inventory</p>
-          </div>
-        </div>
-        <Button onClick={() => openAdd()} size="sm" className="h-8 text-xs gap-1.5 px-3 bg-violet-600 hover:bg-violet-700">
-          <Plus className="w-3.5 h-3.5" />
-          Add Model
-        </Button>
-      </div>
+      <PageHeader
+        title="Phone Models"
+        description="Manage models per brand - used in purchases & inventory"
+        icon={<Smartphone />}
+        iconBg="bg-indigo-600"
+        action={<Button onClick={() => openAdd()} size="sm" className="gap-1.5"><Plus className="w-3.5 h-3.5" />Add Model</Button>}
+      />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { title: "Total Models",    value: stats.total,   sub: "All brands",       color: "bg-violet-500" },
-          { title: "iPhone Models",   value: stats.iphone,  sub: "Apple only",       color: "bg-slate-700"  },
+          { title: "Total Models",    value: stats.total,   sub: "All brands",       color: "bg-indigo-500" },
+          { title: "iPhone Models",   value: stats.iphone,  sub: "Apple only",       color: "bg-slate-600"  },
           { title: "Android Models",  value: stats.android, sub: "All other brands", color: "bg-emerald-500"},
-          { title: "Brands Covered",  value: stats.brands,  sub: "With models",      color: "bg-blue-500"   },
+          { title: "Brands Covered",  value: stats.brands,  sub: "With models",      color: "bg-cyan-500"   },
         ].map(c => (
           <div key={c.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none">{c.title}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 leading-none">{c.title}</p>
               <div className={`w-6 h-6 rounded-md ${c.color} flex items-center justify-center shrink-0`}>
                 <Smartphone className="w-3.5 h-3.5 text-white" />
               </div>
@@ -235,14 +235,14 @@ export default function ModelsPage() {
             placeholder="Search models..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400"
+            className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
           />
         </div>
         <div className="relative">
           <select
             value={filterBrand}
             onChange={e => setFilterBrand(e.target.value)}
-            className="h-8 pl-2 pr-7 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 appearance-none"
+            className="h-8 pl-2 pr-7 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 appearance-none"
           >
             <option value="all">All Brands</option>
             {Array.from(new Set(models.map(m => m.brandName))).sort().map(b => (
@@ -270,11 +270,11 @@ export default function ModelsPage() {
               {/* Brand header row */}
               <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
+                  <div className="w-6 h-6 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
                     <span className="text-white text-[9px] font-bold">{brandName.slice(0, 2).toUpperCase()}</span>
                   </div>
                   <span className="text-xs font-bold text-slate-800">{brandName}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
                     {mList.length} model{mList.length !== 1 ? "s" : ""}
                   </span>
                   <span className={cn(
@@ -287,7 +287,7 @@ export default function ModelsPage() {
                 <Button
                   onClick={() => openAdd(brandName)}
                   size="sm" variant="outline"
-                  className="h-6 text-[10px] px-2 gap-1 text-violet-600 border-violet-200 hover:bg-violet-50"
+                  className="h-6 text-[10px] px-2 gap-1 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                 >
                   <Plus className="w-2.5 h-2.5" />Add
                 </Button>
@@ -307,7 +307,7 @@ export default function ModelsPage() {
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => openEdit(m)}
-                        className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+                        className="p-1 rounded-md hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors"
                         title="Edit"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -319,7 +319,7 @@ export default function ModelsPage() {
                       ) : (
                         <button
                           onClick={() => setDeleteTarget(m)}
-                          className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                          className="p-1 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -344,14 +344,14 @@ export default function ModelsPage() {
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1">
-              <Label className="text-xs">Brand <span className="text-red-500">*</span></Label>
+              <Label className="text-xs">Brand <span className="text-rose-500">*</span></Label>
               <div className="relative">
                 <select
                   value={formBrand}
                   onChange={e => { setFormBrand(e.target.value); if (formErrors.brand) setFormErrors(p => ({ ...p, brand: "" })) }}
                   className={cn(
-                    "w-full h-8 pl-2 pr-7 text-xs rounded-md border bg-white focus:outline-none focus:ring-1 focus:ring-violet-400 appearance-none",
-                    formErrors.brand ? "border-red-400" : "border-slate-200"
+                    "w-full h-8 pl-2 pr-7 text-xs rounded-md border bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 appearance-none",
+                    formErrors.brand ? "border-rose-400" : "border-slate-200"
                   )}
                 >
                   <option value="">Select brand...</option>
@@ -359,27 +359,27 @@ export default function ModelsPage() {
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
               </div>
-              {formErrors.brand && <p className="text-[10px] text-red-500">{formErrors.brand}</p>}
+              {formErrors.brand && <p className="text-[10px] text-rose-500">{formErrors.brand}</p>}
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Model Name <span className="text-red-500">*</span></Label>
+              <Label className="text-xs">Model Name <span className="text-rose-500">*</span></Label>
               <Input
                 placeholder={formBrand.toLowerCase() === "apple" ? "e.g. iPhone 15 Pro Max" : "e.g. Samsung S24 Ultra"}
                 value={formName}
                 onChange={e => { setFormName(e.target.value); if (formErrors.name) setFormErrors(p => ({ ...p, name: "" })) }}
-                className={cn("h-8 text-xs", formErrors.name ? "border-red-400" : "")}
+                className={cn("h-8 text-xs", formErrors.name ? "border-rose-400" : "")}
                 autoFocus
               />
-              {formErrors.name && <p className="text-[10px] text-red-500">{formErrors.name}</p>}
+              {formErrors.name && <p className="text-[10px] text-rose-500">{formErrors.name}</p>}
             </div>
             <p className="text-[10px] text-slate-400 bg-slate-50 rounded-md px-2 py-1.5">
               Tip: Editing a model name will NOT update historical purchase records - only future purchases will use the new name.
             </p>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs bg-violet-600 hover:bg-violet-700" onClick={handleSave}>
-              {editTarget ? "Save Changes" : "Add Model"}
+          <DialogFooter className="flex-row justify-end gap-2 space-x-0">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editTarget ? "Save Changes" : "Add Model"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -391,10 +391,19 @@ export default function ModelsPage() {
         onOpenChange={open => !open && setDeleteTarget(null)}
         title="Delete Model"
         description={`Delete "${deleteTarget?.name}" (${deleteTarget?.brandName})? This won't affect existing purchase records.`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
+  )
+}
+
+export default function ModelsPage() {
+  return (
+    <PermissionGate permission="catalog.view">
+      <ModelsPageInner />
+    </PermissionGate>
   )
 }

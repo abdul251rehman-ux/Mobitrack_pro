@@ -1,5 +1,6 @@
-"use client"
+﻿"use client"
 
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import { Plus, Pencil, Trash2, Award, Smartphone, Package, Globe, Search, Lock, Calendar } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
@@ -23,6 +24,8 @@ interface Brand {
 
 import { DataTable } from "@/components/shared/data-table"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageLoader } from "@/components/shared/page-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -49,7 +52,7 @@ function StatusChip({ status }: { status: Brand["status"] }) {
 }
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
-export default function BrandsPage() {
+function BrandsPageInner() {
   const [list, setList] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -63,6 +66,8 @@ export default function BrandsPage() {
   const [formDesc, setFormDesc] = useState("")
   const [formStatus, setFormStatus] = useState<Brand["status"]>("Active")
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function fetchBrands() {
     try {
@@ -151,7 +156,9 @@ export default function BrandsPage() {
   }
 
   async function handleSave() {
+    if (saving) return
     if (!validate()) return
+    setSaving(true)
     try {
       const initials = formInitials.trim().toUpperCase().slice(0, 2) || formName.slice(0, 2).toUpperCase()
       if (editTarget) {
@@ -173,12 +180,15 @@ export default function BrandsPage() {
       await fetchBrands()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to save brand")
+    } finally {
+      setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     if (deleteTarget.isSystem) { toast.error("System brands cannot be deleted"); return }
+    setDeleting(true)
     try {
       const { error } = await supabase.from("brands").delete().eq("id", deleteTarget.id)
       if (error) throw error
@@ -187,6 +197,8 @@ export default function BrandsPage() {
       await fetchBrands()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to delete brand")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -198,7 +210,7 @@ export default function BrandsPage() {
         const b = row.original
         return (
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
               <span className="text-white text-[10px] font-bold">{b.logoInitials}</span>
             </div>
             <div>
@@ -223,7 +235,7 @@ export default function BrandsPage() {
       header: "Mobiles",
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Smartphone className="w-3 h-3 text-blue-400" />
+          <Smartphone className="w-3 h-3 text-indigo-400" />
           <span className="text-xs font-medium text-slate-700">{row.original.mobileCount}</span>
         </div>
       ),
@@ -271,7 +283,7 @@ export default function BrandsPage() {
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => openEdit(b)}
-              className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+              className="p-1 rounded-md hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors"
               title="Edit"
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -283,7 +295,7 @@ export default function BrandsPage() {
             ) : (
               <button
                 onClick={() => setDeleteTarget(b)}
-                className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                className="p-1 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors"
                 title="Delete"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -296,46 +308,34 @@ export default function BrandsPage() {
   ], [])
 
   const statCards = [
-    { title: "Total Brands",     value: stats.total,            sub: `${stats.active} active`,    Icon: Award,       iconBg: "bg-blue-500"   },
+    { title: "Total Brands",     value: stats.total,            sub: `${stats.active} active`,    Icon: Award,       iconBg: "bg-indigo-500" },
     { title: "Active Brands",    value: stats.active,           sub: "Currently in use",          Icon: Globe,       iconBg: "bg-emerald-500"},
-    { title: "Mobile Products",  value: stats.totalMobiles,     sub: "Across all brands",         Icon: Smartphone,  iconBg: "bg-sky-500"    },
+    { title: "Mobile Products",  value: stats.totalMobiles,     sub: "Across all brands",         Icon: Smartphone,  iconBg: "bg-cyan-500"   },
     { title: "Accessories",      value: stats.totalAccessories, sub: "Across all brands",         Icon: Package,     iconBg: "bg-slate-500"  },
   ]
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="space-y-4">
 
       {/* ── Compact header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-            <Award className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-900 leading-none">Brands</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Manage mobile and accessory brands in your catalog</p>
-          </div>
-        </div>
-        <Button onClick={openAdd} size="sm" className="h-8 text-xs gap-1.5 px-3">
-          <Plus className="w-3.5 h-3.5" />
-          Add Brand
-        </Button>
-      </div>
+      <PageHeader
+        title="Brands"
+        description="Manage mobile and accessory brands in your catalog"
+        icon={<Award />}
+        iconBg="bg-indigo-600"
+        action={<Button onClick={openAdd} size="sm" className="gap-1.5"><Plus className="w-3.5 h-3.5" />Add Brand</Button>}
+      />
 
-      {/* ── 4 stat cards in one row ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-2.5">
+      {/* ── 4 stat cards ─────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
         {statCards.map((card) => (
           <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none">{card.title}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 leading-none">{card.title}</p>
               <div className={`w-6 h-6 rounded-md ${card.iconBg} flex items-center justify-center shrink-0`}>
                 <card.Icon className="w-3.5 h-3.5 text-white" />
               </div>
@@ -355,7 +355,7 @@ export default function BrandsPage() {
             placeholder="Search brands..."
             value={mobileSearch}
             onChange={(e) => setMobileSearch(e.target.value)}
-            className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
           />
         </div>
         {list
@@ -368,7 +368,7 @@ export default function BrandsPage() {
                 <div className={`w-1 shrink-0 ${accentBg}`} />
                 <div className="flex-1 p-2.5 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
                       <span className="text-white text-[10px] font-bold">{brand.logoInitials}</span>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -387,7 +387,7 @@ export default function BrandsPage() {
                     <StatusChip status={brand.status} />
                   </div>
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium">
+                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-medium">
                       <Smartphone className="w-2.5 h-2.5" />{brand.mobileCount} Mobiles
                     </span>
                     <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
@@ -404,7 +404,7 @@ export default function BrandsPage() {
                     <Calendar className="w-2.5 h-2.5" />{formatDate(brand.createdAt)}
                   </div>
                   <div className="flex gap-1.5">
-                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => openEdit(brand)}>
+                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-indigo-600 border-indigo-200 hover:bg-indigo-50" onClick={() => openEdit(brand)}>
                       <Pencil className="w-3 h-3" />Edit
                     </Button>
                     {brand.isSystem ? (
@@ -412,7 +412,7 @@ export default function BrandsPage() {
                         <Lock className="w-3 h-3" />Locked
                       </Button>
                     ) : (
-                      <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-red-500 border-red-200 hover:bg-red-50" onClick={() => setDeleteTarget(brand)}>
+                      <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] gap-1 text-rose-500 border-rose-200 hover:bg-rose-50" onClick={() => setDeleteTarget(brand)}>
                         <Trash2 className="w-3 h-3" />Delete
                       </Button>
                     )}
@@ -444,21 +444,21 @@ export default function BrandsPage() {
             {/* Row 1: Name + Initials */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Brand Name <span className="text-red-500">*</span></Label>
+                <Label className="text-xs">Brand Name <span className="text-rose-500">*</span></Label>
                 <Input
                   placeholder="e.g. Samsung"
                   value={formName}
                   onChange={(e) => handleNameChange(e.target.value)}
-                  className={`h-8 text-xs ${formErrors.name ? "border-red-400" : ""}`}
+                  className={`h-8 text-xs ${formErrors.name ? "border-rose-400" : ""}`}
                 />
-                {formErrors.name && <p className="text-[10px] text-red-500">{formErrors.name}</p>}
+                {formErrors.name && <p className="text-[10px] text-rose-500">{formErrors.name}</p>}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">
                   Initials <span className="text-slate-400 font-normal">(2 chars)</span>
                 </Label>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
                     <span className="text-white text-[10px] font-bold">{formInitials || "??"}</span>
                   </div>
                   <Input
@@ -475,14 +475,14 @@ export default function BrandsPage() {
             {/* Row 2: Country + Status */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Country <span className="text-red-500">*</span></Label>
+                <Label className="text-xs">Country <span className="text-rose-500">*</span></Label>
                 <Input
                   placeholder="e.g. South Korea"
                   value={formCountry}
                   onChange={(e) => { setFormCountry(e.target.value); if (formErrors.country) setFormErrors((p) => ({ ...p, country: "" })) }}
-                  className={`h-8 text-xs ${formErrors.country ? "border-red-400" : ""}`}
+                  className={`h-8 text-xs ${formErrors.country ? "border-rose-400" : ""}`}
                 />
-                {formErrors.country && <p className="text-[10px] text-red-500">{formErrors.country}</p>}
+                {formErrors.country && <p className="text-[10px] text-rose-500">{formErrors.country}</p>}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Status</Label>
@@ -514,11 +514,11 @@ export default function BrandsPage() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
-              {editTarget ? "Save Changes" : "Add Brand"}
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editTarget ? "Save Changes" : "Add Brand"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -530,10 +530,19 @@ export default function BrandsPage() {
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Delete Brand"
         description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
+  )
+}
+
+export default function BrandsPage() {
+  return (
+    <PermissionGate permission="catalog.view">
+      <BrandsPageInner />
+    </PermissionGate>
   )
 }
