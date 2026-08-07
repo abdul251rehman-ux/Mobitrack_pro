@@ -4,7 +4,8 @@ import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useEffect } from "react"
 import {
   Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown,
-  FileText, Eye, CheckCircle, AlertTriangle, PlusCircle,
+  FileText, Eye, CheckCircle, AlertTriangle, PlusCircle, Scale,
+  Smartphone, Headphones,
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -19,11 +20,14 @@ import { formatCurrency, formatDate, todayPKT, cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
+import { StatCard } from "@/components/shared/stat-card"
+import { useLanguage } from "@/context/language-context"
 
 type LedgerEntry = {
   id: string
@@ -38,6 +42,16 @@ type LedgerEntry = {
   // Rich detail refs for drawer
   saleId?: string
   paymentId?: string
+}
+
+/** IDs of payments folded into their sale's row (same day, same invoice) - excluded from the flat payment list */
+function computeDownPaymentIds(sales: import("@/data/types").Sale[], payments: import("@/data/types").Payment[]): Set<string> {
+  const ids = new Set<string>()
+  sales.forEach(s => {
+    const match = payments.find(p => p.referenceNumber === s.invoiceNumber && p.date === s.date && p.status === "Completed" && !ids.has(p.id))
+    if (match) ids.add(match.id)
+  })
+  return ids
 }
 
 type AccountStatus = "all" | "outstanding" | "cleared" | "advance"
@@ -92,6 +106,7 @@ function EntryDetailModal({
   payments: import("@/data/types").Payment[]
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   if (!entry) return null
 
   const sale    = entry.saleId    ? sales.find(s => s.id === entry.saleId)       : undefined
@@ -108,13 +123,13 @@ function EntryDetailModal({
 
   return (
     <Dialog open={!!entry} onOpenChange={onClose}>
-      <DialogContent className="w-[96vw] max-w-3xl max-h-[85vh] overflow-y-auto p-0">
+      <DialogContent className="w-[96vw] max-w-3xl max-h-[85dvh] overflow-y-auto p-0">
         {/* ── Header ── */}
-        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-slate-100">
+        <div className="flex items-start justify-between px-4 sm:px-6 pt-5 pb-4 border-b border-slate-100">
           <div>
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">
-                {isSale ? "Sale Details" : "Payment Details"}
+                {isSale ? t("ledger.customer.Sale Details") : t("ledger.customer.Payment Details")}
               </DialogTitle>
               <DialogDescription className="font-mono text-indigo-600 text-sm font-semibold mt-0.5">
                 {entry.reference}
@@ -133,26 +148,26 @@ function EntryDetailModal({
                 : payStatus === "Partial Payment" ? "bg-amber-100 text-amber-700 border-amber-200"
                 : "bg-rose-100 text-rose-700 border-rose-200"
               )}>
-                {payStatus}
+                {payStatus === "Paid in Full" ? t("ledger.customer.Paid in Full") : payStatus === "Partial Payment" ? t("ledger.customer.Partial Payment") : t("status.Unpaid")}
               </Badge>
             )}
             {!isSale && (
               <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold px-2 py-0.5">
-                Payment Received
+                {t("ledger.customer.Payment Received")}
               </Badge>
             )}
           </div>
         </div>
 
         {/* ── Meta grid ── */}
-        <div className="mx-6 mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="mx-4 sm:mx-6 mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
           {[
-            { label: "Date",           value: formatDate(entry.date) },
-            { label: "Reference",      value: entry.reference, mono: true },
-            ...(sale?.paymentMethod   ? [{ label: "Payment Method", value: sale.paymentMethod }] : []),
-            ...(payment?.method       ? [{ label: "Payment Method", value: payment.method }] : []),
+            { label: t("ledger.customer.Date"),           value: formatDate(entry.date) },
+            { label: t("ledger.customer.Reference"),      value: entry.reference, mono: true },
+            ...(sale?.paymentMethod   ? [{ label: t("ledger.customer.Payment Method meta"), value: sale.paymentMethod }] : []),
+            ...(payment?.method       ? [{ label: t("ledger.customer.Payment Method meta"), value: payment.method }] : []),
             ...(payment?.notes && !payment.notes.match(/^(Payment for|Outstanding for)/i)
-              ? [{ label: "Notes", value: payment.notes }] : []),
+              ? [{ label: t("ledger.customer.Notes"), value: payment.notes }] : []),
           ].map((row, i) => (
             <div key={i} className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2.5">
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">{row.label}</p>
@@ -165,17 +180,46 @@ function EntryDetailModal({
 
         {/* ── Sale items table ── */}
         {sale && sale.items.length > 0 && (
-          <div className="mx-6 mt-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Items Sold</p>
-            <div className="rounded-lg border border-slate-200 overflow-x-auto">
-              <table className="w-full min-w-[420px] text-xs">
+          <div className="mx-4 sm:mx-6 mt-4">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t("ledger.customer.Items Sold")}</p>
+
+            {/* Mobile cards */}
+            <div className="md:hidden rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+              {sale.items.map((item, i) => {
+                const unitPrice = item.quantity > 0 ? item.lineTotal / item.quantity : 0
+                return (
+                  <div key={i} className="px-3 py-2.5 flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                      {(item as any).category === "Accessory"
+                        ? <Headphones className="w-3.5 h-3.5 text-indigo-600" />
+                        : <Smartphone className="w-3.5 h-3.5 text-indigo-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 leading-tight truncate">{item.productName}</p>
+                      {item.imei && <p className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">{t("ledger.customer.IMEI")} {item.imei}</p>}
+                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-500">
+                        <span>{t("ledger.customer.Qty")}: {item.quantity}</span>
+                        <span>·</span>
+                        <span>{formatCurrency(unitPrice)} {t("sale.each")}</span>
+                      </div>
+                      {item.discount > 0 && <p className="text-[10px] text-amber-600 mt-0.5">{t("ledger.customer.Disc")} -{formatCurrency(item.discount)}</p>}
+                    </div>
+                    <span className="text-xs font-bold text-slate-800 shrink-0 whitespace-nowrap">{formatCurrency(item.lineTotal)}</span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block rounded-lg border border-slate-200 overflow-x-auto">
+              <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Product</th>
-                    <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Type</th>
-                    <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Qty</th>
-                    <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Unit Price</th>
-                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Total</th>
+                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t("ledger.customer.Product")}</th>
+                    <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t("ledger.customer.Type")}</th>
+                    <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t("ledger.customer.Qty")}</th>
+                    <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t("ledger.customer.Unit Price")}</th>
+                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t("ledger.customer.Total")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -186,10 +230,10 @@ function EntryDetailModal({
                         <td className="px-4 py-3">
                           <p className="font-semibold text-slate-800 leading-tight">{item.productName}</p>
                           {item.imei && (
-                            <p className="text-[10px] font-mono text-slate-400 mt-0.5">IMEI: {item.imei}</p>
+                            <p className="text-[10px] font-mono text-slate-400 mt-0.5">{t("ledger.customer.IMEI")} {item.imei}</p>
                           )}
                           {item.discount > 0 && (
-                            <p className="text-[10px] text-amber-600 mt-0.5">Disc: -{formatCurrency(item.discount)}</p>
+                            <p className="text-[10px] text-amber-600 mt-0.5">{t("ledger.customer.Disc")} -{formatCurrency(item.discount)}</p>
                           )}
                         </td>
                         <td className="px-3 py-3 text-center">
@@ -211,21 +255,21 @@ function EntryDetailModal({
             <div className="mt-3 flex justify-end">
               <div className="w-full sm:w-64 rounded-lg border border-slate-200 overflow-hidden text-xs">
                 <div className="flex justify-between px-4 py-2 bg-slate-50 border-b border-slate-100">
-                  <span className="text-slate-500">Subtotal</span>
+                  <span className="text-slate-500">{t("ledger.customer.Subtotal")}</span>
                   <span className="font-medium text-slate-700">{formatCurrency(subtotal)}</span>
                 </div>
                 {sale.discount > 0 && (
                   <div className="flex justify-between px-4 py-2 bg-slate-50 border-b border-slate-100">
-                    <span className="text-slate-500">Discount</span>
+                    <span className="text-slate-500">{t("ledger.customer.Discount")}</span>
                     <span className="font-medium text-amber-600">-{formatCurrency(sale.discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between px-4 py-2.5 bg-slate-800">
-                  <span className="font-bold text-white">Total</span>
+                  <span className="font-bold text-white">{t("ledger.customer.Total")}</span>
                   <span className="font-bold text-white">{formatCurrency(sale.total)}</span>
                 </div>
                 <div className="flex justify-between px-4 py-2 bg-white border-b border-slate-100">
-                  <span className="text-slate-500">Amount Received</span>
+                  <span className="text-slate-500">{t("ledger.customer.Amount Received")}</span>
                   <span className="font-semibold text-emerald-600">{formatCurrency(sale.amountReceived)}</span>
                 </div>
                 <div className={cn(
@@ -233,10 +277,10 @@ function EntryDetailModal({
                   saleOutstanding > 0 ? "bg-rose-50" : "bg-emerald-50"
                 )}>
                   <span className={cn("font-semibold", saleOutstanding > 0 ? "text-rose-700" : "text-emerald-700")}>
-                    {saleOutstanding > 0 ? "Balance Due" : "Settled"}
+                    {saleOutstanding > 0 ? t("ledger.customer.Balance Due") : t("ledger.customer.Settled")}
                   </span>
                   <span className={cn("font-bold", saleOutstanding > 0 ? "text-rose-700" : "text-emerald-700")}>
-                    {saleOutstanding > 0 ? formatCurrency(saleOutstanding) : "Paid in Full"}
+                    {saleOutstanding > 0 ? formatCurrency(saleOutstanding) : t("ledger.customer.Paid in Full")}
                   </span>
                 </div>
               </div>
@@ -246,20 +290,20 @@ function EntryDetailModal({
 
         {/* ── Payment details (non-sale entry) ── */}
         {payment && !isSale && (
-          <div className="mx-6 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-4">
-            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3">Payment Info</p>
+          <div className="mx-4 sm:mx-6 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 sm:px-5 py-4">
+            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3">{t("ledger.customer.Payment Info")}</p>
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-slate-500">Amount</span>
+                <span className="text-slate-500">{t("ledger.customer.Amount")}</span>
                 <span className="font-bold text-emerald-700">{formatCurrency(payment.amount)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Method</span>
+                <span className="text-slate-500">{t("ledger.customer.Method")}</span>
                 <span className="font-semibold text-slate-700">{payment.method}</span>
               </div>
               {payment.notes && !payment.notes.match(/^(Payment for|Outstanding for)/i) && (
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Notes</span>
+                  <span className="text-slate-500">{t("ledger.customer.Notes")}</span>
                   <span className="font-medium text-slate-700 text-right max-w-[60%]">{payment.notes}</span>
                 </div>
               )}
@@ -274,6 +318,7 @@ function EntryDetailModal({
 }
 
 function CustomerLedgerPageInner() {
+  const { t } = useLanguage()
   const [loading, setLoading]     = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales]         = useState<Sale[]>([])
@@ -373,6 +418,13 @@ function CustomerLedgerPageInner() {
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId)
 
+  // Auto-fill Opening Balance from the customer's saved value when switching
+  // customers - still a plain useState the user can type over for a one-off
+  // view, same convention as app/ledger/suppliers/page.tsx.
+  useEffect(() => {
+    setOpeningBalance(selectedCustomer?.openingBalance ?? 0)
+  }, [selectedCustomerId])
+
   // Compute net balance per customer for filtering & status badge
   const customerBalanceMap = useMemo(() => {
     const map = new Map<string, number>()
@@ -407,16 +459,23 @@ function CustomerLedgerPageInner() {
       ? new Set([selectedCustomerId])
       : new Set(filteredCustomers.map(c => c.id))
 
+    // A payment made on the same day as (and referencing) its sale is that sale's down-payment,
+    // not a separate event - fold it into the sale row instead of a second line. Payments made
+    // later against the same invoice are genuinely separate events and keep their own row.
+    const downPaymentIds = computeDownPaymentIds(sales, customerPayments)
+
     sales
       .filter(s => s.customerId && custIds.has(s.customerId) && s.status !== "Refunded")
       .forEach(s => {
         const payStatus = s.amountReceived >= s.total ? "Paid in Full"
           : s.amountReceived > 0 ? "Partial Payment"
           : "Unpaid"
+        const downPayment = customerPayments.find(p => downPaymentIds.has(p.id) && p.referenceNumber === s.invoiceNumber)
         raw.push({
           id: s.id, date: s.date, reference: s.invoiceNumber,
           description: `Sale Invoice  ·  ${s.items.length} item${s.items.length !== 1 ? "s" : ""}  ·  ${payStatus}`,
-          debit: s.total, credit: 0, type: "sale", customerName: s.customerName,
+          // Net effect on the balance: full sale value minus any down-payment made at the same time
+          debit: s.total - (downPayment?.amount ?? 0), credit: 0, type: "sale", customerName: s.customerName,
           saleId: s.id,
         })
       })
@@ -430,9 +489,10 @@ function CustomerLedgerPageInner() {
         saleId: s.id,
       }))
 
-    // Only count Completed payments — Pending rows are "outstanding IOUs", not actual money received
+    // Only count Completed payments — Pending rows are "outstanding IOUs", not actual money received.
+    // Down-payments folded into their sale row above are excluded here to avoid double-counting.
     customerPayments
-      .filter(p => custIds.has(p.entityId) && p.status === "Completed")
+      .filter(p => custIds.has(p.entityId) && p.status === "Completed" && !downPaymentIds.has(p.id))
       .forEach(p => raw.push({
         id: p.id, date: p.date,
         reference: p.referenceNumber || p.id.slice(0, 8),
@@ -517,29 +577,34 @@ function CustomerLedgerPageInner() {
 
   async function handlePDFExport() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
-    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = ""
+    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = "", shopLogo: string | undefined
     try {
       const { getTenant } = await import("@/lib/api/settings")
       const tenant = await getTenant()
       shopName    = tenant.name    || shopName
       shopAddress = [tenant.address, tenant.city].filter(Boolean).join(", ")
       shopPhone   = tenant.phone   || ""
+      shopLogo    = tenant.logo    || undefined
     } catch { /* defaults */ }
 
     const custLabel  = selectedCustomer ? selectedCustomer.name : "All Customers"
     const periodLine = dateFrom || dateTo
       ? `Period: ${dateFrom || "Start"} to ${dateTo || "Now"}`
       : "All Time"
+    const statusLabel = accountStatus !== "all"
+      ? `Status: ${accountStatus.charAt(0).toUpperCase()}${accountStatus.slice(1)}`
+      : null
 
     const balLabel = closingBalance > 0 ? "Dr (Outstanding)"
       : closingBalance < 0 ? "Cr (Advance)"
       : "Settled"
 
     const { generateReportPDF } = await import("@/lib/pdf/report")
+    const subtitle = [custLabel, statusLabel, periodLine, `${filtered.length} entries`].filter(Boolean).join("  |  ")
     generateReportPDF({
-      shopName, shopAddress, shopPhone,
+      shopName, shopAddress, shopPhone, shopLogo,
       title: "Customer Ledger",
-      subtitle: `${custLabel}  |  ${periodLine}  |  ${filtered.length} entries`,
+      subtitle,
       columns: [
         { header: "Date",        dataKey: "date",    width: 24, halign: "center" },
         ...(!selectedCustomerId ? [{ header: "Customer", dataKey: "customer", width: 34 }] : []),
@@ -618,8 +683,8 @@ function CustomerLedgerPageInner() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <PageHeader
-        title="Customer Ledger"
-        description="Account statements, outstanding dues, advances and settled accounts"
+        title={t("ledger.customer.Title")}
+        description={t("ledger.customer.Description")}
         action={
           <div className="flex gap-1.5">
             {selectedCustomerId && (
@@ -627,20 +692,20 @@ function CustomerLedgerPageInner() {
                 onClick={openCollectDialog}
                 className="flex items-center gap-1.5 h-8 px-3 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors"
               >
-                <PlusCircle className="w-3.5 h-3.5" /> Collect Payment
+                <PlusCircle className="w-3.5 h-3.5" /> {t("ledger.customer.Collect Payment")}
               </button>
             )}
             <button
               onClick={handlePDFExport}
               className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
             >
-              <FileText className="w-3.5 h-3.5" /> PDF
+              <FileText className="w-3.5 h-3.5" /> {t("ledger.customer.PDF")}
             </button>
             <button
               onClick={handleExportCSV}
               className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
             >
-              <Download className="w-3.5 h-3.5" /> Excel
+              <Download className="w-3.5 h-3.5" /> {t("ledger.customer.Excel")}
             </button>
           </div>
         }
@@ -653,78 +718,80 @@ function CustomerLedgerPageInner() {
           {/* Row 1: Customer selector + account status filter */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="sm:col-span-2">
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Customer</label>
-              <select
-                value={selectedCustomerId}
-                onChange={e => { setSelectedCustomerId(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.customer.Customer")}</label>
+              <Select
+                value={selectedCustomerId || "__all"}
+                onValueChange={v => { setSelectedCustomerId(v === "__all" ? "" : v); setPage(1) }}
               >
-                <option value="">All Customers ({filteredCustomers.length})</option>
-                {filteredCustomers.map(c => {
-                  const bal = customerBalanceMap.get(c.id) ?? 0
-                  const tag = bal > 0 ? ` • Due Rs ${bal.toLocaleString("en-PK")}` : bal < 0 ? ` • Advance` : ` • Settled`
-                  return <option key={c.id} value={c.id}>{c.name} ({c.phone}){tag}</option>
-                })}
-              </select>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">{t("ledger.customer.All Customers")} ({filteredCustomers.length})</SelectItem>
+                  {filteredCustomers.map(c => {
+                    const bal = customerBalanceMap.get(c.id) ?? 0
+                    const tag = bal > 0 ? ` • ${t("ledger.customer.Due")} ${bal.toLocaleString("en-PK")}` : bal < 0 ? ` • ${t("ledger.customer.Advance")}` : ` • ${t("ledger.customer.Settled")}`
+                    return <SelectItem key={c.id} value={c.id}>{c.name} ({c.phone}){tag}</SelectItem>
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Account Status</label>
-              <select
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.customer.Account Status")}</label>
+              <Select
                 value={accountStatus}
-                onChange={e => { setAccountStatus(e.target.value as AccountStatus); setSelectedCustomerId(""); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                onValueChange={v => { setAccountStatus(v as AccountStatus); setSelectedCustomerId(""); setPage(1) }}
               >
-                <option value="all">All Accounts</option>
-                <option value="outstanding">Outstanding / Dues Only</option>
-                <option value="cleared">Settled / Cleared Only</option>
-                <option value="advance">Advance / Overpaid Only</option>
-              </select>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("ledger.customer.All Accounts")}</SelectItem>
+                  <SelectItem value="outstanding">{t("ledger.customer.Outstanding Only")}</SelectItem>
+                  <SelectItem value="cleared">{t("ledger.customer.Cleared Only")}</SelectItem>
+                  <SelectItem value="advance">{t("ledger.customer.Advance Only")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           {/* Row 2: Period preset + custom date range */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Period</label>
-              <select
-                value={periodPreset}
-                onChange={e => handlePresetChange(e.target.value as PeriodPreset)}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="all_time">All Time</option>
-                <option value="this_week">This Week</option>
-                <option value="last_week">Last Week</option>
-                <option value="this_month">This Month</option>
-                <option value="last_month">Last Month</option>
-                <option value="this_quarter">This Quarter</option>
-                <option value="this_year">This Year</option>
-                <option value="custom">Custom Range</option>
-              </select>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.customer.Period")}</label>
+              <Select value={periodPreset} onValueChange={v => handlePresetChange(v as PeriodPreset)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all_time">{t("ledger.customer.All Time")}</SelectItem>
+                  <SelectItem value="this_week">{t("ledger.customer.This Week")}</SelectItem>
+                  <SelectItem value="last_week">{t("ledger.customer.Last Week")}</SelectItem>
+                  <SelectItem value="this_month">{t("ledger.customer.This Month")}</SelectItem>
+                  <SelectItem value="last_month">{t("ledger.customer.Last Month")}</SelectItem>
+                  <SelectItem value="this_quarter">{t("ledger.customer.This Quarter")}</SelectItem>
+                  <SelectItem value="this_year">{t("ledger.customer.This Year")}</SelectItem>
+                  <SelectItem value="custom">{t("ledger.customer.Custom Range")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">From Date</label>
-              <input
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.customer.From Date")}</label>
+              <Input
                 type="date" value={dateFrom}
                 onChange={e => { setDateFrom(e.target.value); setPeriodPreset("custom"); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="h-8 text-xs"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">To Date</label>
-              <input
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.customer.To Date")}</label>
+              <Input
                 type="date" value={dateTo}
                 onChange={e => { setDateTo(e.target.value); setPeriodPreset("custom"); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="h-8 text-xs"
               />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Opening Balance (Rs)</label>
-              <input
-                type="number" onWheel={e => e.currentTarget.blur()}
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.customer.Opening Balance")}</label>
+              <MoneyInput
                 value={openingBalance}
-                onChange={e => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="0 (positive = customer needs to pay us, negative = advance paid)"
+                onChange={v => { setOpeningBalance(Number(v)); setPage(1) }}
+                className="h-8 text-xs"
+                placeholder={t("ledger.customer.Opening hint")}
               />
             </div>
           </div>
@@ -736,7 +803,7 @@ function CustomerLedgerPageInner() {
                 onClick={() => { setDateFrom(""); setDateTo(""); setPeriodPreset("all_time"); setSelectedCustomerId(""); setAccountStatus("all"); setOpeningBalance(0); setPage(1) }}
                 className="text-[10px] text-indigo-600 hover:underline"
               >
-                Clear all filters
+                {t("ledger.customer.Clear all filters")}
               </button>
             </div>
           )}
@@ -744,40 +811,41 @@ function CustomerLedgerPageInner() {
       </Card>
 
       {/* ── Summary cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <Card className="border-l-4 border-l-rose-500">
-          <CardContent className="px-3 py-2.5">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Debit</p>
-            <p className="text-base font-bold text-slate-900 mt-0.5">{formatCurrency(totalDebit)}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Charged to customer</p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="px-3 py-2.5">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Credit</p>
-            <p className="text-base font-bold text-slate-900 mt-0.5">{formatCurrency(totalCredit)}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Payments received</p>
-          </CardContent>
-        </Card>
-        <Card className={cn("border-l-4", closingBalance > 0 ? "border-l-rose-500" : closingBalance < 0 ? "border-l-emerald-400" : "border-l-slate-300")}>
-          <CardContent className="px-3 py-2.5">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Net Balance</p>
-            <p className={cn("text-base font-bold mt-0.5", closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400")}>
-              {formatCurrency(Math.abs(closingBalance))}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              {closingBalance > 0 ? "Customer still needs to pay" : closingBalance < 0 ? "Customer paid extra (advance)" : "Settled"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className={cn("border-l-4", scenario.color.includes("rose") ? "border-l-rose-500" : scenario.color.includes("emerald") ? "border-l-emerald-500" : "border-l-slate-300")}>
-          <CardContent className="px-3 py-2.5">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</p>
-            <div className={cn("mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full border", scenario.color)}>
-              {scenario.icon} {scenario.label}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+        <StatCard
+          title={t("ledger.customer.Total Debit")} value={formatCurrency(totalDebit)}
+          subtext={t("ledger.customer.Charged to customer")}
+          icon={TrendingUp} iconBg="bg-rose-100" subtextOnMobile
+        />
+        <StatCard
+          title={t("ledger.customer.Total Credit")} value={formatCurrency(totalCredit)}
+          subtext={t("ledger.customer.Payments received")}
+          icon={TrendingDown} iconBg="bg-emerald-100" subtextOnMobile
+        />
+        <div className={cn(
+          "relative overflow-hidden rounded-xl bg-white px-2.5 py-2 sm:px-4 sm:py-3 min-w-0",
+          "border border-slate-100 border-t-2",
+          "shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200",
+          scenario.color.includes("rose") ? "border-t-rose-500" : scenario.color.includes("emerald") ? "border-t-emerald-500" : "border-t-slate-400"
+        )}>
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
+            <div className={cn("w-6 h-6 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shadow-sm shrink-0",
+              scenario.color.includes("rose") ? "bg-rose-600" : scenario.color.includes("emerald") ? "bg-emerald-600" : "bg-slate-600")}>
+              <Scale className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
             </div>
-          </CardContent>
-        </Card>
+            <div className={cn("inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border shrink-0", scenario.color)}>
+              {scenario.icon}
+              {scenario.label === "Outstanding Due" ? t("ledger.customer.Outstanding Due") : scenario.label === "Advance / Overpaid" ? t("ledger.customer.Advance Overpaid") : t("ledger.customer.Account Settled")}
+            </div>
+          </div>
+          <p className={cn(
+            "font-bold text-slate-900 leading-none tracking-tight mb-1 truncate",
+            formatCurrency(Math.abs(closingBalance)).length > 14 ? "text-xs sm:text-sm" : formatCurrency(Math.abs(closingBalance)).length > 10 ? "text-sm sm:text-base" : "text-base sm:text-xl"
+          )}>
+            {formatCurrency(Math.abs(closingBalance))}
+          </p>
+          <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500 truncate">{t("ledger.customer.Net Balance")}</p>
+        </div>
       </div>
 
       {/* ── Ledger table ───────────────────────────────────────────────────── */}
@@ -785,42 +853,90 @@ function CustomerLedgerPageInner() {
         <Card>
           <CardContent className="py-10 text-center">
             <CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-xs text-slate-400">No transactions found for the selected filters.</p>
-            <p className="text-[10px] text-slate-300 mt-1">Try changing the date range or account status filter.</p>
+            <p className="text-xs text-slate-400">{t("ledger.customer.No tx filters")}</p>
+            <p className="text-[10px] text-slate-300 mt-1">{t("ledger.customer.Try changing")}</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader className="px-3 py-2 border-b border-slate-100">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="text-sm font-semibold text-slate-800">
-                {selectedCustomer ? `${selectedCustomer.name} — Account Statement` : "All Customers — Account Statement"}
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-slate-800 truncate min-w-0">
+                {selectedCustomer ? `${selectedCustomer.name} — ${t("ledger.customer.Account Statement")}` : `${t("ledger.customer.All Customers Statement")} — ${t("ledger.customer.Account Statement")}`}
                 {(dateFrom || dateTo) && (
                   <span className="ml-2 text-[10px] font-normal text-slate-400">
-                    {dateFrom || "Start"} → {dateTo || "Now"}
+                    {dateFrom || t("ledger.customer.Start")} → {dateTo || t("ledger.customer.Now")}
                   </span>
                 )}
               </CardTitle>
-              <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />Sale (Dr)</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Payment (Cr)</span>
+              <div className="hidden sm:flex items-center gap-2.5 text-[10px] text-slate-400 shrink-0">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />{t("ledger.customer.Sale Dr")}</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />{t("ledger.customer.Payment Cr")}</span>
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
 
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {paginated.map(entry => (
+                <button
+                  key={entry.id}
+                  onClick={() => setDrawerEntry(entry)}
+                  className="flex w-full text-left hover:bg-slate-50/70 active:bg-slate-100 transition-colors"
+                >
+                  <div className={`w-1 shrink-0 ${accentColor(entry.type)}`} />
+                  <div className="flex-1 min-w-0 px-3 py-2.5 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-slate-400">{formatDate(entry.date)}</p>
+                      {!selectedCustomerId && entry.customerName && (
+                        <p className="text-[10px] font-medium text-slate-500 truncate">{entry.customerName}</p>
+                      )}
+                    </div>
+                    <p className={cn("text-xs font-medium leading-snug truncate", entry.type === "opening" ? "text-slate-500 italic" : "text-slate-800")}>
+                      {entry.description}
+                    </p>
+                    <p className="text-[10px] font-mono text-slate-400">{entry.reference}</p>
+                    <div className="flex items-center justify-between gap-2 pt-1 mt-1 border-t border-slate-50">
+                      <div className="flex items-center gap-2 text-xs font-semibold">
+                        {entry.debit > 0 && <span className="text-rose-600">{t("ledger.customer.Dr")} {formatCurrency(entry.debit)}</span>}
+                        {entry.credit > 0 && <span className="text-emerald-600">{t("ledger.customer.Cr")} {formatCurrency(entry.credit)}</span>}
+                      </div>
+                      <p className={cn("text-xs font-bold shrink-0", entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400")}>
+                        {formatCurrency(Math.abs(entry.balance))}{entry.balance > 0 ? ` ${t("ledger.customer.Dr")}` : entry.balance < 0 ? ` ${t("ledger.customer.Cr")}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center pr-2 shrink-0">
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                  </div>
+                </button>
+              ))}
+              <div className="px-3 py-2 bg-slate-50 border-t-2 border-slate-200">
+                <div className="flex justify-between text-xs"><span className="font-semibold text-slate-600">{t("ledger.customer.Totals")}</span></div>
+                <div className="flex justify-between text-xs mt-1"><span className="text-slate-500">{t("ledger.customer.Debit")}</span><span className="font-bold text-rose-700">{formatCurrency(totalDebit)}</span></div>
+                <div className="flex justify-between text-xs mt-1"><span className="text-slate-500">{t("ledger.customer.Credit")}</span><span className="font-bold text-emerald-700">{formatCurrency(totalCredit)}</span></div>
+                <div className="flex justify-between text-xs mt-1 pt-1 border-t border-slate-200">
+                  <span className="font-semibold text-slate-700">{t("ledger.customer.Balance")}</span>
+                  <span className={cn("font-bold", closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400")}>
+                    {formatCurrency(Math.abs(closingBalance))}{closingBalance > 0 ? ` ${t("ledger.customer.Dr")}` : closingBalance < 0 ? ` ${t("ledger.customer.Cr")}` : ""}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Desktop table */}
-            <div className="overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80">
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Date</th>
-                    {!selectedCustomerId && <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Customer</th>}
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Reference</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Description</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider whitespace-nowrap">Debit</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">Credit</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Balance</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.customer.Date")}</th>
+                    {!selectedCustomerId && <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.customer.Customer")}</th>}
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.customer.Reference")}</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("ledger.customer.Description col")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider whitespace-nowrap">{t("ledger.customer.Debit")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">{t("ledger.customer.Credit")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.customer.Balance")}</th>
                     <th className="px-3 py-2 w-8" />
                   </tr>
                 </thead>
@@ -841,7 +957,7 @@ function CustomerLedgerPageInner() {
                         entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400")}>
                         {formatCurrency(Math.abs(entry.balance))}
                         <span className="font-medium ml-0.5 text-[10px]">
-                          {entry.balance > 0 ? " Dr" : entry.balance < 0 ? " Cr" : ""}
+                          {entry.balance > 0 ? ` ${t("ledger.customer.Dr")}` : entry.balance < 0 ? ` ${t("ledger.customer.Cr")}` : ""}
                         </span>
                       </td>
                       <td className="px-2 py-2 text-center">
@@ -857,13 +973,13 @@ function CustomerLedgerPageInner() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                    <td colSpan={!selectedCustomerId ? 4 : 3} className="px-3 py-2 text-xs text-slate-500 text-right">Totals</td>
+                    <td colSpan={!selectedCustomerId ? 4 : 3} className="px-3 py-2 text-xs text-slate-500 text-right">{t("ledger.customer.Totals")}</td>
                     <td className="px-3 py-2 text-right text-xs font-bold text-rose-700 whitespace-nowrap">{formatCurrency(totalDebit)}</td>
                     <td className="px-3 py-2 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalCredit)}</td>
                     <td className={cn("px-3 py-2 text-right text-xs font-bold whitespace-nowrap",
                       closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400")}>
                       {formatCurrency(Math.abs(closingBalance))}
-                      <span className="font-medium ml-0.5 text-[10px]">{closingBalance > 0 ? " Dr" : closingBalance < 0 ? " Cr" : ""}</span>
+                      <span className="font-medium ml-0.5 text-[10px]">{closingBalance > 0 ? ` ${t("ledger.customer.Dr")}` : closingBalance < 0 ? ` ${t("ledger.customer.Cr")}` : ""}</span>
                     </td>
                     <td className="px-2 py-2" />
                   </tr>
@@ -875,7 +991,7 @@ function CustomerLedgerPageInner() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400">
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} {t("ledger.customer.of")} {filtered.length}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
@@ -906,9 +1022,9 @@ function CustomerLedgerPageInner() {
       <Dialog open={collectOpen} onOpenChange={v => { if (!v) setCollectOpen(false) }}>
         <DialogContent className="w-[96vw] max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">Collect Payment</DialogTitle>
+            <DialogTitle className="text-base font-bold text-slate-900">{t("ledger.customer.Collect Payment")}</DialogTitle>
             <DialogDescription className="text-slate-500 text-sm">
-              {selectedCustomer?.name} — record a payment received
+              {selectedCustomer?.name} — {t("ledger.customer.record a payment")}
             </DialogDescription>
           </DialogHeader>
 
@@ -926,7 +1042,7 @@ function CustomerLedgerPageInner() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-                        {netDue > 0 ? "Running Balance (Due)" : netDue < 0 ? "Advance on Account" : "Settled"}
+                        {netDue > 0 ? t("ledger.customer.Running Balance Due") : netDue < 0 ? t("ledger.customer.Advance on Account") : t("ledger.customer.Settled")}
                       </p>
                       <p className={cn("text-2xl font-extrabold tabular-nums", netDue > 0 ? "text-rose-700" : netDue < 0 ? "text-emerald-700" : "text-slate-400")}>
                         {formatCurrency(Math.abs(netDue))}
@@ -934,10 +1050,10 @@ function CustomerLedgerPageInner() {
                     </div>
                     {amt > 0 && (
                       <div className="text-right">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">After Collection</p>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{t("ledger.customer.After Collection")}</p>
                         <p className={cn("text-lg font-bold tabular-nums", after > 0 ? "text-rose-600" : after < 0 ? "text-emerald-600" : "text-emerald-600")}>
                           {formatCurrency(Math.abs(after))}
-                          <span className="text-xs font-medium ml-1">{after > 0 ? "Dr" : after <= 0 ? "Cr / Settled" : ""}</span>
+                          <span className="text-xs font-medium ml-1">{after > 0 ? t("ledger.customer.Dr") : after <= 0 ? t("ledger.customer.Cr Settled") : ""}</span>
                         </p>
                       </div>
                     )}
@@ -949,12 +1065,12 @@ function CustomerLedgerPageInner() {
             {/* Amount */}
             <div>
               <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                Amount Received (Rs)
+                {t("ledger.customer.Amount Received Field")}
               </label>
-              <Input
-                type="number" min="1" placeholder="Enter amount"
+              <MoneyInput
+                min="1" placeholder={t("ledger.customer.Enter amount")}
                 value={collectAmount}
-                onChange={e => setCollectAmount(e.target.value)}
+                onChange={v => setCollectAmount(v)}
                 className="text-sm"
                 autoFocus
               />
@@ -963,7 +1079,7 @@ function CustomerLedgerPageInner() {
             {/* Payment method */}
             <div>
               <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                Payment Method
+                {t("ledger.customer.Payment Method Field")}
               </label>
               <Select value={collectMethod} onValueChange={setCollectMethod}>
                 <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
@@ -978,10 +1094,10 @@ function CustomerLedgerPageInner() {
             {/* Finance account */}
             <div>
               <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                Deposit to Account
+                {t("ledger.customer.Deposit Account")}
               </label>
               <Select value={collectAccountId} onValueChange={setCollectAccountId}>
-                <SelectTrigger className="text-sm"><SelectValue placeholder="Select account" /></SelectTrigger>
+                <SelectTrigger className="text-sm"><SelectValue placeholder={t("ledger.customer.Select account")} /></SelectTrigger>
                 <SelectContent>
                   {financeAccounts.map(a => (
                     <SelectItem key={a.id} value={a.id}>
@@ -997,7 +1113,7 @@ function CustomerLedgerPageInner() {
               disabled={collecting || !collectAmount || parseFloat(collectAmount) <= 0 || !collectAccountId}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
             >
-              {collecting ? "Saving..." : `Collect ${parseFloat(collectAmount) > 0 ? formatCurrency(parseFloat(collectAmount)) : ""}`}
+              {collecting ? t("ledger.customer.Saving") : `${t("ledger.customer.Collect")} ${parseFloat(collectAmount) > 0 ? formatCurrency(parseFloat(collectAmount)) : ""}`}
             </Button>
           </div>
         </DialogContent>

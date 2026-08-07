@@ -2,7 +2,7 @@
 
 import { PermissionGate } from "@/components/shared/permission-gate"
 import React, { useState, useMemo, useEffect } from "react"
-import { Plus, Eye, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet, Trash2 } from "lucide-react"
+import { Plus, Eye, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calendar, AlertCircle, Download, FileText, Banknote, CreditCard, Smartphone, Building2, Wallet, Trash2, ChevronDown } from "lucide-react"
 
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -10,13 +10,11 @@ import { startOfDay, startOfWeek, startOfMonth, isAfter, parseISO } from "date-f
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import { getSales } from "@/lib/api/sales"
+import { getSales, voidSale } from "@/lib/api/sales"
 import { getTenant } from "@/lib/api/settings"
 import type { ShopInfo } from "@/lib/pdf/invoice"
 import { Sale } from "@/data/types"
 import { generateInvoicePDF } from "@/lib/pdf/invoice"
-import { supabase } from "@/lib/supabase"
-import { getTenantId } from "@/lib/api/helpers"
 import { DataTable } from "@/components/shared/data-table"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
@@ -24,6 +22,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import {
   Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
@@ -31,8 +30,9 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog"
-import { formatCurrency, formatDatePKT, todayPKT } from "@/lib/utils"
+import { formatCurrency, formatDatePKT, todayPKT, cn } from "@/lib/utils"
 import { PAYMENT_METHODS } from "@/lib/constants"
+import { useLanguage } from "@/context/language-context"
 
 // â"€â"€ Payment method icon map â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const PAYMENT_ICONS: Record<string, React.ElementType> = {
@@ -57,6 +57,7 @@ const THIS_MONTH_PREFIX = TODAY_STR.substring(0, 7)
 
 function SalesPageInner() {
   const router = useRouter()
+  const { t } = useLanguage()
 
   // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [salesList, setSalesList] = useState<Sale[]>([])
@@ -90,6 +91,9 @@ function SalesPageInner() {
   const [salePriceMax, setSalePriceMax] = useState("")
   // Universal search - matches invoice#, customer, IMEI, product name, color, price
   const [universalSearch, setUniversalSearch] = useState("")
+  // Mobile: the detailed filter fields (customer/model/price/date/etc.) are
+  // collapsed by default so the page doesn't open with a wall of inputs.
+  const [showFilters, setShowFilters] = useState(false)
 
   // â"€â"€ Delete sale state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null)
@@ -100,53 +104,12 @@ function SalesPageInner() {
     if (!deleteTarget || deleting) return
     setDeleting(true)
     try {
-      const tenantId = await getTenantId()
       const sale = deleteTarget
-
-      // 1. Load all sale_items to reverse inventory
-      const { data: saleItems } = await supabase
-        .from("sale_items").select("product_id, product_type, quantity, imei")
-        .eq("sale_id", sale.id)
-
-      // 2. Reverse inventory for each item
-      for (const item of (saleItems ?? [])) {
-        if ((item as any).product_type === "Mobile") {
-          // Restore imei_record to in_stock
-          if ((item as any).imei) {
-            await supabase.from("imei_records")
-              .update({ device_status: "in_stock", sold_date: null, customer_name: null, customer_phone: null, customer_id: null })
-              .eq("imei_number", (item as any).imei).eq("tenant_id", tenantId)
-          }
-          // Re-increment catalog stock
-          if ((item as any).product_id) {
-            const { data: mob } = await supabase.from("mobiles").select("stock").eq("id", (item as any).product_id).single()
-            if (mob) await supabase.from("mobiles").update({ stock: (mob as any).stock + (item as any).quantity }).eq("id", (item as any).product_id)
-          }
-        } else if ((item as any).product_type === "Accessory") {
-          // Re-increment accessory stock (sale trigger decremented it)
-          if ((item as any).product_id) {
-            const { data: acc } = await supabase.from("accessories").select("stock").eq("id", (item as any).product_id).single()
-            if (acc) await supabase.from("accessories").update({ stock: (acc as any).stock + (item as any).quantity }).eq("id", (item as any).product_id)
-          }
-        }
-      }
-
-      // 3. Reverse finance account balances from sale payments
-      const { data: finTxns } = await supabase
-        .from("finance_transactions").select("account_id, amount, type")
-        .eq("reference_number", sale.invoiceNumber).eq("tenant_id", tenantId)
-      for (const txn of (finTxns ?? [])) {
-        if ((txn as any).type === "sale_receipt") {
-          const { data: acc } = await supabase.from("finance_accounts").select("current_balance").eq("id", (txn as any).account_id).single()
-          if (acc) await supabase.from("finance_accounts").update({ current_balance: (acc as any).current_balance - (txn as any).amount }).eq("id", (txn as any).account_id)
-        }
-      }
-
-      // 4. Delete related records, then the sale
-      await supabase.from("finance_transactions").delete().eq("reference_number", sale.invoiceNumber).eq("tenant_id", tenantId)
-      await supabase.from("payments").delete().eq("reference_number", sale.invoiceNumber).eq("tenant_id", tenantId)
-      await supabase.from("sale_items").delete().eq("sale_id", sale.id)
-      await supabase.from("sales").delete().eq("id", sale.id)
+      // Reverses inventory, IMEI/used-phone status, customer stats, and
+      // finance balances, then deletes the sale - all in one atomic
+      // transaction (fn_void_sale), so a failure partway through can never
+      // leave orphaned records or a stock/balance mismatch behind.
+      await voidSale(sale.id)
 
       setSalesList(prev => prev.filter(s => s.id !== sale.id))
       toast.success(`Sale ${sale.invoiceNumber} deleted`)
@@ -242,6 +205,10 @@ function SalesPageInner() {
     })
   }, [salesList, customerSearch, paymentFilter, statusFilter, dateFrom, dateTo, salePriceMin, salePriceMax, modelSearch, universalSearch])
 
+  // Detail fields beyond the always-visible universal search - drives the
+  // mobile filter-toggle's active-indicator dot.
+  const hasDetailFilters = !!(customerSearch || modelSearch || salePriceMin || salePriceMax || dateFrom || dateTo || paymentFilter !== "all" || statusFilter !== "all")
+
   // â"€â"€ Handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   function handleReset() {
     setDateFrom("")
@@ -301,28 +268,41 @@ function SalesPageInner() {
   async function handleExportPDF() {
     if (filtered.length === 0) { toast.error("No data to export"); return }
     const totalAmount = filtered.reduce((s, sale) => s + sale.total, 0)
-    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = ""
+    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = "", shopLogo: string | undefined
     try {
       const { getTenant } = await import("@/lib/api/settings")
       const tenant = await getTenant()
       shopName = tenant.name || shopName
       shopAddress = [tenant.address, tenant.city].filter(Boolean).join(", ")
       shopPhone = tenant.phone || ""
+      shopLogo = tenant.logo || undefined
     } catch { /* use defaults */ }
     const { generateReportPDF } = await import("@/lib/pdf/report")
+    const filterParts = [
+      dateFrom && "From: " + dateFrom,
+      dateTo && "To: " + dateTo,
+      paymentFilter !== "all" && "Payment: " + paymentFilter,
+      statusFilter !== "all" && "Status: " + statusFilter,
+      customerSearch && `Customer: "${customerSearch}"`,
+      modelSearch && `Model: "${modelSearch}"`,
+      (salePriceMin || salePriceMax) && `Price: ${salePriceMin || "0"}-${salePriceMax || "∞"}`,
+      universalSearch && `Search: "${universalSearch}"`,
+    ].filter(Boolean)
+    const subtitle = [...filterParts, `${filtered.length} records`, `Total: Rs ${totalAmount.toLocaleString("en-PK")}`].join("  |  ")
     generateReportPDF({
-      shopName, shopAddress, shopPhone,
+      shopName, shopAddress, shopPhone, shopLogo,
       title: "Sales Report",
-      subtitle: `${filtered.length} records  -  Total: Rs ${totalAmount.toLocaleString("en-PK")}`,
+      subtitle,
+      orientation: "landscape",
       columns: [
-        { header: "#",             dataKey: "idx",     width: 8,  halign: "center" },
-        { header: "Invoice #",     dataKey: "invoice", width: 28 },
-        { header: "Date",          dataKey: "date",    width: 24 },
-        { header: "Customer",      dataKey: "customer",width: 36 },
-        { header: "Items",         dataKey: "items",   width: 10, halign: "center" },
-        { header: "Total (Rs)",    dataKey: "total",   width: 24, halign: "right", bold: true },
-        { header: "Payment",       dataKey: "payment", width: 24 },
-        { header: "Status",        dataKey: "status",  width: 18, halign: "center" },
+        { header: "#",             dataKey: "idx",     width: 10, halign: "center" },
+        { header: "Invoice #",     dataKey: "invoice", width: 32 },
+        { header: "Date",          dataKey: "date",    width: 26 },
+        { header: "Customer",      dataKey: "customer" },
+        { header: "Items",         dataKey: "items",   width: 14, halign: "center" },
+        { header: "Total (Rs)",    dataKey: "total",   width: 30, halign: "right", bold: true },
+        { header: "Payment",       dataKey: "payment", width: 28 },
+        { header: "Status",        dataKey: "status",  width: 24, halign: "center" },
       ],
       rows: filtered.map((s, i) => ({
         idx:      i + 1,
@@ -348,7 +328,7 @@ function SalesPageInner() {
   const columns: ColumnDef<Sale>[] = [
     {
       accessorKey: "invoiceNumber",
-      header: "Invoice #",
+      header: t("sale.list.Invoice"),
       cell: ({ row }) => (
         <Link href={`/sales/${row.original.id}`} className="font-mono text-indigo-600 text-sm font-semibold hover:underline">
           {row.original.invoiceNumber}
@@ -357,7 +337,7 @@ function SalesPageInner() {
     },
     {
       accessorKey: "date",
-      header: "Date",
+      header: t("sale.list.Date"),
       cell: ({ row }) => (
         <span className="text-slate-600 text-sm whitespace-nowrap">
           {formatDatePKT(row.original.date)}
@@ -366,7 +346,7 @@ function SalesPageInner() {
     },
     {
       id: "customer",
-      header: "Customer",
+      header: t("sale.list.Customer"),
       cell: ({ row }) => {
         const name = row.original.customerName
         const phone = row.original.customerPhone
@@ -390,7 +370,7 @@ function SalesPageInner() {
     },
     {
       id: "items",
-      header: "Items",
+      header: t("sale.list.Items"),
       cell: ({ row }) => {
         const items = row.original.items
         return (
@@ -416,7 +396,7 @@ function SalesPageInner() {
     },
     {
       accessorKey: "total",
-      header: "Total",
+      header: t("sale.list.Total"),
       cell: ({ row }) => (
         <span className="font-bold text-slate-900 text-sm whitespace-nowrap">
           {formatCurrency(row.original.total)}
@@ -425,7 +405,7 @@ function SalesPageInner() {
     },
     {
       accessorKey: "paymentMethod",
-      header: "Payment",
+      header: t("sale.list.Payment"),
       cell: ({ row }) => {
         const method = row.original.paymentMethod
         return (
@@ -438,12 +418,12 @@ function SalesPageInner() {
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: t("sale.list.Status"),
       cell: ({ row }) => <StatusBadge status={row.original.status} />,
     },
     {
       id: "actions",
-      header: "Actions",
+      header: t("sale.list.Actions"),
       cell: ({ row }) => {
         const sale = row.original
         return (
@@ -454,7 +434,7 @@ function SalesPageInner() {
               size="icon-sm"
               className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
               onClick={() => router.push(`/sales/${sale.id}`)}
-              title="View details"
+              title={t("sale.list.View details")}
             >
               <Eye className="w-4 h-4" />
             </Button>
@@ -465,7 +445,7 @@ function SalesPageInner() {
               size="icon-sm"
               className="h-8 w-8 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50"
               onClick={async () => generateInvoicePDF(sale, shopInfo, "save")}
-              title="Download invoice PDF"
+              title={t("sale.list.Download invoice")}
             >
               <Download className="w-4 h-4" />
             </Button>
@@ -477,7 +457,7 @@ function SalesPageInner() {
                   variant="ghost"
                   size="icon-sm"
                   className="h-8 w-8 text-slate-500 hover:text-rose-600 hover:bg-rose-50"
-                  title="Process return / refund"
+                  title={t("sale.list.Process return")}
                 >
                   <RotateCcw className="w-4 h-4" />
                 </Button>
@@ -490,7 +470,7 @@ function SalesPageInner() {
               size="icon-sm"
               className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
               onClick={() => setDeleteTarget(sale)}
-              title="Delete sale"
+              title={t("sale.list.Delete")}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -505,21 +485,21 @@ function SalesPageInner() {
     <div className="space-y-4">
       {/* Page Header */}
       <PageHeader
-        title="Sales"
-        description="Manage and track all sales transactions"
+        title={t("sale.list.Page title")}
+        description={t("sale.list.Page desc")}
         icon={<ShoppingCart />}
         iconBg="bg-indigo-600"
         action={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportExcel}>
-              <Download className="w-3.5 h-3.5" /> Export
+              <Download className="w-3.5 h-3.5" /> {t("sale.list.Export")}
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportPDF}>
               <FileText className="w-3.5 h-3.5" /> PDF
             </Button>
             <Link href="/sales/new">
               <Button className="gap-2">
-                <Plus className="w-4 h-4" /> New Sale
+                <Plus className="w-4 h-4" /> {t("sale.list.New Sale")}
               </Button>
             </Link>
           </div>
@@ -529,7 +509,7 @@ function SalesPageInner() {
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <StatCard
-          title="Today's Sales"
+          title={t("sale.list.Today's Sales")}
           value={formatCurrency(stats.todayTotal)}
           subtext={`${stats.todayCount} transaction${stats.todayCount !== 1 ? "s" : ""}`}
           icon={ShoppingCart}
@@ -537,7 +517,7 @@ function SalesPageInner() {
           gradient="from-indigo-50 to-indigo-100"
         />
         <StatCard
-          title="This Week"
+          title={t("sale.list.This Week")}
           value={formatCurrency(stats.weekTotal)}
           subtext={`${stats.weekCount} transaction${stats.weekCount !== 1 ? "s" : ""}`}
           icon={TrendingUp}
@@ -545,7 +525,7 @@ function SalesPageInner() {
           gradient="from-emerald-50 to-emerald-100"
         />
         <StatCard
-          title="This Month"
+          title={t("sale.list.This Month")}
           value={formatCurrency(stats.monthTotal)}
           subtext={`${stats.monthCount} transaction${stats.monthCount !== 1 ? "s" : ""}`}
           icon={Calendar}
@@ -553,21 +533,21 @@ function SalesPageInner() {
           gradient="from-cyan-50 to-cyan-100"
         />
         <StatCard
-          title="Outstanding"
+          title={t("sale.list.Outstanding")}
           value={formatCurrency(stats.pendingTotal)}
-          subtext={`${stats.pendingCount} pending`}
+          subtext={`${stats.pendingCount} ${t("sale.list.pending")}`}
           icon={AlertCircle}
           iconBg="bg-amber-100"
           gradient="from-amber-50 to-amber-100"
         />
         {/* Completion rate */}
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-col justify-between">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Completion Rate</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t("sale.list.Completion Rate")}</p>
           <div className="flex items-end gap-1.5">
             <span className={`text-2xl font-bold leading-none ${stats.completionRate >= 80 ? "text-emerald-600" : stats.completionRate >= 50 ? "text-amber-600" : "text-rose-600"}`}>
               {stats.completionRate}%
             </span>
-            <span className="text-xs text-slate-400 mb-0.5">completed</span>
+            <span className="text-xs text-slate-400 mb-0.5">{t("sale.list.completed")}</span>
           </div>
           <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div
@@ -575,16 +555,16 @@ function SalesPageInner() {
               style={{ width: `${stats.completionRate}%` }}
             />
           </div>
-          <p className="text-[10px] text-slate-400 mt-1">{stats.completedCount} of {salesList.length} sales</p>
+          <p className="text-[10px] text-slate-400 mt-1">{stats.completedCount} {t("sale.list.of")} {salesList.length} {t("sale.list.sales")}</p>
         </div>
         {/* Collection rate */}
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-col justify-between">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Collection Rate</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t("sale.list.Collection Rate")}</p>
           <div className="flex items-end gap-1.5">
             <span className={`text-2xl font-bold leading-none ${stats.collectionRate >= 80 ? "text-emerald-600" : stats.collectionRate >= 50 ? "text-amber-600" : "text-rose-600"}`}>
               {stats.collectionRate}%
             </span>
-            <span className="text-xs text-slate-400 mb-0.5">collected</span>
+            <span className="text-xs text-slate-400 mb-0.5">{t("sale.list.collected")}</span>
           </div>
           <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div
@@ -592,7 +572,7 @@ function SalesPageInner() {
               style={{ width: `${stats.collectionRate}%` }}
             />
           </div>
-          <p className="text-[10px] text-slate-400 mt-1">{formatCurrency(stats.collectedRevenue)} of {formatCurrency(stats.totalRevenue)}</p>
+          <p className="text-[10px] text-slate-400 mt-1">{formatCurrency(stats.collectedRevenue)} {t("sale.list.of")} {formatCurrency(stats.totalRevenue)}</p>
         </div>
       </div>
 
@@ -604,17 +584,25 @@ function SalesPageInner() {
 
       {/* Filter Bar */}
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-1.5 mb-2.5">
+        <button
+          type="button"
+          onClick={() => setShowFilters(v => !v)}
+          className="w-full flex items-center gap-1.5 mb-2.5 sm:pointer-events-none"
+        >
           <Filter className="w-3 h-3 text-slate-400" />
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Filters</span>
-        </div>
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("sale.list.Filters")}</span>
+          {hasDetailFilters && (
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 sm:hidden" />
+          )}
+          <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 ml-auto sm:hidden transition-transform", showFilters && "rotate-180")} />
+        </button>
 
         {/* Universal search */}
         <div className="mb-2.5">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <Input
-              placeholder="Search by invoice #, customer, IMEI, product name, price, color..."
+              placeholder={t("sale.list.Universal search")}
               value={universalSearch}
               onChange={(e) => setUniversalSearch(e.target.value)}
               className="pl-8 h-9 text-xs"
@@ -622,14 +610,14 @@ function SalesPageInner() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
+        <div className={cn("flex flex-wrap items-end gap-2", !showFilters && "hidden sm:flex")}>
           {/* Customer search */}
           <div className="flex flex-col gap-1 min-w-0 w-full sm:w-auto sm:min-w-[160px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Customer</label>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("sale.list.Customer")}</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
               <Input
-                placeholder="Customer name..."
+                placeholder={t("sale.list.Customer name")}
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
                 className="pl-7 h-8 text-xs"
@@ -639,11 +627,11 @@ function SalesPageInner() {
 
           {/* Model search */}
           <div className="flex flex-col gap-1 min-w-0 w-full sm:w-auto sm:min-w-[150px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Model / Product</label>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("sale.list.Model Product")}</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
               <Input
-                placeholder="e.g. iPhone 15, Samsung..."
+                placeholder={t("sale.list.Model search")}
                 value={modelSearch}
                 onChange={(e) => setModelSearch(e.target.value)}
                 className="pl-7 h-8 text-xs"
@@ -653,23 +641,21 @@ function SalesPageInner() {
 
           {/* Sale price range */}
           <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[160px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Sale Amount (Rs)</label>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("sale.list.Sale Amount")}</label>
             <div className="flex items-center gap-1">
-              <Input
-                type="number" onWheel={e => e.currentTarget.blur()}
+              <MoneyInput
                 min="0"
-                placeholder="Min"
+                placeholder={t("sale.list.Min")}
                 value={salePriceMin}
-                onChange={(e) => setSalePriceMin(e.target.value)}
+                onChange={(v) => setSalePriceMin(v)}
                 className="h-8 text-xs flex-1 min-w-0"
               />
               <span className="text-slate-300 text-xs">-</span>
-              <Input
-                type="number" onWheel={e => e.currentTarget.blur()}
+              <MoneyInput
                 min="0"
-                placeholder="Max"
+                placeholder={t("sale.list.Max")}
                 value={salePriceMax}
-                onChange={(e) => setSalePriceMax(e.target.value)}
+                onChange={(v) => setSalePriceMax(v)}
                 className="h-8 text-xs flex-1 min-w-0"
               />
             </div>
@@ -677,7 +663,7 @@ function SalesPageInner() {
 
           {/* Date range */}
           <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[240px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Date Range</label>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("sale.list.Date Range")}</label>
             <div className="flex items-center gap-1">
               <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 text-xs flex-1 min-w-0" />
               <span className="text-slate-300 text-xs">-</span>
@@ -687,13 +673,13 @@ function SalesPageInner() {
 
           {/* Payment method */}
           <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[140px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Payment</label>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("sale.list.Payment")}</label>
             <Select value={paymentFilter} onValueChange={setPaymentFilter}>
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="All Methods" />
+                <SelectValue placeholder={t("sale.list.All Methods")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Methods</SelectItem>
+                <SelectItem value="all">{t("sale.list.All Methods")}</SelectItem>
                 {PAYMENT_METHODS.map((m) => (
                   <SelectItem key={m} value={m}>
                     <span className="flex items-center gap-1.5">
@@ -708,16 +694,16 @@ function SalesPageInner() {
 
           {/* Status */}
           <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[120px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</label>
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("sale.list.Status")}</label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="All Statuses" />
+                <SelectValue placeholder={t("sale.list.All Statuses")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Refunded">Refunded</SelectItem>
+                <SelectItem value="all">{t("sale.list.All Statuses")}</SelectItem>
+                <SelectItem value="Completed">{t("status.Completed")}</SelectItem>
+                <SelectItem value="Pending">{t("status.Pending")}</SelectItem>
+                <SelectItem value="Refunded">{t("status.Refunded")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -725,7 +711,7 @@ function SalesPageInner() {
           {/* Reset */}
           <Button variant="outline" size="sm" className="h-8 self-end text-xs text-slate-600 hover:text-rose-600 hover:border-rose-300" onClick={handleReset}>
             <RotateCcw className="w-3 h-3 mr-1" />
-            Reset
+            {t("sale.list.Reset")}
           </Button>
         </div>
       </div>
@@ -733,7 +719,7 @@ function SalesPageInner() {
       {/* Mobile Cards (md:hidden) */}
       <div className="md:hidden space-y-3">
         {filtered.length === 0 && (
-          <div className="text-center py-10 text-slate-400 text-sm">No sales found</div>
+          <div className="text-center py-10 text-slate-400 text-sm">{t("sale.list.No sales found")}</div>
         )}
         {filtered.map((sale) => {
           const accentColor =
@@ -792,11 +778,11 @@ function SalesPageInner() {
                   <span className="text-base font-bold text-slate-900">{formatCurrency(sale.total)}</span>
                   <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
                     <ShoppingCart className="w-3 h-3" />
-                    {sale.items.length} item{sale.items.length !== 1 ? "s" : ""}
+                    {sale.items.length} {sale.items.length !== 1 ? t("sale.list.items") : t("sale.list.item")}
                   </span>
                   {sale.status === "Pending" && sale.total - sale.amountReceived > 0 && (
                     <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                      Udhaar: {formatCurrency(sale.total - sale.amountReceived)}
+                      {t("sale.list.Udhaar")}: {formatCurrency(sale.total - sale.amountReceived)}
                     </span>
                   )}
                 </div>
@@ -810,7 +796,7 @@ function SalesPageInner() {
                     onClick={() => router.push(`/sales/${sale.id}`)}
                   >
                     <Eye className="w-3 h-3" />
-                    View
+                    {t("sale.list.View")}
                   </Button>
                   <Button
                     variant="outline"
@@ -819,13 +805,13 @@ function SalesPageInner() {
                     onClick={async () => generateInvoicePDF(sale, shopInfo, "save")}
                   >
                     <Download className="w-3 h-3" />
-                    PDF
+                    {t("sale.list.PDF")}
                   </Button>
                   {sale.status === "Completed" && (
                     <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-rose-500 border-rose-200 hover:bg-rose-50" asChild>
                       <Link href={`/returns?invoice=${encodeURIComponent(sale.invoiceNumber)}`}>
                         <RotateCcw className="w-3 h-3" />
-                        Refund
+                        {t("sale.list.Refund")}
                       </Link>
                     </Button>
                   )}
@@ -834,7 +820,7 @@ function SalesPageInner() {
                     size="sm"
                     className="h-8 w-8 text-xs text-slate-400 border-slate-200 hover:text-rose-600 hover:bg-rose-50 px-0"
                     onClick={() => setDeleteTarget(sale)}
-                    title="Delete sale"
+                    title={t("sale.list.Delete")}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -850,7 +836,7 @@ function SalesPageInner() {
         <DataTable
           columns={columns}
           data={filtered}
-          searchPlaceholder="Quick search..."
+          searchPlaceholder={t("sale.list.Quick search")}
         />
       </div>
 
@@ -861,23 +847,21 @@ function SalesPageInner() {
       <Dialog open={!!deleteTarget} onOpenChange={v => { if (!v) setDeleteTarget(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">Delete Sale?</DialogTitle>
+            <DialogTitle className="text-base font-bold text-slate-900">{t("sale.list.Delete Sale")}</DialogTitle>
             <DialogDescription className="text-sm text-slate-500 mt-1">
-              This will permanently delete{" "}
-              <span className="font-semibold text-slate-700">{deleteTarget?.invoiceNumber}</span> and
-              reverse all inventory changes - phones return to in-stock, accessories stock restored, finance
-              balances reversed. This cannot be undone.
+              {t("sale.list.Delete desc")}{" "}
+              <span className="font-semibold text-slate-700">{deleteTarget?.invoiceNumber}</span> {t("sale.list.Delete desc 2")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 mt-2">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>{t("btn.Cancel")}</Button>
             <Button
               className="bg-rose-600 hover:bg-rose-700 text-white gap-1.5"
               onClick={handleDeleteSale}
               disabled={deleting}
             >
               <Trash2 className="w-3.5 h-3.5" />
-              {deleting ? "Deleting..." : "Delete"}
+              {deleting ? t("sale.list.Deleting") : t("sale.list.Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

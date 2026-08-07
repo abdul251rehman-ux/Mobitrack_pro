@@ -66,6 +66,8 @@ function BrandsPageInner() {
   const [formDesc, setFormDesc] = useState("")
   const [formStatus, setFormStatus] = useState<Brand["status"]>("Active")
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function fetchBrands() {
     try {
@@ -154,7 +156,9 @@ function BrandsPageInner() {
   }
 
   async function handleSave() {
+    if (saving) return
     if (!validate()) return
+    setSaving(true)
     try {
       const initials = formInitials.trim().toUpperCase().slice(0, 2) || formName.slice(0, 2).toUpperCase()
       if (editTarget) {
@@ -176,12 +180,15 @@ function BrandsPageInner() {
       await fetchBrands()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to save brand")
+    } finally {
+      setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     if (deleteTarget.isSystem) { toast.error("System brands cannot be deleted"); return }
+    setDeleting(true)
     try {
       const { error } = await supabase.from("brands").delete().eq("id", deleteTarget.id)
       if (error) throw error
@@ -190,6 +197,8 @@ function BrandsPageInner() {
       await fetchBrands()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to delete brand")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -321,8 +330,8 @@ function BrandsPageInner() {
         action={<Button onClick={openAdd} size="sm" className="gap-1.5"><Plus className="w-3.5 h-3.5" />Add Brand</Button>}
       />
 
-      {/* ── 4 stat cards in one row ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-3 sm:gap-4">
+      {/* ── 4 stat cards ─────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
         {statCards.map((card) => (
           <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
@@ -505,11 +514,11 @@ function BrandsPageInner() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
-              {editTarget ? "Save Changes" : "Add Brand"}
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editTarget ? "Save Changes" : "Add Brand"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -521,9 +530,10 @@ function BrandsPageInner() {
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Delete Brand"
         description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
   )

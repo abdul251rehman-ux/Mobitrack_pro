@@ -1,6 +1,6 @@
 import { supabase } from '../supabase'
 import { getTenantId } from './helpers'
-import { toSale, toDbSale, toDbSaleItem } from './types'
+import { toSale } from './types'
 import type { DbSale, DbSaleItem } from './types'
 import type { Sale, SaleItem } from '@/data/types'
 
@@ -67,64 +67,60 @@ export async function getSaleById(id: string): Promise<Sale | null> {
   }
 }
 
-export async function generateNextInvoiceNumber(tenantId: string): Promise<string> {
-  // Use PKT date so the number is always correct for Pakistan timezone
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
-  const dateTag = today.replace(/-/g, '') // YYYYMMDD → e.g. 20260521
-
-  // Fetch all invoice numbers for today and find the max sequence used
-  // Using MAX rather than COUNT so gaps from deleted records never cause duplicates
-  const { data } = await supabase
-    .from('sales')
-    .select('invoice_number')
-    .eq('tenant_id', tenantId)
-    .eq('date', today)
-    .like('invoice_number', `INV-${dateTag}-%`)
-
-  let maxSeq = 0
-  for (const row of (data ?? [])) {
-    const parts = (row.invoice_number as string).split('-')
-    const n = parseInt(parts[parts.length - 1], 10)
-    if (!isNaN(n) && n > maxSeq) maxSeq = n
-  }
-
-  const seq = String(maxSeq + 1).padStart(3, '0')
-  return `INV-${dateTag}-${seq}`
-}
-
+/**
+ * Creates a sale, its line items, and every side effect (stock decrement,
+ * IMEI/used-phone status, customer stats, payments, finance transactions)
+ * in one atomic Postgres transaction via fn_create_sale. Either everything
+ * commits or nothing does - no half-saved sale is possible.
+ */
 export async function createSale(
-  data: Omit<Sale, 'id'>,
-  items: Omit<SaleItem, 'id'>[]
+  data: Omit<Sale, 'id' | 'invoiceNumber' | 'paymentMethod' | 'amountReceived' | 'changeDue'> & { customerId?: string },
+  items: Omit<SaleItem, 'id'>[],
+  splits: { accountId: string; amount: number }[]
 ): Promise<Sale> {
   const tenantId = await getTenantId()
-  const dbSale = toDbSale(data as Partial<Sale>, tenantId)
 
-  // Insert the sale header
-  const { data: createdSale, error: saleError } = await supabase
-    .from('sales')
-    .insert(dbSale)
-    .select()
-    .single()
+  const { data: result, error } = await supabase.rpc('fn_create_sale', {
+    p_tenant_id: tenantId,
+    p_date: data.date,
+    p_customer_id: data.customerId || null,
+    p_customer_name: data.customerName,
+    p_customer_phone: data.customerPhone,
+    p_discount: data.discount,
+    p_tax: data.tax,
+    p_warranty_days: data.warrantyDays ?? null,
+    p_notes: data.notes ?? null,
+    p_items: items.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      productType: item.productType,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      discount: item.discount,
+      lineTotal: item.lineTotal,
+      imei: item.imei ?? null,
+    })),
+    p_splits: splits,
+  })
 
-  if (saleError) throw new Error(`Failed to create sale: ${saleError.message}`)
+  if (error) throw new Error(`Failed to create sale: ${error.message}`)
 
-  const saleId = (createdSale as DbSale).id
+  return toSale(result.sale as DbSale, (result.items as DbSaleItem[]) ?? [])
+}
 
-  // Insert sale items — if this fails, delete the header (compensating rollback)
-  const dbItems = items.map((item) => toDbSaleItem(item as SaleItem, saleId, tenantId))
-
-  const { data: createdItems, error: itemsError } = await supabase
-    .from('sale_items')
-    .insert(dbItems)
-    .select()
-
-  if (itemsError) {
-    // Roll back the orphaned sale header so no ghost record is left
-    await supabase.from('sales').delete().eq('id', saleId)
-    throw new Error(`Failed to create sale items: ${itemsError.message}`)
-  }
-
-  return toSale(createdSale as DbSale, (createdItems as DbSaleItem[]) ?? [])
+/**
+ * Voids (deletes) a sale and reverses every side effect it caused - stock,
+ * IMEI/used-phone status, customer stats, finance balances - atomically.
+ * Replaces the old handleDeleteSale, which had no error checking at all
+ * and never reversed customer stats.
+ */
+export async function voidSale(saleId: string): Promise<void> {
+  const tenantId = await getTenantId()
+  const { error } = await supabase.rpc('fn_void_sale', {
+    p_tenant_id: tenantId,
+    p_sale_id: saleId,
+  })
+  if (error) throw new Error(`Failed to void sale: ${error.message}`)
 }
 
 export async function updateSaleStatus(id: string, status: string): Promise<void> {

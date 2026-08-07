@@ -6,7 +6,7 @@ import {
   Headphones, Check, Banknote, Wallet, Landmark, CreditCard,
   AlertCircle, ChevronDown, ChevronRight, Battery, Copy, X as XIcon,
   Image as ImageIcon, Fingerprint, Settings2, Pencil, ExternalLink,
-  Lock, Unlock,
+  Lock, Unlock, Palette, ScanLine,
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -19,9 +19,9 @@ import type { FinanceAccount } from "@/lib/api/types"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
@@ -151,10 +151,43 @@ function StepDot({ n, active, done, label }: { n: number; active: boolean; done:
 function Field({ label, required, children, className }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("space-y-0.5", className)}>
-      <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+      <Label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">
         {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
       </Label>
       {children}
+    </div>
+  )
+}
+
+// â"€â"€â"€ FieldHead â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Label row for a PhoneCard field. Lock + "Manage" only reveal on hover of the
+// enclosing field, keeping the label itself clean and scannable at rest.
+
+function FieldHead({
+  label, required, compact, locked, onToggleLock, children,
+}: {
+  label: string
+  required?: boolean
+  compact?: boolean
+  locked?: boolean
+  onToggleLock?: () => void
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="group/field flex items-center gap-1 relative min-h-[15px]">
+      <span className={cn(
+        "font-semibold text-slate-600 uppercase tracking-wide",
+        compact ? "text-[9px]" : "text-[10px]"
+      )}>
+        {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
+      </span>
+      <div className={cn(
+        "flex items-center gap-1 transition-opacity",
+        locked ? "opacity-100" : "opacity-0 group-hover/field:opacity-100 group-focus-within/field:opacity-100"
+      )}>
+        {onToggleLock && <PurchaseLockBtn locked={!!locked} onToggle={onToggleLock} label={label} />}
+        {children}
+      </div>
     </div>
   )
 }
@@ -168,7 +201,7 @@ function Sel({ value, onChange, children, className, error }: { value: string; o
       onChange={e => onChange(e.target.value)}
       className={cn(
         "w-full h-7 rounded-md border bg-white px-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 transition-colors appearance-none",
-        error ? "border-rose-400 bg-rose-50" : "border-slate-200 hover:border-slate-300",
+        error ? "border-rose-400 bg-rose-50" : "border-slate-300 hover:border-slate-400",
         className
       )}
     >
@@ -181,7 +214,7 @@ function Sel({ value, onChange, children, className, error }: { value: string; o
 // Type to search, Enter / "+ Add" to create inline and persist to DB
 
 function CreatableCombobox({
-  value, onChange, options, onAdd, placeholder, className, error,
+  value, onChange, options, onAdd, placeholder, className, inputClassName, error,
 }: {
   value: string
   onChange: (v: string) => void
@@ -189,6 +222,8 @@ function CreatableCombobox({
   onAdd?: (v: string) => Promise<void>
   placeholder?: string
   className?: string
+  /** Overrides the wrapper's default height/text-size (e.g. "h-10 text-sm") */
+  inputClassName?: string
   error?: boolean
 }) {
   const [query, setQuery] = useState("")
@@ -201,6 +236,7 @@ function CreatableCombobox({
   const filtered = q ? unique.filter(o => o.toLowerCase().includes(q)) : unique
   const exactMatch = unique.some(o => o.toLowerCase() === q)
   const canCreate = !!onAdd && q.length > 0 && !exactMatch
+  const textSizeClass = inputClassName?.match(/text-(?:xs|sm|base|lg|\[[^\]]+\])/)?.[0] ?? "text-xs"
 
   async function handleAdd() {
     if (!onAdd || !query.trim() || adding) return
@@ -236,7 +272,8 @@ function CreatableCombobox({
     <div className={cn("relative", className)}>
       <div className={cn(
         "flex items-center h-7 rounded-md border bg-white px-2 gap-1 transition-colors focus-within:ring-1 focus-within:ring-indigo-400",
-        error ? "border-rose-400 bg-rose-50" : value ? "border-indigo-300 bg-indigo-50/30" : "border-slate-200",
+        error ? "border-rose-400 bg-rose-50" : value ? "border-indigo-300 bg-indigo-50/30" : "border-slate-300 hover:border-slate-400",
+        inputClassName,
       )}>
         <input
           ref={inputRef}
@@ -249,7 +286,7 @@ function CreatableCombobox({
             if (e.key === "Escape") { setOpen(false); setQuery("") }
           }}
           placeholder={open ? (value || placeholder || "Type or select...") : (placeholder || "Type or select...")}
-          className="flex-1 text-xs bg-transparent outline-none min-w-0 text-slate-800 font-medium placeholder:text-slate-400"
+          className={cn("flex-1 bg-transparent outline-none min-w-0 text-slate-800 font-medium placeholder:text-slate-400", textSizeClass)}
           spellCheck={false}
           autoComplete="off"
           autoCorrect="off"
@@ -312,7 +349,7 @@ function CreatableCombobox({
 // Inline add/edit/delete for catalog items (brands, colors, storage, RAM)
 
 function QuickCatPopover({
-  label, items, onAdd, onEdit, onDelete, catalogHref,
+  label, items, onAdd, onEdit, onDelete, catalogHref, onSelect,
 }: {
   label: string
   items: string[]
@@ -320,6 +357,7 @@ function QuickCatPopover({
   onEdit: (oldVal: string, newVal: string) => Promise<void>
   onDelete: (v: string) => Promise<void>
   catalogHref: string
+  onSelect?: (v: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState("")
@@ -332,7 +370,8 @@ function QuickCatPopover({
   async function handleAdd() {
     if (!input.trim() || saving) return
     setSaving(true)
-    try { await onAdd(input.trim()); setInput("") }
+    const v = input.trim()
+    try { await onAdd(v); setInput(""); onSelect?.(v); setOpen(false) }
     catch { /* toast handled in caller */ }
     finally { setSaving(false) }
   }
@@ -395,7 +434,7 @@ function QuickCatPopover({
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleAdd() }}
             placeholder={`Add ${label.toLowerCase()}...`}
-            className="flex-1 h-6 text-[11px] rounded border border-slate-200 px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            className="flex-1 h-6 text-[11px] rounded border border-slate-300 px-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
           />
           <button type="button" onClick={handleAdd} disabled={!input.trim() || saving}
             className="h-6 px-2 text-[10px] font-bold bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40 transition-colors">
@@ -455,6 +494,323 @@ function QuickCatPopover({
   )
 }
 
+// â"€â"€â"€ Color Distributor popover â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Lets the user split a row's qty into groups per color (e.g. 4 Black, 3 Blue, 3 Silver)
+// instead of picking a color one-by-one for every IMEI unit. Applying fills the units
+// contiguously by color group in the order entered.
+
+function ColorDistributor({
+  qty, colors, onAdd, onApply, appliedGroups, onEdit,
+}: {
+  qty: number
+  colors: string[]
+  onAdd: (v: string) => Promise<void>
+  onApply: (groups: { color: string; count: number }[]) => void
+  /** Non-empty once colors have been assigned - shows a compact summary instead of the form */
+  appliedGroups: { color: string; count: number }[]
+  onEdit: () => void
+}) {
+  const [rows, setRows] = useState<{ color: string; count: string }[]>([{ color: "", count: String(qty) }])
+
+  const assigned = rows.reduce((sum, r) => sum + (parseInt(r.count) || 0), 0)
+  const remaining = qty - assigned
+  const canApply = remaining === 0 && rows.every(r => r.color.trim() && (parseInt(r.count) || 0) > 0)
+
+  function updateRow(i: number, patch: Partial<{ color: string; count: string }>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() { setRows(prev => [...prev, { color: "", count: remaining > 0 ? String(remaining) : "" }]) }
+  function removeRow(i: number) { setRows(prev => prev.length === 1 ? prev : prev.filter((_, idx) => idx !== i)) }
+
+  function handleApply() {
+    if (!canApply) return
+    onApply(rows.map(r => ({ color: r.color.trim(), count: parseInt(r.count) || 0 })))
+  }
+
+  // Already distributed - compact summary with an edit affordance
+  if (appliedGroups.length > 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-2 bg-indigo-50/50 border-b border-slate-100">
+        <Palette className="w-3 h-3 text-indigo-400 shrink-0" />
+        {appliedGroups.map((g, i) => (
+          <span key={i} className="text-[10px] font-semibold text-indigo-700 bg-white border border-indigo-200 rounded-full px-2 py-0.5">
+            {g.color} × {g.count}
+          </span>
+        ))}
+        <button type="button" onClick={onEdit}
+          className="ml-auto text-[10px] font-bold text-indigo-500 hover:text-indigo-700 transition-colors">
+          Edit split
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-2.5 py-2 bg-indigo-50/40 border-b border-slate-100 space-y-1.5">
+      <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-700">
+        <Palette className="w-3 h-3" /> Split {qty} units by color
+      </div>
+
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <div className="flex-1 min-w-0">
+            <CreatableCombobox
+              value={r.color}
+              onChange={v => updateRow(i, { color: v })}
+              options={colors}
+              onAdd={async v => { await onAdd(v); updateRow(i, { color: v }) }}
+              placeholder="Choose color..."
+            />
+          </div>
+          <span className="text-[10px] text-slate-400 shrink-0">×</span>
+          <input
+            type="number" onWheel={e => e.currentTarget.blur()} min={1}
+            value={r.count}
+            onChange={e => updateRow(i, { count: e.target.value.replace(/\D/g, "") })}
+            placeholder="Qty"
+            className="w-16 h-8 rounded-md border border-slate-300 px-1.5 text-xs text-center bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+          <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1}
+            className="p-1 text-slate-300 hover:text-rose-500 disabled:opacity-30 disabled:hover:text-slate-300 transition-colors">
+            <XIcon className="w-3 h-3" />
+          </button>
+        </div>
+      ))}
+
+      <div className="flex items-center gap-1.5">
+        <button type="button" onClick={addRow}
+          className="flex items-center gap-1 py-1 px-1.5 text-[10px] font-semibold text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors">
+          <Plus className="w-3 h-3" /> Add color
+        </button>
+        <span className={cn(
+          "flex-1 text-[10px] font-semibold text-center py-1 rounded-md",
+          remaining === 0 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+        )}>
+          {remaining === 0 ? `All ${qty} assigned` : remaining > 0 ? `${remaining} left` : `${-remaining} too many`}
+        </span>
+      </div>
+
+      <button type="button" onClick={handleApply} disabled={!canApply}
+        className="w-full h-7 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-40 transition-colors">
+        Apply split
+      </button>
+    </div>
+  )
+}
+
+// â"€â"€â"€ Scan-to-slot: one input per color group, auto-advances on 15-digit scan â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+function ColorScanGroup({
+  color, unitIndexes, units, onUnit, onCheckImei, autoFocus, colors, onAddColor, showBattery,
+}: {
+  color: string
+  unitIndexes: number[]
+  units: MobileUnit[]
+  onUnit: (unitIdx: number, field: keyof MobileUnit, val: string) => void
+  onCheckImei: (unitIdx: number, imei: string) => void
+  autoFocus: boolean
+  colors: string[]
+  onAddColor: (v: string) => Promise<void>
+  showBattery: boolean
+}) {
+  const [scanValue, setScanValue] = useState("")
+  const scanRef = useRef<HTMLInputElement>(null)
+  const fieldRefs = useRef<Map<number, HTMLInputElement>>(new Map())
+  const filled = unitIndexes.filter(i => units[i].imei.length === 15 && !units[i].imeiError).length
+  const total = unitIndexes.length
+  const isFull = filled >= total
+  const nextEmptyIdx = unitIndexes.find(i => units[i].imei.length === 0)
+
+  useEffect(() => {
+    if (autoFocus && !isFull) scanRef.current?.focus()
+  }, [autoFocus, isFull])
+
+  function commitScan(raw: string) {
+    const val = raw.replace(/\D/g, "").slice(0, 15)
+    if (val.length > 0 && nextEmptyIdx !== undefined) {
+      onUnit(nextEmptyIdx, "imei", val)
+      if (val.length === 15) onCheckImei(nextEmptyIdx, val)
+    }
+    setScanValue("")
+  }
+
+  function handleScanChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 15)
+    setScanValue(val)
+    if (val.length === 15 && nextEmptyIdx !== undefined) {
+      onUnit(nextEmptyIdx, "imei", val)
+      onCheckImei(nextEmptyIdx, val)
+      setScanValue("")
+    }
+  }
+
+  function focusNextEmptyAfter(ui: number) {
+    const idx = unitIndexes.indexOf(ui)
+    const nextUi = unitIndexes.slice(idx + 1).find(i => units[i].imei.length === 0)
+    if (nextUi !== undefined) fieldRefs.current.get(nextUi)?.focus()
+    else scanRef.current?.focus()
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <div className={cn(
+        "flex items-center gap-1.5 px-2.5 py-1.5",
+        isFull ? "bg-emerald-50" : "bg-slate-50"
+      )}>
+        <span className="text-[11px] font-bold text-slate-700 flex-1 truncate">{color || "No color"}</span>
+        <span className={cn(
+          "text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+          isFull ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+        )}>
+          {filled}/{total}
+        </span>
+      </div>
+
+      {!isFull && (
+        <div className="relative px-2.5 py-1.5 bg-indigo-50/40 border-t border-slate-100">
+          <ScanLine className="absolute left-4.5 top-1/2 -translate-y-1/2 w-3 h-3 text-indigo-400 pointer-events-none" />
+          <input
+            ref={scanRef}
+            value={scanValue}
+            onChange={handleScanChange}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitScan(scanValue) } }}
+            placeholder={`Scan IMEI for ${color || "this color"}... (${total - filled} left)`}
+            maxLength={15}
+            className="w-full h-7 rounded-md border border-indigo-300 pl-6 pr-2 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+        </div>
+      )}
+
+      <div className="divide-y divide-slate-100">
+        {unitIndexes.map(ui => {
+          const unit = units[ui]
+          const isDuplicate = !!unit.imeiError
+          const isChecking = !!unit.imeiChecking
+          const isOk = unit.imei.length === 15 && !isDuplicate && !isChecking
+          const isSoldLocked = !!unit.soldLocked
+          return (
+            <div key={ui} className={cn("px-2.5 py-1.5 space-y-1", isSoldLocked && "opacity-60")}>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[9px] font-bold text-slate-400 w-4 shrink-0">#{ui + 1}</span>
+                <div className="relative flex-1 min-w-[140px]">
+                  <input
+                    ref={el => { if (el) fieldRefs.current.set(ui, el); else fieldRefs.current.delete(ui) }}
+                    value={unit.imei}
+                    readOnly={isSoldLocked}
+                    onKeyDown={isSoldLocked ? undefined : e => { if (e.key === "Enter") { e.preventDefault(); focusNextEmptyAfter(ui) } }}
+                    onChange={isSoldLocked ? undefined : e => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 15)
+                      onUnit(ui, "imei", val)
+                      if (val.length === 15) onCheckImei(ui, val)
+                    }}
+                    placeholder="15-digit IMEI"
+                    maxLength={15}
+                    className={cn(
+                      "w-full h-7 rounded-md border px-2 pr-10 text-xs font-mono bg-white focus:outline-none focus:ring-1",
+                      isSoldLocked ? "border-slate-200 bg-slate-50 cursor-not-allowed text-slate-500"
+                      : isDuplicate ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
+                      : isOk ? "border-emerald-400 bg-emerald-50 focus:ring-emerald-400"
+                      : unit.imei.length > 0 ? "border-amber-300 bg-amber-50/40 focus:ring-amber-300"
+                      : "border-slate-300 focus:ring-indigo-400"
+                    )}
+                  />
+                  {isChecking && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin pointer-events-none" />
+                  )}
+                  {!isChecking && unit.imei.length > 0 && unit.imei.length < 15 && (
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] text-amber-500 font-bold pointer-events-none">
+                      {15 - unit.imei.length}
+                    </span>
+                  )}
+                  {!isChecking && isOk && (
+                    <Check className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-500 pointer-events-none" />
+                  )}
+                  {!isChecking && isDuplicate && (
+                    <AlertCircle className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-rose-500 pointer-events-none" />
+                  )}
+                </div>
+                {/* Reassign color - escape hatch if a unit was scanned into the wrong group */}
+                <div className="w-24 shrink-0">
+                  {isSoldLocked
+                    ? <span className="flex h-7 items-center px-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md">{unit.color || "-"}</span>
+                    : <CreatableCombobox value={unit.color} onChange={v => onUnit(ui, "color", v)} options={colors} onAdd={onAddColor} placeholder="Color..." />
+                  }
+                </div>
+                {showBattery && (
+                  <div className="flex items-center gap-1 w-16 shrink-0">
+                    <Battery className="w-3 h-3 text-slate-400 shrink-0" />
+                    <input
+                      type="number" onWheel={e => e.currentTarget.blur()} min="1" max="100"
+                      value={unit.batteryHealth}
+                      readOnly={isSoldLocked}
+                      onChange={isSoldLocked ? undefined : e => onUnit(ui, "batteryHealth", e.target.value)}
+                      placeholder="%"
+                      className={cn("w-full h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", isSoldLocked && "bg-slate-50 cursor-not-allowed")}
+                    />
+                  </div>
+                )}
+              </div>
+              {isDuplicate && (
+                <p className="text-[10px] text-rose-600 font-semibold pl-5">
+                  {unit.imeiError === "duplicate_local"
+                    ? "Already entered in this purchase"
+                    : "This IMEI is already in stock - sold or returned it first"}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ScannedUnitGroups({
+  units, onUnit, onCheckImei, colors, onAddColor, showBattery,
+}: {
+  units: MobileUnit[]
+  onUnit: (unitIdx: number, field: keyof MobileUnit, val: string) => void
+  onCheckImei: (unitIdx: number, imei: string) => void
+  colors: string[]
+  onAddColor: (v: string) => Promise<void>
+  showBattery: boolean
+}) {
+  // Group unit indexes by color, preserving first-seen order (matches Distribute apply order)
+  const groups = useMemo(() => {
+    const order: string[] = []
+    const map = new Map<string, number[]>()
+    units.forEach((u, i) => {
+      const key = u.color || ""
+      if (!map.has(key)) { map.set(key, []); order.push(key) }
+      map.get(key)!.push(i)
+    })
+    return order.map(color => ({ color, unitIndexes: map.get(color)! }))
+  }, [units])
+
+  const firstIncompleteColor = groups.find(g =>
+    g.unitIndexes.some(i => units[i].imei.length === 0)
+  )?.color
+
+  return (
+    <div className="p-2 space-y-2">
+      {groups.map(g => (
+        <ColorScanGroup
+          key={g.color || "__none__"}
+          color={g.color}
+          unitIndexes={g.unitIndexes}
+          units={units}
+          onUnit={onUnit}
+          onCheckImei={onCheckImei}
+          colors={colors}
+          onAddColor={onAddColor}
+          showBattery={showBattery}
+          autoFocus={g.color === firstIncompleteColor}
+        />
+      ))}
+    </div>
+  )
+}
+
 // â"€â"€â"€ Mobile phone card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function PhoneCard({
@@ -503,6 +859,19 @@ function PhoneCard({
   const qty = parseInt(row.qty) || 1
   const cats = getCategories(row.deviceType, extraIphoneCategories, extraAndroidCategories)
   const imeiDone = row.units.filter(u => u.imei.length === 15 && !u.imeiError && !u.imeiChecking).length
+  const [editingSplit, setEditingSplit] = useState(false)
+
+  // Summary of the current color split, in first-seen order - empty until every unit has a color
+  const appliedColorGroups = useMemo(() => {
+    if (qty <= 1 || editingSplit || row.units.some(u => !u.color)) return []
+    const order: string[] = []
+    const counts = new Map<string, number>()
+    for (const u of row.units) {
+      if (!counts.has(u.color)) { counts.set(u.color, 0); order.push(u.color) }
+      counts.set(u.color, counts.get(u.color)! + 1)
+    }
+    return order.map(color => ({ color, count: counts.get(color)! }))
+  }, [row.units, qty, editingSplit])
 
   // Filter models to the currently selected brand
   const brandModels = useMemo(() => {
@@ -512,73 +881,73 @@ function PhoneCard({
       .map(m => m.name)
   }, [models, row.brand])
 
+  function handleBrandChange(v: string) {
+    onChange("brand", v)
+    onChange("model", "") // reset model when brand changes
+    const isApple = v.trim().toLowerCase() === "apple"
+    const newType = isApple ? "iphone" : "android"
+    if (newType !== row.deviceType) {
+      onChange("deviceType", newType)
+      if (isApple) onChange("ram", "")
+      const opts = getCategories(newType, extraIphoneCategories, extraAndroidCategories)
+      if (!opts.includes(row.category)) onChange("category", opts[0])
+    }
+  }
+
   return (
     <div className={cn(
-      "rounded-lg border bg-white shadow-sm transition-all",
-      row.rowError ? "border-rose-300 bg-rose-50/20" : "border-slate-200 hover:border-indigo-300"
+      "group/card rounded-xl border bg-white shadow-sm transition-all",
+      row.rowError ? "border-rose-300 bg-rose-50/20" : "border-slate-200 hover:border-indigo-300 hover:shadow-md"
     )}>
       {/* Card header */}
-      <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-slate-100 bg-slate-50/60 rounded-t-lg">
-        <Smartphone className="w-3 h-3 text-indigo-500 shrink-0" />
-        <span className="text-[11px] font-bold text-slate-600">
-          #{idx + 1}
-          {row.brand && row.model && <span className="font-normal text-slate-400 ml-1">{row.brand} {row.model}</span>}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100 bg-slate-50/60 rounded-t-xl">
+        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[11px] font-bold shrink-0">
+          {idx + 1}
+        </div>
+        <Smartphone className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+        <span className="text-sm font-semibold text-slate-700 truncate min-w-0">
+          {row.brand && row.model ? `${row.brand} ${row.model}` : <span className="text-slate-400 font-normal">New phone entry</span>}
         </span>
         {row.buyPrice && parseFloat(row.buyPrice) > 0 && (
-          <span className="ml-auto text-[10px] font-bold text-emerald-600">
+          <span className="ml-auto text-sm font-bold text-emerald-600 tabular-nums">
             {formatCurrency(parseFloat(row.buyPrice) * qty)}
           </span>
         )}
-        <div className="flex items-center gap-0 ml-1">
-          <button onClick={onDuplicate} title="Duplicate" className="p-1 text-slate-300 hover:text-indigo-500 transition-colors">
-            <Copy className="w-3 h-3" />
+        <div className="flex items-center gap-0.5 ml-1">
+          <button onClick={onDuplicate} title="Duplicate" className="p-1.5 rounded-md text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 transition-colors">
+            <Copy className="w-3.5 h-3.5" />
           </button>
-          <button onClick={onRemove} className="p-1 text-slate-300 hover:text-rose-500 transition-colors">
-            <XIcon className="w-3 h-3" />
+          <button onClick={onRemove} title="Remove" className="p-1.5 rounded-md text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors">
+            <XIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {/* Fields */}
-      <div className="p-2 space-y-1.5">
-        {/* Row 1: Brand + Model + Type */}
-        <div className="grid grid-cols-3 gap-1.5">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1 relative">
-              <PurchaseLockBtn locked={locks.brand} onToggle={() => onToggleLock("brand")} label="Brand" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                Brand<span className="text-rose-500 ml-0.5">*</span>
-              </Label>
+      <div className="p-4 space-y-4">
+
+        {/* Zone 1: Device identity */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-1 space-y-1">
+            <FieldHead label="Brand" required locked={locks.brand} onToggleLock={() => onToggleLock("brand")}>
               <QuickCatPopover
                 label="Brands" items={brands}
                 onAdd={onAddBrand}
                 onEdit={onEditBrand}
                 onDelete={onDeleteBrand}
                 catalogHref="/catalog/brands"
+                onSelect={handleBrandChange}
               />
-            </div>
+            </FieldHead>
             <CreatableCombobox
-              value={row.brand} onChange={v => {
-                onChange("brand", v)
-                onChange("model", "") // reset model when brand changes
-                const isApple = v.trim().toLowerCase() === "apple"
-                const newType = isApple ? "iphone" : "android"
-                if (newType !== row.deviceType) {
-                  onChange("deviceType", newType)
-                  if (isApple) onChange("ram", "")
-                  const opts = getCategories(newType, extraIphoneCategories, extraAndroidCategories)
-                  if (!opts.includes(row.category)) onChange("category", opts[0])
-                }
-              }}
+              value={row.brand} onChange={handleBrandChange}
               options={brands} onAdd={onAddBrand}
               placeholder="Samsung, Apple..." error={!!row.rowError && !row.brand}
+              inputClassName="h-10 text-sm"
             />
           </div>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1 relative">
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                Model<span className="text-rose-500 ml-0.5">*</span>
-              </Label>
+          <div className="sm:col-span-1 space-y-1">
+            <FieldHead label="Model" required>
               {row.brand ? (
                 <QuickCatPopover
                   label={`${row.brand} Models`} items={brandModels}
@@ -586,14 +955,10 @@ function PhoneCard({
                   onEdit={onEditModel}
                   onDelete={onDeleteModel}
                   catalogHref="/catalog/models"
+                  onSelect={v => onChange("model", v)}
                 />
-              ) : (
-                <span title="Select a brand first to manage models"
-                  className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold text-slate-300 border border-slate-200 cursor-not-allowed leading-none">
-                  <Plus className="w-2.5 h-2.5" /><span>Manage</span>
-                </span>
-              )}
-            </div>
+              ) : undefined}
+            </FieldHead>
             <CreatableCombobox
               value={row.model}
               onChange={v => onChange("model", v)}
@@ -601,65 +966,62 @@ function PhoneCard({
               onAdd={row.brand ? onAddModel : undefined}
               placeholder={row.brand ? "Select or add model..." : "Choose brand first"}
               error={!!row.rowError && !row.model.trim()}
+              inputClassName="h-10 text-sm"
             />
           </div>
-          <Field label="Type">
+          <div className="sm:col-span-1 space-y-1">
+            <FieldHead label="Type" />
             <Sel value={row.deviceType} onChange={v => {
               const dt = v as "android" | "iphone"
               onChange("deviceType", dt)
               if (dt === "iphone") onChange("ram", "")
               const opts = getCategories(dt, extraIphoneCategories, extraAndroidCategories)
               if (!opts.includes(row.category)) onChange("category", opts[0])
-            }}>
+            }} className="h-10 text-sm">
               <option value="android">Android</option>
               <option value="iphone">iPhone</option>
             </Sel>
-          </Field>
+          </div>
         </div>
 
-        {/* Row 2: Storage + RAM + PTA + Condition */}
-        <div className={cn("grid gap-1.5", row.deviceType === "android" ? "grid-cols-4" : "grid-cols-3")}>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1 relative">
-              <PurchaseLockBtn locked={locks.storage} onToggle={() => onToggleLock("storage")} label="Storage" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Storage</Label>
+        {/* Zone 2: Specs (secondary, recessed) */}
+        <div className={cn(
+          "grid grid-cols-1 gap-2.5 rounded-lg bg-slate-50/70 border border-slate-100 p-2.5",
+          row.deviceType === "android" ? "sm:grid-cols-4" : "sm:grid-cols-3"
+        )}>
+          <div className="space-y-1">
+            <FieldHead label="Storage" compact locked={locks.storage} onToggleLock={() => onToggleLock("storage")}>
               <QuickCatPopover
                 label="Storage" items={storageOptions}
                 onAdd={onAddStorage} onEdit={onEditStorage} onDelete={onDeleteStorage}
                 catalogHref="/catalog/storage"
+                onSelect={v => onChange("storage", v)}
               />
-            </div>
-            <CreatableCombobox value={row.storage} onChange={v => onChange("storage", v)} options={storageOptions} onAdd={onAddStorage} placeholder="128GB..." />
+            </FieldHead>
+            <CreatableCombobox value={row.storage} onChange={v => onChange("storage", v)} options={storageOptions} onAdd={onAddStorage} placeholder="128GB..." inputClassName="h-9 text-xs bg-white" />
           </div>
           {row.deviceType === "android" && (
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1 relative">
-                <PurchaseLockBtn locked={locks.ram} onToggle={() => onToggleLock("ram")} label="RAM" />
-                <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">RAM</Label>
+            <div className="space-y-1">
+              <FieldHead label="RAM" compact locked={locks.ram} onToggleLock={() => onToggleLock("ram")}>
                 <QuickCatPopover
                   label="RAM" items={ramOptions}
                   onAdd={onAddRam} onEdit={onEditRam} onDelete={onDeleteRam}
                   catalogHref="/catalog/ram"
+                  onSelect={v => onChange("ram", v)}
                 />
-              </div>
-              <CreatableCombobox value={row.ram} onChange={v => onChange("ram", v)} options={ramOptions} onAdd={onAddRam} placeholder="8GB..." />
+              </FieldHead>
+              <CreatableCombobox value={row.ram} onChange={v => onChange("ram", v)} options={ramOptions} onAdd={onAddRam} placeholder="8GB..." inputClassName="h-9 text-xs bg-white" />
             </div>
           )}
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1">
-              <PurchaseLockBtn locked={locks.category} onToggle={() => onToggleLock("category")} label="Category" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Category</Label>
-            </div>
-            <Sel value={row.category} onChange={v => onChange("category", v)}>
+          <div className="space-y-1">
+            <FieldHead label="Category" compact locked={locks.category} onToggleLock={() => onToggleLock("category")} />
+            <Sel value={row.category} onChange={v => onChange("category", v)} className="h-9 text-xs bg-white">
               {cats.map(c => <option key={c} value={c}>{c}</option>)}
             </Sel>
           </div>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1">
-              <PurchaseLockBtn locked={locks.condition} onToggle={() => onToggleLock("condition")} label="Condition" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Condition</Label>
-            </div>
-            <Sel value={row.condition} onChange={v => onChange("condition", v)}>
+          <div className="space-y-1">
+            <FieldHead label="Condition" compact locked={locks.condition} onToggleLock={() => onToggleLock("condition")} />
+            <Sel value={row.condition} onChange={v => onChange("condition", v)} className="h-9 text-xs bg-white">
               <option value="New">New</option>
               <option value="Refurbished">Refurb</option>
               <option value="Used">Used</option>
@@ -667,93 +1029,119 @@ function PhoneCard({
           </div>
         </div>
 
-        {/* Row 3: Buy + Sell + Qty + Photo */}
-        <div className="grid grid-cols-4 gap-1.5">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1">
-              <PurchaseLockBtn locked={locks.buyPrice} onToggle={() => onToggleLock("buyPrice")} label="Buy price" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Buy Rs<span className="text-rose-500 ml-0.5">*</span></Label>
-            </div>
-            <input
-              type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0"
+        {/* Zone 3: Pricing & quantity (primary) */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <FieldHead label="Buy Rs" required locked={locks.buyPrice} onToggleLock={() => onToggleLock("buyPrice")} />
+            <MoneyInput min={0} placeholder="0"
               value={row.buyPrice}
-              onChange={e => onChange("buyPrice", e.target.value)}
+              onChange={v => onChange("buyPrice", v)}
               className={cn(
-                "w-full h-7 rounded-md border px-2 text-xs font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400",
-                !!row.rowError && (!row.buyPrice || parseFloat(row.buyPrice) <= 0) ? "border-rose-400 bg-rose-50" : "border-slate-200"
+                "w-full h-11 rounded-lg border px-3 text-base font-bold tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400",
+                !!row.rowError && (!row.buyPrice || parseFloat(row.buyPrice) <= 0) ? "border-rose-400 bg-rose-50" : "border-slate-300"
               )}
             />
           </div>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1">
-              <PurchaseLockBtn locked={locks.sellPrice} onToggle={() => onToggleLock("sellPrice")} label="Sell price" />
-              <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sell Rs</Label>
-            </div>
-            <input
-              type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0"
+          <div className="space-y-1">
+            <FieldHead label="Sell Rs" locked={locks.sellPrice} onToggleLock={() => onToggleLock("sellPrice")} />
+            <MoneyInput min={0} placeholder="0"
               value={row.sellPrice}
-              onChange={e => onChange("sellPrice", e.target.value)}
-              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              onChange={v => onChange("sellPrice", v)}
+              className="w-full h-11 rounded-lg border border-slate-300 px-3 text-base font-semibold tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
-          <Field label="Qty">
-            <div className="relative">
-              <input
-                type="number" onWheel={e => e.currentTarget.blur()} min={1} value={row.qty}
-                onChange={e => onChange("qty", e.target.value)}
-                className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-              />
-            </div>
-          </Field>
-          <Field label="Photo">
+          <div className="space-y-1">
+            <FieldHead label="Qty" />
+            <input
+              type="number" onWheel={e => e.currentTarget.blur()} min={1} value={row.qty}
+              onChange={e => onChange("qty", e.target.value)}
+              className="w-full h-11 rounded-lg border border-slate-300 px-3 text-base font-bold tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+          <div className="space-y-1">
+            <FieldHead label="Photo" />
             <input ref={imgRef} type="file" accept="image/*" className="hidden"
               onChange={e => { if (e.target.files?.[0]) onImageUpload(e.target.files[0]) }} />
             {row.imagePreview ? (
-              <div className="relative w-7 h-7">
-                <img src={row.imagePreview} alt="" className="w-7 h-7 rounded object-cover border border-slate-200" />
+              <div className="relative w-11 h-11">
+                <img src={row.imagePreview} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200" />
                 <button onClick={() => onChange("imagePreview", null)}
-                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white rounded-full flex items-center justify-center">
-                  <XIcon className="w-2 h-2" />
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 text-white rounded-full flex items-center justify-center">
+                  <XIcon className="w-2.5 h-2.5" />
                 </button>
               </div>
             ) : (
               <button onClick={() => imgRef.current?.click()}
-                className="h-7 w-full rounded-md border border-dashed border-slate-200 flex items-center justify-center text-slate-300 hover:border-indigo-400 hover:text-indigo-400 transition-colors">
-                <ImageIcon className="w-3 h-3" />
+                className="h-11 w-full rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-300 hover:border-indigo-400 hover:text-indigo-400 hover:bg-indigo-50/40 transition-colors">
+                <ImageIcon className="w-4 h-4" />
               </button>
             )}
-          </Field>
+          </div>
         </div>
 
         {/* Row error */}
         {row.rowError && (
-          <div className="flex items-center gap-1 text-[10px] text-rose-600 bg-rose-50 rounded px-2 py-1 border border-rose-200">
-            <AlertCircle className="w-3 h-3 shrink-0" />
+          <div className="flex items-center gap-1.5 text-xs text-rose-600 bg-rose-50 rounded-lg px-3 py-2 border border-rose-200">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             {row.rowError}
           </div>
         )}
 
         {/* IMEI section */}
         <div className="rounded-md border border-slate-200">
-          <button
-            type="button"
-            onClick={() => onChange("expanded", !row.expanded)}
-            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left rounded-t-md"
-          >
-            <Fingerprint className="w-3 h-3 text-indigo-400 shrink-0" />
-            <span className="text-[11px] font-semibold text-slate-600 flex-1">
-              IMEI - Color{row.deviceType === "iphone" ? " - Battery" : ""}
-            </span>
-            <span className={cn(
-              "text-[9px] font-bold px-1.5 py-0.5 rounded-full",
-              imeiDone === qty ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-            )}>
-              {imeiDone}/{qty}
-            </span>
-            <ChevronDown className={cn("w-3 h-3 text-slate-400 transition-transform shrink-0", row.expanded && "rotate-180")} />
-          </button>
+          <div className="w-full flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 transition-colors rounded-t-md">
+            <button
+              type="button"
+              onClick={() => onChange("expanded", !row.expanded)}
+              className="flex-1 flex items-center gap-1.5 text-left"
+            >
+              <Fingerprint className="w-3 h-3 text-indigo-400 shrink-0" />
+              <span className="text-[11px] font-semibold text-slate-600 flex-1">
+                IMEI - Color{row.deviceType === "iphone" ? " - Battery" : ""}
+              </span>
+              <span className={cn(
+                "text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                imeiDone === qty ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              )}>
+                {imeiDone}/{qty}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange("expanded", !row.expanded)}
+              className="shrink-0"
+            >
+              <ChevronDown className={cn("w-3 h-3 text-slate-400 transition-transform", row.expanded && "rotate-180")} />
+            </button>
+          </div>
 
-          {row.expanded && (
+          {row.expanded && qty > 1 && (
+            <ColorDistributor
+              qty={qty}
+              colors={colors}
+              onAdd={onAddColor}
+              appliedGroups={appliedColorGroups}
+              onEdit={() => setEditingSplit(true)}
+              onApply={groups => {
+                const orderedColors = groups.flatMap(g => Array.from({ length: g.count }, () => g.color))
+                onChange("units", row.units.map((u, i) => ({ ...u, color: orderedColors[i] ?? u.color })))
+                setEditingSplit(false)
+              }}
+            />
+          )}
+
+          {row.expanded && qty > 1 && appliedColorGroups.length > 0 && (
+            <ScannedUnitGroups
+              units={row.units}
+              onUnit={onUnit}
+              onCheckImei={onCheckImei}
+              colors={colors}
+              onAddColor={onAddColor}
+              showBattery={row.deviceType === "iphone"}
+            />
+          )}
+
+          {row.expanded && qty === 1 && (
             <div className="divide-y divide-slate-100">
               {row.units.map((unit, ui) => {
                 const isDuplicate = !!unit.imeiError
@@ -768,9 +1156,9 @@ function PhoneCard({
                         <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wide">Sold - cannot edit</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-[9px] font-bold text-slate-400 w-4 shrink-0">#{ui + 1}</span>
-                      <div className="relative flex-1">
+                      <div className="relative flex-1 min-w-[140px]">
                         <input
                           value={unit.imei}
                           readOnly={isSoldLocked}
@@ -787,7 +1175,7 @@ function PhoneCard({
                             : isDuplicate ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
                             : isOk ? "border-emerald-400 bg-emerald-50 focus:ring-emerald-400"
                             : unit.imei.length > 0 ? "border-amber-300 bg-amber-50/40 focus:ring-amber-300"
-                            : "border-slate-200 focus:ring-indigo-400"
+                            : "border-slate-300 focus:ring-indigo-400"
                           )}
                         />
                         {isChecking && (
@@ -821,7 +1209,7 @@ function PhoneCard({
                             readOnly={isSoldLocked}
                             onChange={isSoldLocked ? undefined : e => onUnit(ui, "batteryHealth", e.target.value)}
                             placeholder="%"
-                            className={cn("w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", isSoldLocked && "bg-slate-50 cursor-not-allowed")}
+                            className={cn("w-full h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", isSoldLocked && "bg-slate-50 cursor-not-allowed")}
                           />
                         </div>
                       )}
@@ -898,7 +1286,7 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !submitting) onClose() }}>
-      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="sm:max-w-lg p-0 gap-0">
         <DialogTitle className="sr-only">Review Purchase Order</DialogTitle>
 
         {/* Header */}
@@ -962,10 +1350,10 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
           {/* Shipping + Tax */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Shipping (Rs) · کرایہ">
-              <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={shipping} onChange={e => setShipping(e.target.value)} className="h-9 text-sm" placeholder="0" />
+              <MoneyInput min={0} value={shipping} onChange={v => setShipping(v)} className="h-9 text-sm" placeholder="0" />
             </Field>
             <Field label="Tax / Other (Rs)">
-              <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={tax} onChange={e => setTax(e.target.value)} className="h-9 text-sm" placeholder="0" />
+              <MoneyInput min={0} value={tax} onChange={v => setTax(v)} className="h-9 text-sm" placeholder="0" />
             </Field>
           </div>
 
@@ -1038,10 +1426,10 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
                       <div className="px-3 pb-3">
                         <div className="flex gap-2">
                           <div className="flex-1">
-                            <Input type="number" onWheel={e => e.currentTarget.blur()} min={0}
+                            <MoneyInput min={0}
                               placeholder="Amount paid (Rs)"
                               value={entry?.amount ?? ""}
-                              onChange={e => setAmount(acc.id, e.target.value)}
+                              onChange={v => setAmount(acc.id, v)}
                               className={cn("h-9 text-sm", bad && "border-rose-400")}
                               autoFocus
                             />
@@ -1121,8 +1509,8 @@ function ReviewOrderModal({ open, onClose, mobileRows, accessoryItems, onConfirm
 
 // â"€â"€â"€ Main Sheet â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
-  open: boolean; onClose: () => void; onCreated?: () => void; editPurchaseId?: string | null
+export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
+  onClose: () => void; onCreated?: () => void; editPurchaseId?: string | null
 }) {
   const { language } = useLanguage()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -1944,49 +2332,53 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
   const subtotalLive = mobileRows.reduce((s, r) => s + (parseFloat(r.buyPrice) || 0) * (parseInt(r.qty) || 1), 0)
     + accessoryItems.reduce((s, a) => s + (parseFloat(a.buyPrice) || 0) * (parseInt(a.qty) || 1), 0)
 
-  return (
-    <Sheet open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <SheetContent side="right" className="w-full max-w-none md:max-w-[680px] p-0 flex flex-col">
-
-        {/* â"€â"€ Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 pt-3 pb-3 shrink-0">
-          <div className="flex items-center gap-2.5 pr-8">
-            <ShoppingBag className="w-4 h-4 text-white/80 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <SheetTitle className="text-sm">{editMode ? `Edit Purchase${editPoNumber ? ` - ${editPoNumber}` : ""}` : "New Purchase Order"}</SheetTitle>
-              <SheetDescription className="text-[11px]">{editMode ? "Update purchase details - sold items are locked" : "Add phones & accessories from your supplier"}</SheetDescription>
-            </div>
-            {/* Live total in header */}
-            {subtotalLive > 0 && (
-              <span className="text-xs font-extrabold text-white tabular-nums shrink-0">
-                {formatCurrency(subtotalLive)}
-              </span>
-            )}
-          </div>
-
-          {/* Progress steps */}
-          <div className="mt-2.5 flex items-center gap-0">
-            <StepDot n={1} active={!supplierDone} done={supplierDone} label="Supplier" />
-            <div className={cn("flex-1 h-px mx-1 rounded transition-colors", supplierDone ? "bg-white/40" : "bg-white/15")} />
-            <StepDot n={2} active={supplierDone && !phonesDone} done={supplierDone && phonesDone} label="Items" />
-            <div className={cn("flex-1 h-px mx-1 rounded transition-colors", supplierDone && phonesDone ? "bg-white/40" : "bg-white/15")} />
-            <StepDot n={3} active={supplierDone && phonesDone} done={false} label="Review" />
-          </div>
+  const headerContent = (
+    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 shrink-0 px-4 sm:px-8 pt-5 pb-4">
+      <div className="mx-auto max-w-5xl flex items-center gap-2.5">
+        <ShoppingBag className="text-white/80 shrink-0 w-5 h-5" />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold text-white">
+            {editMode ? `Edit Purchase${editPoNumber ? ` - ${editPoNumber}` : ""}` : "New Purchase Order"}
+          </h1>
+          <p className="text-xs text-white/70">
+            {editMode ? "Update purchase details - sold items are locked" : "Add phones & accessories from your supplier"}
+          </p>
         </div>
+        {/* Live total in header */}
+        {subtotalLive > 0 && (
+          <span className="font-extrabold text-white tabular-nums shrink-0 text-base">
+            {formatCurrency(subtotalLive)}
+          </span>
+        )}
+        <button type="button" onClick={onClose} title="Close" className="shrink-0 rounded-full p-1.5 bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <XIcon className="w-4 h-4" />
+        </button>
+      </div>
 
-        {/* â"€â"€ Scrollable body â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-        <div className="flex-1 overflow-y-auto">
+      {/* Progress steps */}
+      <div className="flex items-center gap-0 mx-auto max-w-5xl mt-3">
+        <StepDot n={1} active={!supplierDone} done={supplierDone} label="Supplier" />
+        <div className={cn("flex-1 h-px mx-1 rounded transition-colors", supplierDone ? "bg-white/40" : "bg-white/15")} />
+        <StepDot n={2} active={supplierDone && !phonesDone} done={supplierDone && phonesDone} label="Items" />
+        <div className={cn("flex-1 h-px mx-1 rounded transition-colors", supplierDone && phonesDone ? "bg-white/40" : "bg-white/15")} />
+        <StepDot n={3} active={supplierDone && phonesDone} done={false} label="Review" />
+      </div>
+    </div>
+  )
+
+  const bodyContent = (
+        <div className="flex-1 overflow-y-auto bg-slate-50">
           {dataLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-2">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
               <p className="text-xs text-slate-400">Loading...</p>
             </div>
           ) : (
-            <div className="p-3 space-y-2.5">
+            <div className="max-w-5xl mx-auto p-4 sm:p-8 space-y-4">
 
               {/* â•â• Step 1: Supplier â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               <section>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Supplier <span className="text-rose-400">*</span></p>
+                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Supplier <span className="text-rose-400">*</span></p>
                 <div className="relative">
                   <Building2 className={cn("absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none z-10", selectedSupplier ? "text-emerald-500" : "text-amber-500")} />
                   <input
@@ -2049,31 +2441,30 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                           value={quickSupplierName}
                           onChange={e => setQuickSupplierName(e.target.value)}
                           placeholder="Company / Shop name *"
-                          className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          className="w-full h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                         />
                       </div>
                       <input
                         value={quickSupplierPhone}
                         onChange={e => setQuickSupplierPhone(e.target.value)}
                         placeholder="Phone"
-                        className="h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        className="h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                       />
                       <input
                         value={quickSupplierCity}
                         onChange={e => setQuickSupplierCity(e.target.value)}
                         placeholder="City"
-                        className="h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        className="h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                       />
                       <div className="col-span-3">
                         <div className="relative">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-semibold">Rs</span>
-                          <input
-                            type="number" onWheel={e => e.currentTarget.blur()}
+                          <MoneyInput
                             min="0"
                             value={quickSupplierBalance}
-                            onChange={e => setQuickSupplierBalance(e.target.value)}
-                            placeholder="اس سپلائر کا پرانا بقایا (Rs)"
-                            className="w-full h-7 rounded-md border border-slate-200 pl-7 pr-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                            onChange={v => setQuickSupplierBalance(v)}
+                            placeholder="This supplier's previous balance (Rs)"
+                            className="w-full h-7 rounded-md border border-slate-300 pl-7 pr-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                           />
                         </div>
                       </div>
@@ -2095,7 +2486,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
               {/* â•â• Step 2: Mobile Phones â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               <section>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                     Phones
                     <span className="font-normal normal-case ml-1 text-slate-300">(optional)</span>
                   </p>
@@ -2231,7 +2622,7 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
               {/* â•â• Step 3: Accessories â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               <section className="border-t border-slate-100 pt-2.5">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                     Accessories
                     <span className="font-normal normal-case ml-1 text-slate-300">(optional)</span>
                     {accessoryItems.length > 0 && <span className="ml-1 text-emerald-500">{accessoryItems.length}</span>}
@@ -2248,9 +2639,9 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                     <div className="relative mb-1.5">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                       <input placeholder="Search accessories..." value={accessorySearch} onChange={e => setAccessorySearch(e.target.value)}
-                        className="w-full h-7 rounded-md border border-slate-200 pl-7 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+                        className="w-full h-7 rounded-md border border-slate-300 pl-7 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
                       {filteredAccessories.map(a => {
                         const added = accessoryInCart.has(a.id)
                         return (
@@ -2284,19 +2675,19 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                           <Field label="Buy Rs *">
-                            <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={item.buyPrice}
-                              onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, buyPrice: e.target.value } : a))}
-                              className={cn("w-full h-7 rounded-md border px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", !item.buyPrice ? "border-amber-300" : "border-slate-200")} />
+                            <MoneyInput min={0} placeholder="0" value={item.buyPrice}
+                              onChange={v => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, buyPrice: v } : a))}
+                              className={cn("w-full h-7 rounded-md border px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", !item.buyPrice ? "border-amber-300" : "border-slate-300")} />
                           </Field>
                           <Field label="Sell Rs">
-                            <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={item.sellPrice}
-                              onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, sellPrice: e.target.value } : a))}
-                              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+                            <MoneyInput min={0} placeholder="0" value={item.sellPrice}
+                              onChange={v => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, sellPrice: v } : a))}
+                              className="w-full h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                           </Field>
                           <Field label="Qty">
                             <input type="number" onWheel={e => e.currentTarget.blur()} min={1} value={item.qty}
                               onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, qty: e.target.value } : a))}
-                              className="w-full h-7 rounded-md border border-slate-200 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+                              className="w-full h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                           </Field>
                         </div>
                       </div>
@@ -2308,38 +2699,49 @@ export function NewPurchaseSheet({ open, onClose, onCreated, editPurchaseId }: {
             </div>
           )}
         </div>
+  )
 
-        <div className="shrink-0 border-t border-slate-100 bg-white px-3 py-2.5">
-          <Button
-            type="button"
-            onClick={handleOpenReview}
-            disabled={dataLoading}
-            className={cn(
-              "w-full h-9 font-bold text-sm gap-2 transition-all",
-              selectedSupplierId && totalItems > 0
-                ? "bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white shadow-md"
-                : "bg-slate-100 text-slate-400 cursor-not-allowed"
-            )}
-          >
-            <ShoppingCart className="w-4 h-4" />
-            Review & Confirm
-            {totalItems > 0 && <span className="ml-1 text-xs opacity-80">- {totalItems} item{totalItems !== 1 ? "s" : ""} - {formatCurrency(subtotalLive)}</span>}
-          </Button>
+  const footerContent = (
+        <div className="shrink-0 border-t border-slate-100 bg-white px-4 sm:px-8 py-3">
+          <div className="max-w-5xl mx-auto">
+            <Button
+              type="button"
+              onClick={handleOpenReview}
+              disabled={dataLoading}
+              className={cn(
+                "w-full h-9 font-bold text-sm gap-2 transition-all",
+                selectedSupplierId && totalItems > 0
+                  ? "bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white shadow-md"
+                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
+              )}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Review & Confirm
+              {totalItems > 0 && <span className="ml-1 text-xs opacity-80">- {totalItems} item{totalItems !== 1 ? "s" : ""} - {formatCurrency(subtotalLive)}</span>}
+            </Button>
+          </div>
         </div>
+  )
 
-      </SheetContent>
+  const reviewModal = (
+    <ReviewOrderModal
+      open={reviewOpen}
+      onClose={() => setReviewOpen(false)}
+      mobileRows={mobileRows}
+      accessoryItems={accessoryItems}
+      onConfirm={handleConfirmPurchase}
+      submitting={submitting}
+      accounts={accounts}
+      supplier={selectedSupplier}
+    />
+  )
 
-      <ReviewOrderModal
-        open={reviewOpen}
-        onClose={() => setReviewOpen(false)}
-        mobileRows={mobileRows}
-        accessoryItems={accessoryItems}
-        onConfirm={handleConfirmPurchase}
-        submitting={submitting}
-        accounts={accounts}
-        supplier={selectedSupplier}
-      />
-
-    </Sheet>
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {headerContent}
+      {bodyContent}
+      {footerContent}
+      {reviewModal}
+    </div>
   )
 }

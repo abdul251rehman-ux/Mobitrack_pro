@@ -99,18 +99,30 @@ export async function generateInvoicePDF(
     doc.text(shopName.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase(), LX+LS/2, LY+15, { align:"center" })
   }
 
-  // Shop name + subtitle
-  doc.setTextColor(...C.white)
-  doc.setFont("helvetica","bold"); doc.setFontSize(14)
-  doc.text(shopName, LX+LS+5, LY+10)
-  gs(doc, 0.45); doc.setFont("helvetica","normal"); doc.setFontSize(7)
-  doc.text("OFFICIAL SALES INVOICE", LX+LS+5, LY+16); gs(doc, 1)
-
-  // Contact right
+  // Contact right (measured first so shop name knows how much room it has)
   const contactLines: string[] = []
   if (shopPhone)   contactLines.push(shopPhone)
   if (shopAddress) contactLines.push(shopAddress)
   if (shopEmail)   contactLines.push(shopEmail)
+  doc.setFont("helvetica", "bold"); doc.setFontSize(8.5)
+  const contactMaxW = contactLines.length
+    ? Math.max(...contactLines.map(ln => doc.getTextWidth(ln)))
+    : 0
+
+  // Shop name + subtitle — shrink font if the name would run into the contact block
+  const nameX = LX + LS + 5
+  const nameMaxW = W - M - contactMaxW - 8 - nameX
+  doc.setFont("helvetica", "bold"); doc.setFontSize(14)
+  let nameSize = 14
+  while (nameSize > 9 && doc.getTextWidth(shopName) > nameMaxW) {
+    nameSize -= 0.5
+    doc.setFontSize(nameSize)
+  }
+  doc.setTextColor(...C.white)
+  doc.text(shopName, nameX, LY+10)
+  gs(doc, 0.45); doc.setFont("helvetica","normal"); doc.setFontSize(7)
+  doc.text("OFFICIAL SALES INVOICE", nameX, LY+16); gs(doc, 1)
+
   contactLines.forEach((ln, i) => {
     doc.setFont("helvetica", i===0 ? "bold" : "normal")
     doc.setFontSize(i===0 ? 8.5 : 7.5)
@@ -198,11 +210,15 @@ export async function generateInvoicePDF(
     doc.text(card.tag, CX+6, y+5.5)
 
     doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(...C.ink)
-    doc.text(card.main, CX+6, y+13)
+    const mainMaxW = CW - 9
+    const mainFitted = doc.getTextWidth(card.main) > mainMaxW
+      ? doc.splitTextToSize(card.main, mainMaxW)[0].replace(/\s+\S*$/, "") + "..."
+      : card.main
+    doc.text(mainFitted, CX+6, y+13)
 
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(...C.muted)
-    if (card.sub1) doc.text(card.sub1, CX+6, y+19)
-    if (card.sub2) doc.text(card.sub2, CX+6, y+24)
+    if (card.sub1) doc.text(doc.splitTextToSize(card.sub1, mainMaxW)[0], CX+6, y+19)
+    if (card.sub2) doc.text(doc.splitTextToSize(card.sub2, mainMaxW)[0], CX+6, y+24)
   })
 
   y += CH + 7

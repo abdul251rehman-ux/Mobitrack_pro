@@ -6,11 +6,11 @@ import { Plus, Eye, Pencil, ShoppingBag, CalendarDays, TrendingDown, AlertCircle
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 import { getPurchases } from "@/lib/api/purchases"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { Purchase, PurchaseItem, Supplier } from "@/data/types"
-import { NewPurchaseSheet } from "@/app/purchases/new-purchase-sheet"
 import { DataTable } from "@/components/shared/data-table"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
@@ -34,7 +34,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { formatCurrency, formatDatePKT, todayPKT } from "@/lib/utils"
+import { cn, formatCurrency, formatDatePKT, todayPKT } from "@/lib/utils"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TODAY = todayPKT()
@@ -64,9 +64,19 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
     {
       accessorKey: "supplierName",
       header: "Supplier",
-      cell: ({ row }) => (
-        <span className="text-xs font-semibold text-slate-800">{row.getValue("supplierName")}</span>
-      ),
+      cell: ({ row }) => {
+        const isUsed = row.original.items.some(i => i.productType === "UsedPhone")
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-slate-800">{row.getValue("supplierName")}</span>
+            {isUsed && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                Used
+              </span>
+            )}
+          </span>
+        )
+      },
     },
     {
       id: "items",
@@ -144,6 +154,13 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
   ]
 }
 
+// ─── Item type badge (Mobile / Accessory / UsedPhone) ─────────────────────────
+function itemTypeBadgeProps(productType: PurchaseItem["productType"]) {
+  if (productType === "UsedPhone") return { label: "Used Phone", className: "border-amber-200 text-amber-700 bg-amber-50" }
+  if (productType === "Mobile") return { label: "Mobile", className: "border-indigo-200 text-indigo-700 bg-indigo-50" }
+  return { label: "Accessory", className: "border-slate-200 text-slate-700 bg-slate-50" }
+}
+
 // ─── View Dialog ─────────────────────────────────────────────────────────────
 function PurchaseViewDialog({
   purchase,
@@ -158,7 +175,7 @@ function PurchaseViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
+      <DialogContent className="max-w-3xl max-h-[85dvh] overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
         <DialogHeader>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
             <div>
@@ -221,15 +238,8 @@ function PurchaseViewDialog({
               <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-slate-800 text-sm">{item.productName}</span>
-                  <Badge
-                    variant="outline"
-                    className={
-                      item.productType === "Mobile"
-                        ? "border-indigo-200 text-indigo-700 bg-indigo-50 shrink-0"
-                        : "border-slate-200 text-slate-700 bg-slate-50 shrink-0"
-                    }
-                  >
-                    {item.productType}
+                  <Badge variant="outline" className={cn(itemTypeBadgeProps(item.productType).className, "shrink-0")}>
+                    {itemTypeBadgeProps(item.productType).label}
                   </Badge>
                 </div>
                 {item.imeis && item.imeis.length > 0 && (
@@ -282,15 +292,8 @@ function PurchaseViewDialog({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge
-                        variant="outline"
-                        className={
-                          item.productType === "Mobile"
-                            ? "border-indigo-200 text-indigo-700 bg-indigo-50"
-                            : "border-slate-200 text-slate-700 bg-slate-50"
-                        }
-                      >
-                        {item.productType}
+                      <Badge variant="outline" className={itemTypeBadgeProps(item.productType).className}>
+                        {itemTypeBadgeProps(item.productType).label}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
@@ -349,6 +352,8 @@ function PurchaseViewDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 function PurchasesPageInner() {
+  const router = useRouter()
+
   // ── Data state ──────────────────────────────────────────────────────────
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -378,14 +383,12 @@ function PurchasesPageInner() {
   const [supplierFilter, setSupplierFilter] = useState("all")
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all")
   const [deliveryStatusFilter, setDeliveryStatusFilter] = useState("all")
+  const [typeFilter, setTypeFilter] = useState("all")
   const [search, setSearch] = useState("")
 
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [viewPurchase, setViewPurchase] = useState<Purchase | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
-  const [newPurchaseOpen, setNewPurchaseOpen] = useState(false)
-  const [editSheetPurchaseId, setEditSheetPurchaseId] = useState<string | null>(null)
-  const [editSheetOpen, setEditSheetOpen] = useState(false)
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const todayStats = useMemo(() => {
@@ -414,6 +417,8 @@ function PurchasesPageInner() {
       if (supplierFilter !== "all" && p.supplierId !== supplierFilter) return false
       if (paymentStatusFilter !== "all" && p.paymentStatus !== paymentStatusFilter) return false
       if (deliveryStatusFilter !== "all" && p.deliveryStatus !== deliveryStatusFilter) return false
+      if (typeFilter === "used" && !p.items.some(i => i.productType === "UsedPhone")) return false
+      if (typeFilter === "new" && p.items.some(i => i.productType === "UsedPhone")) return false
       if (search.trim()) {
         const q = search.toLowerCase().trim()
         const matchesHeader =
@@ -428,7 +433,7 @@ function PurchasesPageInner() {
       }
       return true
     })
-  }, [purchases, dateFrom, dateTo, supplierFilter, paymentStatusFilter, deliveryStatusFilter, search])
+  }, [purchases, dateFrom, dateTo, supplierFilter, paymentStatusFilter, deliveryStatusFilter, typeFilter, search])
 
   const totalPayable = useMemo(
     () =>
@@ -463,8 +468,7 @@ function PurchasesPageInner() {
   }
 
   function handleEdit(purchase: Purchase) {
-    setEditSheetPurchaseId(purchase.id)
-    setEditSheetOpen(true)
+    router.push(`/purchases/${purchase.id}/edit`)
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -501,6 +505,18 @@ function PurchasesPageInner() {
           {suppliers.filter((s) => s.status === "Active").map((s) => (
             <SelectItem key={s.id} value={s.id}>{s.companyName}</SelectItem>
           ))}
+        </SelectContent>
+      </Select>
+
+      {/* Product type: new vs used phones */}
+      <Select value={typeFilter} onValueChange={setTypeFilter}>
+        <SelectTrigger className="h-8 w-full sm:w-28 text-xs">
+          <SelectValue placeholder="All Types" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Types</SelectItem>
+          <SelectItem value="new">New Stock</SelectItem>
+          <SelectItem value="used">Used Phones</SelectItem>
         </SelectContent>
       </Select>
 
@@ -550,24 +566,35 @@ function PurchasesPageInner() {
       import("@/lib/api/settings"),
     ])
     const tenant = await getTenant()
-    const periodParts = [dateFrom && "From: " + dateFrom, dateTo && "To: " + dateTo].filter(Boolean)
-    const subtitle = [...periodParts, filteredPurchases.length + " orders"].join(" | ")
+    const supplierLabel = supplierFilter !== "all" ? suppliers.find(s => s.id === supplierFilter)?.companyName : null
+    const filterParts = [
+      dateFrom && "From: " + dateFrom,
+      dateTo && "To: " + dateTo,
+      supplierLabel && "Supplier: " + supplierLabel,
+      paymentStatusFilter !== "all" && "Payment: " + paymentStatusFilter,
+      deliveryStatusFilter !== "all" && "Delivery: " + deliveryStatusFilter,
+      typeFilter !== "all" && "Type: " + (typeFilter === "used" ? "Used Phones" : "New"),
+      search && `Search: "${search}"`,
+    ].filter(Boolean)
+    const subtitle = [...filterParts, filteredPurchases.length + " orders"].join(" | ")
     generateReportPDF({
       shopName:    tenant?.name    ?? "Mobile Shop",
       shopAddress: [tenant?.address, tenant?.city].filter(Boolean).join(", "),
       shopPhone:   tenant?.phone   ?? "",
+      shopLogo:    tenant?.logo    || undefined,
       title:       "Purchase Orders",
       subtitle,
+      orientation: "landscape",
       columns: [
-        { header: "PO #",        dataKey: "poNumber",       width: 24, halign: "left" },
-        { header: "Date",        dataKey: "date",           width: 20 },
-        { header: "Supplier",    dataKey: "supplierName",   width: 36 },
-        { header: "Items",       dataKey: "itemCount",      width: 12, halign: "center" },
-        { header: "Total",       dataKey: "totalFmt",       width: 28, halign: "right" },
-        { header: "Paid",        dataKey: "paidFmt",        width: 28, halign: "right" },
-        { header: "Balance Due", dataKey: "balanceFmt",     width: 28, halign: "right", bold: true },
-        { header: "Pay Status",  dataKey: "paymentStatus",  width: 22 },
-        { header: "Delivery",    dataKey: "deliveryStatus", width: 22 },
+        { header: "PO #",        dataKey: "poNumber",       width: 26, halign: "left" },
+        { header: "Date",        dataKey: "date",           width: 22 },
+        { header: "Supplier",    dataKey: "supplierName" },
+        { header: "Items",       dataKey: "itemCount",      width: 14, halign: "center" },
+        { header: "Total",       dataKey: "totalFmt",       width: 30, halign: "right" },
+        { header: "Paid",        dataKey: "paidFmt",        width: 30, halign: "right" },
+        { header: "Balance Due", dataKey: "balanceFmt",     width: 30, halign: "right", bold: true },
+        { header: "Pay Status",  dataKey: "paymentStatus",  width: 26 },
+        { header: "Delivery",    dataKey: "deliveryStatus", width: 26 },
       ],
       rows: filteredPurchases.map(p => ({
         poNumber:       p.poNumber,
@@ -650,16 +677,18 @@ function PurchasesPageInner() {
             <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-9 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
               <Download className="w-3.5 h-3.5" />Excel
             </button>
-            <Button onClick={() => setNewPurchaseOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm h-9">
-              <Plus className="w-4 h-4" />
-              New Purchase
-            </Button>
+            <Link href="/purchases/new">
+              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm h-9">
+                <Plus className="w-4 h-4" />
+                New Purchase
+              </Button>
+            </Link>
           </div>
         }
       />
 
       {/* ── Stat Cards - 4 in one row ────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 mb-4">
         <StatCard
           title="Today's Purchases"
           value={formatCurrency(todayStats.total)}
@@ -742,6 +771,11 @@ function PurchasesPageInner() {
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span className="font-semibold text-slate-800 text-sm truncate">{purchase.supplierName}</span>
+                    {purchase.items.some(i => i.productType === "UsedPhone") && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap shrink-0">
+                        Used
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs text-slate-400 shrink-0 flex items-center gap-1">
                     <CalendarDays className="w-3 h-3" />
@@ -824,19 +858,6 @@ function PurchasesPageInner() {
         purchase={viewPurchase}
         open={viewOpen}
         onClose={() => setViewOpen(false)}
-      />
-
-      <NewPurchaseSheet
-        open={newPurchaseOpen}
-        onClose={() => setNewPurchaseOpen(false)}
-        onCreated={loadPurchases}
-      />
-
-      <NewPurchaseSheet
-        open={editSheetOpen}
-        onClose={() => { setEditSheetOpen(false); setEditSheetPurchaseId(null) }}
-        onCreated={loadPurchases}
-        editPurchaseId={editSheetPurchaseId}
       />
 
     </PageWrapper>

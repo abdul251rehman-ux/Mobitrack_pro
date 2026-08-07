@@ -24,6 +24,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 
@@ -208,6 +209,7 @@ function RebatePageInner() {
   function closeForm() { setShowForm(false); setEditEntry(null) }
 
   async function handleSave(status: RebateStatus) {
+    if (saving) return
     if (!form.supplierId) { toast.error("Select a supplier"); return }
     if (!form.model.trim()) { toast.error("Enter model name"); return }
     if (!form.units || parseInt(form.units) <= 0) { toast.error("Enter units"); return }
@@ -266,6 +268,7 @@ function RebatePageInner() {
   }
 
   async function handlePost(entry: RebateEntry) {
+    if (posting === entry.id || deleting === entry.id) return
     setPosting(entry.id)
     try {
       await postRebateEntry(entry)
@@ -280,6 +283,7 @@ function RebatePageInner() {
   }
 
   async function handleDelete(id: string) {
+    if (deleting === id || posting === id) return
     setDeleting(id)
     try {
       await deleteRebateEntry(id)
@@ -375,8 +379,82 @@ function RebatePageInner() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Mobile cards */}
+      <div className="md:hidden bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="py-16 text-center">
+            <BadgePercent className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-slate-400">No entries yet</p>
+            <p className="text-xs text-slate-400 mt-1">Add a rebate or rate difference to get started</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {filtered.map(entry => (
+              <div key={entry.id} className="p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={cn(
+                      "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold shrink-0",
+                      entry.type === "rebate" ? "bg-indigo-100 text-indigo-700" : "bg-cyan-100 text-cyan-700"
+                    )}>
+                      {entry.type === "rebate" ? <BadgePercent className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+                      {entry.type === "rebate" ? "Rebate" : "Rate Diff"}
+                    </span>
+                    {entry.status === "posted" ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Posted
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700">
+                        <Clock className="w-2.5 h-2.5" /> Draft
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-slate-400 shrink-0">{format(new Date(entry.createdAt), "dd MMM yy")}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-800 truncate">{entry.supplierName}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{entry.model} · {entry.period}</p>
+                </div>
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
+                  <span className="text-[10px] text-slate-500 font-mono">{entry.units} × {formatCurrency(entry.ratePerUnit)}</span>
+                  <span className="text-xs font-bold text-emerald-700">{formatCurrency(entry.total)}</span>
+                </div>
+                <div className="flex items-center justify-end gap-1 pt-0.5">
+                  <button onClick={() => setDrawerEntry(entry)}
+                    className="p-1.5 rounded hover:bg-slate-100 text-slate-300 hover:text-slate-600 transition-colors">
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  {entry.status === "draft" && (
+                    <>
+                      <button onClick={() => handlePost(entry)} disabled={posting === entry.id}
+                        title="Post to ledger"
+                        className="p-1.5 rounded hover:bg-emerald-50 text-slate-300 hover:text-emerald-600 transition-colors disabled:opacity-40">
+                        {posting === entry.id
+                          ? <div className="w-4 h-4 border border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                          : <ArrowDownToLine className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => openEdit(entry)}
+                        className="p-1.5 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-500 transition-colors">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                  <button onClick={() => handleDelete(entry.id)} disabled={deleting === entry.id}
+                    className="p-1.5 rounded hover:bg-rose-50 text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-40">
+                    {deleting === entry.id
+                      ? <div className="w-4 h-4 border border-rose-400 border-t-transparent rounded-full animate-spin" />
+                      : <Trash2 className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Table - desktop */}
+      <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {filtered.length === 0 ? (
           <div className="py-16 text-center">
             <BadgePercent className="w-10 h-10 text-slate-200 mx-auto mb-3" />
@@ -588,7 +666,7 @@ function RebatePageInner() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
 
             {/* Modal header */}
             <div className={cn(
@@ -696,15 +774,15 @@ function RebatePageInner() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-600">Old Buy Price (Rs) <span className="text-rose-500">*</span></Label>
-                    <input type="number" min={0} onWheel={e => e.currentTarget.blur()}
-                      value={form.oldBuyPrice} onChange={e => setForm(f => ({ ...f, oldBuyPrice: e.target.value }))}
+                    <MoneyInput min={0}
+                      value={form.oldBuyPrice} onChange={v => setForm(f => ({ ...f, oldBuyPrice: v }))}
                       placeholder="40000"
                       className="w-full h-9 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-600">New Buy Price (Rs) <span className="text-rose-500">*</span></Label>
-                    <input type="number" min={0} onWheel={e => e.currentTarget.blur()}
-                      value={form.newBuyPrice} onChange={e => setForm(f => ({ ...f, newBuyPrice: e.target.value }))}
+                    <MoneyInput min={0}
+                      value={form.newBuyPrice} onChange={v => setForm(f => ({ ...f, newBuyPrice: v }))}
                       placeholder="37000"
                       className="w-full h-9 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                   </div>
@@ -745,9 +823,9 @@ function RebatePageInner() {
                   <Label className="text-xs font-semibold text-slate-600">
                     {form.type === "rebate" ? "Rebate / Unit (Rs)" : "Diff / Unit (Rs)"}
                   </Label>
-                  <input type="number" min={0} onWheel={e => e.currentTarget.blur()}
+                  <MoneyInput min={0}
                     value={form.type === "rebate" ? form.ratePerUnit : String(priceDiff || "")}
-                    onChange={form.type === "rebate" ? e => setForm(f => ({ ...f, ratePerUnit: e.target.value })) : undefined}
+                    onChange={form.type === "rebate" ? v => setForm(f => ({ ...f, ratePerUnit: v })) : () => {}}
                     readOnly={form.type === "rate_diff"}
                     placeholder={form.type === "rebate" ? "500" : "Auto"}
                     className={cn(
@@ -800,16 +878,18 @@ function RebatePageInner() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" onClick={closeForm} className="flex-1 h-9 text-sm">Cancel</Button>
-                <Button variant="outline" onClick={() => handleSave("draft")} disabled={saving}
-                  className="flex-1 h-9 text-sm border-amber-200 text-amber-700 hover:bg-amber-50">
-                  {saving ? "Saving..." : "Save Draft"}
-                </Button>
+              <div className="flex flex-col gap-2 pt-1">
                 <Button onClick={() => handleSave("posted")} disabled={saving}
-                  className={cn("flex-1 h-9 text-sm", form.type === "rebate" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-cyan-600 hover:bg-cyan-700")}>
+                  className={cn("w-full h-9 text-sm", form.type === "rebate" ? "bg-indigo-600 hover:bg-indigo-700" : "bg-cyan-600 hover:bg-cyan-700")}>
                   {saving ? "Posting..." : "Post to Ledger"}
                 </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={closeForm} className="flex-1 h-9 text-sm">Cancel</Button>
+                  <Button variant="outline" onClick={() => handleSave("draft")} disabled={saving}
+                    className="flex-1 h-9 text-sm border-amber-200 text-amber-700 hover:bg-amber-50">
+                    {saving ? "Saving..." : "Save Draft"}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

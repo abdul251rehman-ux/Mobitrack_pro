@@ -136,11 +136,15 @@ function ReportsPageInner() {
     const dailyChartData = dailyEntries.map(([date, amount]) => ({ date: format(parseISO(date), "dd MMM"), Sales: amount }))
     const days = dailyEntries.length || 1
     const highestDay = dailyEntries.reduce((max, [, v]) => Math.max(max, v), 0)
+    // Group by name + type, not productId - each Mobile unit (IMEI) has its own productId,
+    // so grouping by productId would list "Xiaomi realme c5" as 9 separate one-unit rows
+    // instead of a single row with 9 units. Accessories share one productId per SKU already.
     const productMap: Record<string, { name: string; type: string; units: number; revenue: number }> = {}
     filtered.forEach((s) => s.items.forEach((item) => {
-      if (!productMap[item.productId]) productMap[item.productId] = { name: item.productName, type: item.productType, units: 0, revenue: 0 }
-      productMap[item.productId].units += item.quantity
-      productMap[item.productId].revenue += item.lineTotal
+      const key = `${item.productType}::${item.productName}`
+      if (!productMap[key]) productMap[key] = { name: item.productName, type: item.productType, units: 0, revenue: 0 }
+      productMap[key].units += item.quantity
+      productMap[key].revenue += item.lineTotal
     }))
     const topProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
     const pmMap: Record<string, number> = {}
@@ -248,7 +252,7 @@ function ReportsPageInner() {
   return (
     <div className="p-4 space-y-3">
       {/* â"€â"€ Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
             <BarChart3 className="w-3.5 h-3.5 text-white" />
@@ -256,10 +260,10 @@ function ReportsPageInner() {
           <h1 className="text-base font-bold text-slate-900">Reports & Analytics</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 px-3">
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 px-3 flex-1 sm:flex-none">
             <FileText className="w-3.5 h-3.5" />Generate PDF
           </Button>
-          <Button size="sm" className="h-8 text-xs gap-1.5 px-3 bg-indigo-600 hover:bg-indigo-700">
+          <Button size="sm" className="h-8 text-xs gap-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 flex-1 sm:flex-none">
             <Download className="w-3.5 h-3.5" />Export All
           </Button>
         </div>
@@ -267,9 +271,9 @@ function ReportsPageInner() {
 
       {/* â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Tabs defaultValue="sales" className="space-y-3">
-        <TabsList className="bg-white border border-slate-200 p-0.5 rounded-xl shadow-sm h-8 overflow-x-auto">
+        <TabsList className="flex w-full max-w-full overflow-x-auto bg-white border border-slate-200 p-0.5 rounded-xl shadow-sm h-8 justify-start">
           {[["sales","Sales Report"],["purchases","Purchase Report"],["pl","Profit & Loss"],["inventory","Inventory Report"],["suppliers","Supplier Performance"]].map(([v, l]) => (
-            <TabsTrigger key={v} value={v} className="h-7 text-xs px-3 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white">{l}</TabsTrigger>
+            <TabsTrigger key={v} value={v} className="h-7 text-xs px-3 rounded-lg shrink-0 data-[state=active]:bg-indigo-600 data-[state=active]:text-white">{l}</TabsTrigger>
           ))}
         </TabsList>
 
@@ -277,7 +281,7 @@ function ReportsPageInner() {
         <TabsContent value="sales" className="space-y-3 mt-0">
           <DateBar from={salesFrom} to={salesTo} onFrom={setSalesFrom} onTo={setSalesTo} />
 
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
             <StatCard title="Total Sales"       value={formatCurrency(salesData.totalSales)}           subtext="Excl. refunded orders" icon={DollarSign}  iconBg="bg-indigo-100"   trend={12} />
             <StatCard title="Avg Daily Sale"    value={formatCurrency(Math.round(salesData.avgDaily))} subtext="Over selected period"  icon={TrendingUp}  iconBg="bg-indigo-100" />
             <StatCard title="Highest Single Day" value={formatCurrency(salesData.highestDay)}          subtext="Peak revenue day"      icon={BarChart2}   iconBg="bg-indigo-100" />
@@ -301,7 +305,26 @@ function ReportsPageInner() {
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
             <SectionCard title="Top 10 Selling Products" className="xl:col-span-2">
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-50">
+                {salesData.topProducts.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2">
+                    {i < 3
+                      ? <span className={`shrink-0 inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${i===0?"bg-indigo-600 text-white":i===1?"bg-indigo-400 text-white":"bg-indigo-100 text-indigo-700"}`}>{i+1}</span>
+                      : <span className="shrink-0 text-slate-400 text-[10px] w-5 text-center">{i+1}</span>}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{p.name}</p>
+                      <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border mt-0.5 ${p.type==="Mobile"?"text-indigo-600 border-indigo-200 bg-indigo-50":"text-slate-600 border-slate-200 bg-slate-50"}`}>{p.type}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-indigo-600">{formatCurrency(p.revenue)}</p>
+                      <p className="text-[10px] text-slate-400">{p.units} units</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead><tr className="bg-slate-50 border-b border-slate-100">
                     <TH>#</TH><TH>Product</TH><TH>Type</TH><TH right>Units</TH><TH right>Revenue</TH>
@@ -346,7 +369,7 @@ function ReportsPageInner() {
         <TabsContent value="purchases" className="space-y-3 mt-0">
           <DateBar from={purchasesFrom} to={purchasesTo} onFrom={setPurchasesFrom} onTo={setPurchasesTo} />
 
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
             <StatCard title="Total Spend"       value={formatCurrency(purchasesData.totalSpend)}                    subtext="All purchase orders"       icon={DollarSign}   iconBg="bg-rose-100" />
             <StatCard title="Unique Suppliers"  value={purchasesData.uniqueSuppliers.toString()}                   subtext="Active in period"          icon={Package}      iconBg="bg-indigo-100" />
             <StatCard title="Avg Order Value"   value={formatCurrency(Math.round(purchasesData.avgOrderValue))}     subtext="Per purchase order"        icon={ShoppingCart} iconBg="bg-indigo-100" />
@@ -376,7 +399,24 @@ function ReportsPageInner() {
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
             <SectionCard title="Supplier-wise Breakdown" className="xl:col-span-2">
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-50">
+                {purchasesData.supplierRows.map((row, i) => (
+                  <div key={i} className="px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-slate-800 truncate">{row.name}</span>
+                      <span className="text-xs font-semibold text-rose-600 shrink-0">{formatCurrency(row.spent)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 shrink-0">{row.orders} orders</span>
+                      <div className="flex-1 bg-slate-100 rounded-full h-1"><div className="bg-rose-400 h-1 rounded-full" style={{ width: `${row.pct}%` }} /></div>
+                      <span className="text-[10px] font-medium text-slate-600 shrink-0">{row.pct}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead><tr className="bg-slate-50 border-b border-slate-100">
                     <TH>Supplier</TH><TH right>Orders</TH><TH right>Total Spent</TH><TH right>% of Total</TH>
@@ -419,7 +459,7 @@ function ReportsPageInner() {
 
         {/* â•â• PROFIT & LOSS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="pl" className="space-y-3 mt-0">
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
             <StatCard title="Gross Revenue"  value={formatCurrency(plData.grossRevenue)}                     subtext="Last 6 months"      icon={DollarSign}  iconBg="bg-indigo-100" />
             <StatCard title="Total Cost"     value={formatCurrency(plData.totalCost)}                        subtext="COGS - last 6 months" icon={TrendingDown} iconBg="bg-rose-100" />
             <StatCard title="Gross Profit"   value={formatCurrency(plData.grossProfit)}                      subtext="Revenue minus cost"  icon={TrendingUp}  iconBg="bg-indigo-100" trend={parseFloat(plData.profitMargin.toFixed(1))} />
@@ -443,7 +483,32 @@ function ReportsPageInner() {
           </SectionCard>
 
           <SectionCard title="Month-over-Month Analysis">
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-slate-50">
+              {plData.tableRows.map((row, i) => (
+                <div key={i} className="px-3 py-2 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-700">{row.month}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border text-indigo-600 border-indigo-200 bg-indigo-50">{row.margin.toFixed(1)}%</span>
+                      {row.momChange !== null && (
+                        <span className={`flex items-center gap-0.5 text-[10px] font-semibold ${row.momChange>=0?"text-emerald-600":"text-rose-500"}`}>
+                          {row.momChange>=0?<TrendingUp className="w-3 h-3"/>:<TrendingDown className="w-3 h-3"/>}
+                          {Math.abs(row.momChange).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-indigo-600 font-medium">Rev {formatCurrency(row.Revenue)}</span>
+                    <span className="text-rose-500 font-medium">Cost {formatCurrency(row.Cost)}</span>
+                    <span className="font-bold text-emerald-600">Profit {formatCurrency(row.Profit)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
                   <TH>Month</TH><TH right>Revenue</TH><TH right>Cost</TH><TH right>Profit</TH><TH right>Margin</TH><TH right>MoM Change</TH>
@@ -476,7 +541,7 @@ function ReportsPageInner() {
 
         {/* â•â• INVENTORY REPORT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="inventory" className="space-y-3 mt-0">
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
             <StatCard title="Total Products"   value={inventoryData.totalProducts.toString()}             subtext={`${mobiles.length} mobiles, ${accessories.length} accessories`} icon={Package}  iconBg="bg-indigo-100" />
             <StatCard title="Total Stock Value" value={formatCurrency(inventoryData.totalStockValue)}    subtext="At purchase cost"   icon={DollarSign} iconBg="bg-indigo-100" />
             <StatCard title="Avg Product Value" value={formatCurrency(Math.round(inventoryData.avgProductValue))} subtext="Per unit in stock" icon={BarChart2}  iconBg="bg-indigo-100" />
@@ -514,7 +579,22 @@ function ReportsPageInner() {
 
           <SectionCard title="Low Stock / Reorder Alert"
             badge={<span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">{inventoryData.lowStockItems.length} items</span>}>
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-slate-50">
+              {inventoryData.lowStockItems.length === 0
+                ? <p className="text-center py-8 text-xs text-slate-400">No low stock items</p>
+                : inventoryData.lowStockItems.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span className="text-xs font-medium text-slate-800 truncate">{item.name}</span>
+                    <div className="text-right shrink-0">
+                      <p className={`text-xs font-bold ${item.stock===0?"text-rose-600":"text-amber-600"}`}>{item.stock===0?"Out of Stock":item.stock}</p>
+                      <p className="text-[10px] font-semibold text-emerald-600">+{item.suggested} suggested</p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
                   <TH>Product Name</TH><TH right>Current Stock</TH><TH right>Suggested Reorder</TH>
@@ -538,7 +618,36 @@ function ReportsPageInner() {
         {/* â•â• SUPPLIER PERFORMANCE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="suppliers" className="space-y-3 mt-0">
           <SectionCard title="Supplier Rankings">
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-slate-50">
+              {supplierPerf.supplierRows.map((s) => {
+                const orders = purchases.filter((p) => p.supplierId === s.id).length
+                return (
+                  <div key={s.id} className="px-3 py-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      {s.rank<=3
+                        ? <span className={`shrink-0 inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${s.rank===1?"bg-indigo-600 text-white":s.rank===2?"bg-indigo-400 text-white":"bg-indigo-100 text-indigo-700"}`}>{s.rank}</span>
+                        : <span className="shrink-0 text-slate-400 text-[10px] font-medium w-5 text-center">{s.rank}</span>}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 truncate">{s.companyName}</p>
+                        <p className="text-[10px] text-slate-400">{s.city}</p>
+                      </div>
+                      <StatusBadge status={s.status} />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] pl-7">
+                      <Stars rating={s.rating} />
+                      <span className="text-slate-500">{orders} orders</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs pl-7">
+                      <span className="font-semibold text-indigo-600">{formatCurrency(s.totalPurchases)}</span>
+                      {s.outstandingBalance > 0 && <span className="font-semibold text-rose-500">Due {formatCurrency(s.outstandingBalance)}</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
                   <TH>Rank</TH><TH>Supplier</TH><TH right>Orders</TH><TH right>Total Value</TH><TH right>Outstanding</TH><TH>Rating</TH><TH>Status</TH>

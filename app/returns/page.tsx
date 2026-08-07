@@ -19,10 +19,12 @@ import { Return, ReturnStatus, ReturnReason, ReturnItem } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { PageHeader } from "@/components/shared/page-header"
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
@@ -113,7 +115,7 @@ const EMPTY_ITEM: NewReturnItem = {
 
 // â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-export default function ReturnsPage() {
+function ReturnsPageInner() {
   const searchParams = useSearchParams()
   const autoInvoice = searchParams.get("invoice") ?? ""
   const autoOpened = useRef(false)
@@ -181,6 +183,8 @@ export default function ReturnsPage() {
   // â"€â"€ Dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [showCreate, setShowCreate] = useState(false)
   const [viewReturn, setViewReturn] = useState<Return | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [processingId, setProcessingId] = useState<string | null>(null)
 
   // â"€â"€ New return form state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [newInvoice, setNewInvoice] = useState("")
@@ -298,6 +302,7 @@ export default function ReturnsPage() {
   // â"€â"€ Create return â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function handleCreateReturn() {
+    if (creating) return
     if (!newInvoice.trim()) {
       toast.error("Invoice number is required")
       return
@@ -310,6 +315,9 @@ export default function ReturnsPage() {
       toast.error("Please add at least one item with a product name")
       return
     }
+
+    setCreating(true)
+    try {
 
     const refundAmount = calcRefundTotal()
 
@@ -352,7 +360,6 @@ export default function ReturnsPage() {
       createdAt: new Date().toISOString(),
     }
 
-    try {
       const created = await createReturn(
         {
           returnNumber: newReturn.returnNumber,
@@ -412,12 +419,16 @@ export default function ReturnsPage() {
       toast.success(`Return ${newReturn.returnNumber} created - ${newRefundType === "store_credit" ? "Store Credit issued" : `Rs ${refundAmount.toLocaleString()} refunded from account`}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create return")
+    } finally {
+      setCreating(false)
     }
   }
 
   // â"€â"€ Status actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function approveReturn(id: string) {
+    if (processingId) return
+    setProcessingId(id)
     try {
       await updateReturnStatus(id, "Approved")
       setReturnsList((prev) =>
@@ -426,10 +437,14 @@ export default function ReturnsPage() {
       toast.success("Return approved")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve return")
+    } finally {
+      setProcessingId(null)
     }
   }
 
   async function rejectReturn(id: string) {
+    if (processingId) return
+    setProcessingId(id)
     try {
       const tenantId = await getTenantId()
 
@@ -474,12 +489,16 @@ export default function ReturnsPage() {
       toast.success("Return rejected - cash refund reversed")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to reject return")
+    } finally {
+      setProcessingId(null)
     }
   }
 
   async function completeReturn(id: string) {
+    if (processingId) return
     const ret = returnsList.find(r => r.id === id)
     if (!ret) return
+    setProcessingId(id)
     try {
       const tenantId = await getTenantId()
 
@@ -558,6 +577,8 @@ export default function ReturnsPage() {
       toast.success("Return completed - inventory restocked & refund recorded")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to complete return")
+    } finally {
+      setProcessingId(null)
     }
   }
 
@@ -594,7 +615,7 @@ export default function ReturnsPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
         <StatCard
           title="Total Returns"
           value={String(stats.total)}
@@ -627,14 +648,14 @@ export default function ReturnsPage() {
 
       {/* Filters */}
       <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-2">
           {/* Search */}
-          <div className="flex-1 min-w-[180px] max-w-[240px]">
+          <div className="col-span-2 sm:flex-1 sm:min-w-[180px] sm:max-w-[240px]">
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Search</label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <Input
-                placeholder="Return # or customer name..."
+                placeholder="Return # or customer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-8 h-8 text-xs"
@@ -646,7 +667,7 @@ export default function ReturnsPage() {
           <div>
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Status</label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectTrigger className="h-8 w-full sm:w-[130px] text-xs">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -662,7 +683,7 @@ export default function ReturnsPage() {
           <div>
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Reason</label>
             <Select value={reasonFilter} onValueChange={setReasonFilter}>
-              <SelectTrigger className="h-8 w-[150px] text-xs">
+              <SelectTrigger className="h-8 w-full sm:w-[150px] text-xs">
                 <SelectValue placeholder="All Reasons" />
               </SelectTrigger>
               <SelectContent>
@@ -675,25 +696,81 @@ export default function ReturnsPage() {
           </div>
 
           {/* Date range */}
-          <div>
+          <div className="col-span-2 sm:col-auto">
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Date Range</label>
             <div className="flex items-center gap-1">
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[115px] text-xs" />
-              <span className="text-slate-300 text-xs">—</span>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[115px] text-xs" />
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 flex-1 sm:w-[115px] text-xs" />
+              <span className="text-slate-300 text-xs shrink-0">—</span>
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 flex-1 sm:w-[115px] text-xs" />
             </div>
           </div>
 
           {/* Reset */}
-          <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs text-slate-600 hover:text-rose-600 hover:border-rose-300 self-end">
+          <Button variant="outline" size="sm" onClick={resetFilters} className="col-span-2 sm:col-auto h-8 gap-1 text-xs text-slate-600 hover:text-rose-600 hover:border-rose-300 sm:self-end">
             <RotateCcw className="w-3 h-3" />
             Reset
           </Button>
         </div>
       </div>
 
-      {/* Table */}
-      <Card className="border border-slate-100 shadow-sm overflow-hidden">
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-2">
+        {filtered.length === 0 ? (
+          <Card className="border border-slate-100 shadow-sm py-10 text-center text-slate-400 text-xs">
+            <RotateCcw className="w-6 h-6 mx-auto mb-1.5 opacity-40" />
+            No returns found
+          </Card>
+        ) : (
+          filtered.map((ret) => (
+            <Card key={ret.id} className="border border-slate-100 shadow-sm p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-indigo-600">{ret.returnNumber}</span>
+                <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${STATUS_COLORS[ret.status]}`}>
+                  {ret.status}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-slate-800">{ret.customerName}</p>
+                <p className="text-[10px] text-slate-400">{ret.customerPhone} · Invoice {ret.invoiceNumber} · {formatDate(ret.date)}</p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge variant="secondary" className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px] px-1.5 py-0 h-4">
+                  {ret.items.length}{ret.items.length === 1 ? " item" : " items"}
+                </Badge>
+                <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${REASON_COLORS[ret.reason]}`}>
+                  {ret.reason}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
+                <span className="text-xs font-semibold text-slate-800">{formatCurrency(ret.refundAmount)}</span>
+                <div className="flex items-center gap-0.5">
+                  <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => setViewReturn(ret)} title="View">
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  {ret.status === "Pending" && (
+                    <>
+                      <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => approveReturn(ret.id)} disabled={processingId === ret.id} title="Approve">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => rejectReturn(ret.id)} disabled={processingId === ret.id} title="Reject">
+                        <XCircle className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
+                  {ret.status === "Approved" && (
+                    <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} disabled={processingId === ret.id} title="Complete">
+                      <Package className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Table - desktop */}
+      <Card className="hidden md:block border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <Table className="min-w-full">
             <TableHeader>
@@ -750,16 +827,16 @@ export default function ReturnsPage() {
                         </Button>
                         {ret.status === "Pending" && (
                           <>
-                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => approveReturn(ret.id)} title="Approve">
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => approveReturn(ret.id)} disabled={processingId === ret.id} title="Approve">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => rejectReturn(ret.id)} title="Reject">
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => rejectReturn(ret.id)} disabled={processingId === ret.id} title="Reject">
                               <XCircle className="w-3.5 h-3.5" />
                             </Button>
                           </>
                         )}
                         {ret.status === "Approved" && (
-                          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} title="Complete">
+                          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} disabled={processingId === ret.id} title="Complete">
                             <Package className="w-3.5 h-3.5" />
                           </Button>
                         )}
@@ -775,7 +852,7 @@ export default function ReturnsPage() {
 
       {/* â"€â"€â"€ Process Return Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Process New Return</DialogTitle>
             <DialogDescription>Enter the return details and items to process a new return.</DialogDescription>
@@ -896,11 +973,10 @@ export default function ReturnsPage() {
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Unit Price (â‚¨)</Label>
-                        <Input
-                          type="number" onWheel={e => e.currentTarget.blur()}
+                        <MoneyInput
                           min={0}
                           value={item.unitPrice}
-                          onChange={(e) => updateItem(idx, { unitPrice: Math.max(0, Number(e.target.value)) })}
+                          onChange={(v) => updateItem(idx, { unitPrice: Math.max(0, Number(v)) })}
                           className="h-9"
                         />
                       </div>
@@ -1002,12 +1078,12 @@ export default function ReturnsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>
+            <Button variant="outline" onClick={() => setShowCreate(false)} disabled={creating}>
               Cancel
             </Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleCreateReturn}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleCreateReturn} disabled={creating}>
               <RotateCcw className="w-4 h-4 mr-2" />
-              Submit Return
+              {creating ? "Submitting..." : "Submit Return"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1015,7 +1091,7 @@ export default function ReturnsPage() {
 
       {/* â"€â"€â"€ View Details Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <Dialog open={!!viewReturn} onOpenChange={(open) => !open && setViewReturn(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl">
           {viewReturn && (
             <>
               <DialogHeader>
@@ -1078,10 +1154,45 @@ export default function ReturnsPage() {
                   </div>
                 )}
 
-                {/* Items table */}
+                {/* Items list */}
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Returned Items</p>
-                  <div className="rounded-lg border border-slate-200 overflow-hidden">
+
+                  {/* Mobile cards */}
+                  <div className="sm:hidden space-y-2">
+                    {viewReturn.items.map((item, idx) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-slate-800 text-sm truncate">{item.productName}</p>
+                          <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-xs shrink-0">
+                            {item.productType}
+                          </Badge>
+                        </div>
+                        {item.imei && <p className="text-xs text-slate-400">IMEI: {item.imei}</p>}
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>Qty {item.quantity} × {formatCurrency(item.unitPrice)}</span>
+                          <span
+                            className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+                              item.condition === "Good"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : item.condition === "Damaged"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-rose-50 text-rose-700 border border-rose-200"
+                            }`}
+                          >
+                            {item.condition}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
+                          <span className="text-xs text-slate-400">Total</span>
+                          <span className="font-semibold text-sm text-slate-900">{formatCurrency(item.lineTotal)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden sm:block rounded-lg border border-slate-200 overflow-hidden">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-slate-50/80">
@@ -1270,5 +1381,13 @@ export default function ReturnsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function ReturnsPage() {
+  return (
+    <PermissionGate permission="returns.view">
+      <ReturnsPageInner />
+    </PermissionGate>
   )
 }

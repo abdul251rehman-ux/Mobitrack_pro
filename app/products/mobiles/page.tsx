@@ -19,7 +19,6 @@ import { format } from "date-fns"
 import { ColumnDef } from "@tanstack/react-table"
 
 import { getMobiles, createMobile, updateMobile, deleteMobile } from "@/lib/api/products"
-import { NewPurchaseSheet } from "@/app/purchases/new-purchase-sheet"
 import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
 import { getSuppliers } from "@/lib/api/suppliers"
@@ -278,6 +277,8 @@ function ViewDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm p-0 overflow-hidden">
+        {/* Screen-reader-only title — the custom header below is the visible one */}
+        <DialogTitle className="sr-only">{m.brand} {m.model} details</DialogTitle>
         {/* Compact header */}
         <div className="bg-indigo-600 px-4 py-3 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
@@ -1716,6 +1717,7 @@ function MobileFormDrawer({
 // â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function MobilesPageInner() {
+  const router = useRouter()
   const [mobileList, setMobileList] = useState<Mobile[]>([])
   const [supplierList, setSupplierList] = useState<Supplier[]>([])
   const [brands, setBrands] = useState<string[]>([])
@@ -1740,8 +1742,7 @@ function MobilesPageInner() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Mobile | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [editSheetPurchaseId, setEditSheetPurchaseId] = useState<string | null>(null)
-  const [editSheetOpen, setEditSheetOpen] = useState(false)
+  const [deletingMobile, setDeletingMobile] = useState(false)
 
   // â"€â"€â"€ Fetch brands from DB â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
@@ -2084,8 +2085,7 @@ function MobilesPageInner() {
         .limit(1)
         .maybeSingle()
       if (data?.purchase_id) {
-        setEditSheetPurchaseId(data.purchase_id)
-        setEditSheetOpen(true)
+        router.push(`/purchases/${data.purchase_id}/edit`)
       } else {
         // No purchase record - fall back to simple mobile edit dialog
         setEditingMobile(mobile)
@@ -2108,7 +2108,8 @@ function MobilesPageInner() {
   }
 
   async function handleDeleteConfirm() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deletingMobile) return
+    setDeletingMobile(true)
     try {
       await deleteMobile(deleteTarget.id)
       toast.success(`${deleteTarget.brand} ${deleteTarget.model} deleted successfully`)
@@ -2117,6 +2118,8 @@ function MobilesPageInner() {
       await fetchData()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to delete mobile")
+    } finally {
+      setDeletingMobile(false)
     }
   }
 
@@ -2357,7 +2360,7 @@ function MobilesPageInner() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <StatCard
           title="Total Models"
           value={String(stats.total)}
@@ -2402,7 +2405,7 @@ function MobilesPageInner() {
               placeholder="Search model, brand, IMEI..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="pl-9 h-9 text-sm"
+              className="pl-9 h-9 text-sm placeholder:truncate"
             />
           </div>
           {/* View toggle */}
@@ -2424,10 +2427,10 @@ function MobilesPageInner() {
           </div>
         </div>
 
-        {/* Row 2: Filters in one row */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        {/* Row 2: Filters — 2x2 grid on mobile, single row from sm up */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:flex-nowrap">
           <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="h-8 text-xs flex-1 min-w-0 sm:w-32 sm:flex-none">
+            <SelectTrigger className="h-9 sm:h-8 text-xs w-full sm:w-32 sm:flex-none">
               <SelectValue placeholder="Brand" />
             </SelectTrigger>
             <SelectContent>
@@ -2439,7 +2442,7 @@ function MobilesPageInner() {
           </Select>
 
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="h-8 text-xs flex-1 min-w-0 sm:w-36 sm:flex-none">
+            <SelectTrigger className="h-9 sm:h-8 text-xs w-full sm:w-36 sm:flex-none">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
@@ -2449,7 +2452,7 @@ function MobilesPageInner() {
           </Select>
 
           <Select value={deviceTypeFilter} onValueChange={setDeviceTypeFilter}>
-            <SelectTrigger className="h-8 text-xs flex-1 min-w-0 sm:w-32 sm:flex-none">
+            <SelectTrigger className="h-9 sm:h-8 text-xs w-full sm:w-32 sm:flex-none">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -2460,7 +2463,7 @@ function MobilesPageInner() {
           </Select>
 
           <Select value={stockFilter} onValueChange={setStockFilter}>
-            <SelectTrigger className="h-8 text-xs flex-1 min-w-0 sm:w-32 sm:flex-none">
+            <SelectTrigger className="h-9 sm:h-8 text-xs w-full sm:w-32 sm:flex-none">
               <SelectValue placeholder="Stock" />
             </SelectTrigger>
             <SelectContent>
@@ -2471,15 +2474,15 @@ function MobilesPageInner() {
           </Select>
 
           {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={clearFilters} className="h-8 text-xs gap-1 shrink-0 px-2.5">
+            <Button variant="outline" size="sm" onClick={clearFilters} className="h-9 sm:h-8 text-xs gap-1 col-span-2 sm:col-span-1 sm:shrink-0 px-2.5">
               <Filter className="w-3 h-3" />
-              Clear
+              Clear filters
             </Button>
           )}
 
           {hasActiveFilters && (
-            <span className="text-xs text-slate-400 ml-auto shrink-0 hidden sm:inline">
-              {filtered.length} of {mobileList.length}
+            <span className="text-xs text-slate-400 sm:ml-auto sm:shrink-0 col-span-2 sm:col-span-1 text-center sm:text-left">
+              {filtered.length} of {mobileList.length} shown
             </span>
           )}
         </div>
@@ -2686,19 +2689,13 @@ function MobilesPageInner() {
             ? `Are you sure you want to delete ${deleteTarget.brand} ${deleteTarget.model}? This action cannot be undone.`
             : "Are you sure you want to delete this mobile phone?"
         }
-        confirmLabel="Delete"
+        confirmLabel={deletingMobile ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         variant="destructive"
         onConfirm={handleDeleteConfirm}
+        loading={deletingMobile}
       />
 
-      {/* Edit Purchase Sheet */}
-      <NewPurchaseSheet
-        open={editSheetOpen}
-        onClose={() => { setEditSheetOpen(false); setEditSheetPurchaseId(null) }}
-        onCreated={fetchData}
-        editPurchaseId={editSheetPurchaseId}
-      />
     </div>
   )
 }

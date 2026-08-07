@@ -1,5 +1,6 @@
 "use client"
 import { cn } from "@/lib/utils"
+import { useLanguage, type TranslationKey } from "@/context/language-context"
 
 interface StatusBadgeProps {
   status: string
@@ -44,14 +45,17 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
+  const { t } = useLanguage()
   const config = statusConfig[status] ?? { label: status, className: "bg-slate-100 text-slate-600 border border-slate-200" }
+  // Falls back to plain English for any status not yet added to the dictionary.
+  const label = t(`status.${config.label}` as TranslationKey, config.label)
   return (
     <span className={cn(
       "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
       config.className,
       className
     )}>
-      {config.label}
+      {label}
     </span>
   )
 }

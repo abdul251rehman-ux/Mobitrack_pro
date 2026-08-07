@@ -20,6 +20,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -43,6 +44,7 @@ const supplierSchema = z.object({
   email:         z.string().email("Valid email").optional().or(z.literal("")),
   address:       z.string().min(5, "Address required"),
   city:          z.string().min(1, "City required"),
+  openingBalance: z.string().optional(),
   notes:         z.string().optional(),
   status:        z.enum(["Active","Inactive"]),
 })
@@ -198,6 +200,7 @@ function SupplierFormDialog({
       email:         editing?.email         ?? "",
       address:       editing?.address       ?? "",
       city:          (editing?.city as SupplierForm["city"]) ?? "Lahore",
+      openingBalance: editing?.openingBalance ? String(editing.openingBalance) : "",
       notes:         editing?.notes         ?? "",
       status:        editing?.status        ?? "Active",
     },
@@ -212,6 +215,7 @@ function SupplierFormDialog({
       email:         editing?.email         ?? "",
       address:       editing?.address       ?? "",
       city:          (editing?.city as SupplierForm["city"]) ?? "Lahore",
+      openingBalance: editing?.openingBalance ? String(editing.openingBalance) : "",
       notes:         editing?.notes         ?? "",
       status:        editing?.status        ?? "Active",
     })
@@ -219,6 +223,7 @@ function SupplierFormDialog({
 
   const statusValue = watch("status")
   const cityValue   = watch("city")
+  const openingBalanceValue = watch("openingBalance")
 
   // When editing a supplier whose city isn't in the preset list, treat as "Other"
   const [customCity, setCustomCity] = useState("")
@@ -242,7 +247,7 @@ function SupplierFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-slate-900">
             {editing ? "Edit Supplier" : "Add New Supplier"}
@@ -300,6 +305,13 @@ function SupplierFormDialog({
               />
             )}
             {errors.city && <p className="text-xs text-rose-500">{errors.city.message}</p>}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="openingBalance">Opening Balance <span className="text-slate-400 text-[10px]">(if we already owed them)</span></Label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Rs</span>
+              <MoneyInput id="openingBalance" value={openingBalanceValue ?? ""} onChange={v => setValue("openingBalance", v)} placeholder="0" className="pl-8 h-8 text-xs" />
+            </div>
           </div>
           <div className="space-y-1">
             <Label className="text-xs" htmlFor="notes">Notes</Label>
@@ -380,6 +392,7 @@ function SuppliersPageInner() {
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [deleteTarget,   setDeleteTarget]   = useState<Supplier | null>(null)
   const [deleteOpen,     setDeleteOpen]     = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
 
   // ── Derived / filtered list ───────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -427,6 +440,7 @@ function SuppliersPageInner() {
 
   const handleSave = async (data: SupplierForm, id?: string) => {
     try {
+      const openingBalance = data.openingBalance ? parseFloat(data.openingBalance) : undefined
       if (id) {
         const updated = await updateSupplier(id, {
           companyName:   data.companyName,
@@ -435,6 +449,7 @@ function SuppliersPageInner() {
           email:         data.email,
           address:       data.address,
           city:          data.city,
+          openingBalance,
           notes:         data.notes,
           status:        data.status,
         })
@@ -452,6 +467,7 @@ function SuppliersPageInner() {
           city:               data.city,
           totalPurchases:     0,
           outstandingBalance: 0,
+          openingBalance,
           rating:             0,
           status:             data.status,
           notes:              data.notes,
@@ -467,13 +483,16 @@ function SuppliersPageInner() {
   }
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
     try {
       await deleteSupplier(deleteTarget.id)
       setSupplierList((prev) => prev.filter((s) => s.id !== deleteTarget.id))
       toast.success(`${deleteTarget.companyName} deleted`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete supplier")
+    } finally {
+      setDeleting(false)
     }
     setDeleteOpen(false)
     setDeleteTarget(null)
@@ -511,7 +530,7 @@ function SuppliersPageInner() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
         <StatCard title="Active Suppliers" value={String(supplierStats.active)} icon={CheckCircle2} iconBg="bg-emerald-100" subtext={`${supplierList.length - supplierStats.active} inactive`} />
         <StatCard title="Total Purchases" value={formatCurrency(supplierStats.totalPurchases)} icon={TrendingUp} iconBg="bg-indigo-100" subtext="All time" />
         <StatCard title="Outstanding Balance" value={formatCurrency(supplierStats.totalOutstanding)} icon={AlertCircle} iconBg="bg-rose-100" subtext="Payable to suppliers" />
@@ -589,6 +608,7 @@ function SuppliersPageInner() {
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={handleConfirmDelete}
+        loading={deleting}
       />
     </div>
   )

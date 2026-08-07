@@ -13,8 +13,7 @@ import { toast } from "sonner"
 
 import { getAuditLogs } from "@/lib/api/audit"
 import { AuditLog, AuditAction, AuditModule } from "@/data/types"
-import { cn } from "@/lib/utils"
-import { exportToCSV } from "@/lib/csv-export"
+import { cn, todayPKT } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -215,12 +214,23 @@ function AuditLogPageInner() {
     setPage(1)
   }
 
-  function handleExport() {
+  async function handleExport() {
     if (filtered.length === 0) {
       toast.error("No data to export")
       return
     }
-    exportToCSV(
+    const { exportToExcel } = await import("@/lib/excel-export")
+
+    const filterParts = [
+      search && `Search: "${search}"`,
+      actionFilter !== "all" && "Action: " + actionFilter,
+      moduleFilter !== "all" && "Module: " + moduleFilter,
+      userFilter !== "all" && "User: " + userFilter,
+      dateFrom && "From: " + dateFrom,
+      dateTo && "To: " + dateTo,
+    ].filter(Boolean)
+
+    exportToExcel(
       filtered.map((l) => ({
         timestamp: formatTimestamp(l.timestamp),
         user: l.userName,
@@ -233,19 +243,27 @@ function AuditLogPageInner() {
         newValue: l.newValue ?? "",
         ipAddress: l.ipAddress ?? "",
       })),
-      "audit-log-export",
+      "audit-log-export-" + todayPKT(),
       [
-        { key: "timestamp", header: "Timestamp" },
-        { key: "user", header: "User" },
-        { key: "role", header: "Role" },
-        { key: "action", header: "Action" },
-        { key: "module", header: "Module" },
-        { key: "entity", header: "Entity" },
-        { key: "description", header: "Description" },
-        { key: "oldValue", header: "Old Value" },
-        { key: "newValue", header: "New Value" },
-        { key: "ipAddress", header: "IP Address" },
-      ]
+        { key: "timestamp",   header: "Timestamp",   width: 18 },
+        { key: "user",        header: "User",         width: 18 },
+        { key: "role",        header: "Role",         width: 14 },
+        { key: "action",      header: "Action",       width: 14 },
+        { key: "module",      header: "Module",       width: 16 },
+        { key: "entity",      header: "Entity",       width: 22 },
+        { key: "description", header: "Description",  width: 40 },
+        { key: "oldValue",    header: "Old Value",    width: 24 },
+        { key: "newValue",    header: "New Value",    width: 24 },
+        { key: "ipAddress",   header: "IP Address",   width: 16 },
+      ],
+      {
+        sheetName: "Audit Log",
+        title: "Audit Log Export",
+        subtitle: filterParts.join("  |  ") || undefined,
+        summaryRows: [
+          { label: "Total Entries", value: filtered.length },
+        ],
+      }
     )
     toast.success(`Exported ${filtered.length} log entries`)
   }
@@ -430,7 +448,45 @@ function AuditLogPageInner() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {paginatedLogs.map((log) => {
+                  const actionStyle = ACTION_COLORS[log.action]
+                  const moduleStyle = MODULE_COLORS[log.module] ?? { text: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" }
+                  return (
+                    <div
+                      key={log.id}
+                      onClick={() => setDetailLog(log)}
+                      className={cn(
+                        "px-3 py-2.5 space-y-1.5 cursor-pointer active:bg-slate-50 transition-colors",
+                        CRITICAL_ACTIONS.includes(log.action) && "bg-rose-50/30"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Badge variant="outline" className={cn("text-[10px] font-semibold px-1.5 py-0 shrink-0", actionStyle.text, actionStyle.bg, actionStyle.border)}>
+                            {log.action.replace(/_/g, " ")}
+                          </Badge>
+                          <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 shrink-0", moduleStyle.text, moduleStyle.bg, moduleStyle.border)}>
+                            {log.module}
+                          </Badge>
+                        </div>
+                        <span className="flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
+                          <Clock className="w-3 h-3" />{formatTimestamp(log.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 line-clamp-2">{log.description}</p>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>{log.userName} · {log.userRole}</span>
+                        {log.entityName && <span className="truncate max-w-[120px]">{log.entityName}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/80">

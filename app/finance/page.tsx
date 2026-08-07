@@ -27,7 +27,6 @@ import type {
 } from "@/lib/api/types"
 import type { Payment, Customer, Supplier, Sale, Purchase } from "@/data/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
-import { exportToCSV } from "@/lib/csv-export"
 import { generateReportPDF } from "@/lib/pdf/report"
 import { getTenant } from "@/lib/api/settings"
 
@@ -37,6 +36,7 @@ import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -279,6 +279,7 @@ function FinancePageInner() {
   }
 
   async function handleAddAccount() {
+    if (saving) return
     if (!accForm.name.trim()) { toast.error("Account name is required"); return }
     const ob = Number(accForm.openingBalance) || 0
     setSaving(true)
@@ -302,7 +303,7 @@ function FinancePageInner() {
   }
 
   async function handleEditAccount() {
-    if (!selectedAccount) return
+    if (!selectedAccount || saving) return
     if (!accForm.name.trim()) { toast.error("Account name is required"); return }
     setSaving(true)
     try {
@@ -323,7 +324,7 @@ function FinancePageInner() {
   }
 
   async function handleDeposit() {
-    if (!selectedAccount) return
+    if (!selectedAccount || saving) return
     const amount = Number(txForm.amount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
     setSaving(true)
@@ -347,7 +348,7 @@ function FinancePageInner() {
   }
 
   async function handleWithdraw() {
-    if (!selectedAccount) return
+    if (!selectedAccount || saving) return
     const amount = Number(txForm.amount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
     if (amount > selectedAccount.currentBalance) { toast.error("Insufficient balance"); return }
@@ -372,6 +373,7 @@ function FinancePageInner() {
   }
 
   async function handleTransfer() {
+    if (saving) return
     const amount = Number(transferForm.amount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
     if (!transferForm.toId) { toast.error("Select destination account"); return }
@@ -401,6 +403,7 @@ function FinancePageInner() {
   }
 
   async function handleRecordPayment() {
+    if (saving) return
     if (!payForm.entityId) { toast.error("Select an entity"); return }
     const amount = Number(payForm.amount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
@@ -461,42 +464,68 @@ function FinancePageInner() {
     }
   }
 
-  function handleExportTx() {
-    exportToCSV(filteredTx.map(tx => {
-      const inflow = isInflow(tx.type)
-      return {
-        date:        tx.date,
-        type:        TX_META[tx.type]?.label ?? tx.type,
-        account:     accounts.find(a => a.id === tx.accountId)?.name ?? "",
-        flow:        inflow ? "IN (+)" : "OUT (-)",
-        amount:      tx.amount,
-        signed:      inflow ? tx.amount : -tx.amount,
-        description: (tx.description ?? "").replace(/[^\x20-\x7E]/g, ""),
-        reference:   tx.referenceNumber ?? "",
-        notes:       (tx.notes ?? "").replace(/[^\x20-\x7E]/g, ""),
+  async function handleExportTx() {
+    if (filteredTx.length === 0) { toast.error("No transactions to export"); return }
+    const { exportToExcel } = await import("@/lib/excel-export")
+
+    const filterParts = [
+      txDateFrom && "From: " + txDateFrom,
+      txDateTo && "To: " + txDateTo,
+      txFilterType !== "All" && "Type: " + (TX_META[txFilterType as keyof typeof TX_META]?.label ?? txFilterType),
+      txFilterAccount !== "All" && "Account: " + (accounts.find(a => a.id === txFilterAccount)?.name ?? txFilterAccount),
+      txSearch && `Search: "${txSearch}"`,
+    ].filter(Boolean)
+
+    const totalIn  = filteredTx.filter(tx => isInflow(tx.type)).reduce((s, tx) => s + tx.amount, 0)
+    const totalOut = filteredTx.filter(tx => !isInflow(tx.type)).reduce((s, tx) => s + tx.amount, 0)
+
+    exportToExcel(
+      filteredTx.map(tx => {
+        const inflow = isInflow(tx.type)
+        return {
+          date:        tx.date,
+          type:        TX_META[tx.type]?.label ?? tx.type,
+          account:     accounts.find(a => a.id === tx.accountId)?.name ?? "",
+          flow:        inflow ? "IN (+)" : "OUT (-)",
+          signed:      inflow ? tx.amount : -tx.amount,
+          description: tx.description ?? "",
+          reference:   tx.referenceNumber ?? "",
+          notes:       tx.notes ?? "",
+        }
+      }),
+      "finance-transactions-" + todayPKT(),
+      [
+        { key: "date",        header: "Date",              width: 14 },
+        { key: "type",        header: "Transaction Type",  width: 18 },
+        { key: "account",     header: "Account",           width: 18 },
+        { key: "flow",        header: "Flow",              width: 10, align: "center" },
+        { key: "signed",      header: "Amount (Rs)",       width: 16, numFmt: "#,##0", align: "right" },
+        { key: "description", header: "Description",       width: 34 },
+        { key: "reference",   header: "Reference No.",     width: 30 },
+        { key: "notes",       header: "Notes",             width: 30 },
+      ],
+      {
+        sheetName: "Transactions",
+        title: "Finance Transaction Report",
+        subtitle: filterParts.join("  |  ") || undefined,
+        summaryRows: [
+          { label: "Total Inflow",  value: totalIn },
+          { label: "Total Outflow", value: totalOut },
+          { label: "Net Cash Flow", value: totalIn - totalOut },
+        ],
       }
-    }), "finance-transactions", [
-      { key: "date",        header: "Date" },
-      { key: "type",        header: "Transaction Type" },
-      { key: "account",     header: "Account" },
-      { key: "flow",        header: "Flow" },
-      { key: "amount",      header: "Amount (Rs)" },
-      { key: "signed",      header: "Signed Amount (Rs)" },
-      { key: "description", header: "Description" },
-      { key: "reference",   header: "Reference No." },
-      { key: "notes",       header: "Notes" },
-    ])
+    )
     toast.success(`Exported ${filteredTx.length} transactions`)
   }
 
   async function handlePDFReport() {
-    // Determine date range from selected period
+    // Determine date range from selected period (applied on top of the on-screen filters)
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, "0")
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
     let fromDate = ""
-    let toDate = fmt(now)
+    let toDate = ""
     let periodLabel = ""
 
     if (reportPeriod === "this_week") {
@@ -529,18 +558,20 @@ function FinancePageInner() {
       fromDate = `${y}-01-01`; toDate = `${y}-12-31`
       periodLabel = `Year: ${y}`
     } else {
-      // "all" — no filter
+      // "all" — no additional period narrowing
       periodLabel = "All Time"
     }
 
-    const txForPeriod = transactions.filter(tx => {
+    // Start from the same filtered set the user sees on screen (search/type/account/date-range),
+    // then further narrow by the report period preset — mirrors handleExportTx's use of filteredTx.
+    const txForPeriod = filteredTx.filter(tx => {
       if (fromDate && tx.date < fromDate) return false
       if (toDate   && tx.date > toDate)   return false
       return true
     })
 
     if (txForPeriod.length === 0) {
-      toast.error("No transactions found for the selected period")
+      toast.error("No transactions match the current filters for the selected period")
       return
     }
 
@@ -548,20 +579,28 @@ function FinancePageInner() {
     const totalOut = txForPeriod.filter(tx => !isInflow(tx.type)).reduce((s, tx) => s + tx.amount, 0)
     const netFlow  = totalIn - totalOut
 
-    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = ""
+    // Describe every active filter in the subtitle so the PDF is self-explanatory on paper
+    const activeFilterParts: string[] = [periodLabel]
+    if (txFilterType !== "All")    activeFilterParts.push(`Type: ${TX_META[txFilterType as keyof typeof TX_META]?.label ?? txFilterType}`)
+    if (txFilterAccount !== "All") activeFilterParts.push(`Account: ${accounts.find(a => a.id === txFilterAccount)?.name ?? txFilterAccount}`)
+    if (txDateFrom || txDateTo)    activeFilterParts.push(`Filtered: ${txDateFrom || "Start"} to ${txDateTo || "Now"}`)
+    if (txSearch)                  activeFilterParts.push(`Search: "${txSearch}"`)
+
+    let shopName = "MobiTrack Pro", shopAddress = "", shopPhone = "", shopLogo: string | undefined
     try {
       const tenant = await getTenant()
       shopName    = tenant.name ?? shopName
       shopAddress = tenant.address ?? ""
       shopPhone   = tenant.phone ?? ""
+      shopLogo    = tenant.logo || undefined
     } catch { /* use defaults */ }
 
     const periodSlug = periodLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")
 
     generateReportPDF({
-      shopName, shopAddress, shopPhone,
+      shopName, shopAddress, shopPhone, shopLogo,
       title: "Finance Transaction Report",
-      subtitle: `${periodLabel}  |  ${txForPeriod.length} transactions`,
+      subtitle: `${activeFilterParts.join("  |  ")}  |  ${txForPeriod.length} transactions`,
       orientation: "landscape",
       columns: [
         { header: "Date",        dataKey: "date",        width: 24,  halign: "center" },
@@ -609,7 +648,7 @@ function FinancePageInner() {
       />
 
       {/* â"€â"€â"€ Summary Bar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Cash in Hand"   value={formatCurrency(summary.cash)}    icon={Banknote}   iconBg="bg-emerald-100" subtext={`${accounts.filter(a => a.type === "cash").length} cash account(s)`} />
         <StatCard title="In Banks"        value={formatCurrency(summary.banks)}   icon={Building2}  iconBg="bg-cyan-100"    subtext={`${accounts.filter(a => a.type === "bank").length} bank account(s)`} />
         <StatCard title="Mobile Wallets"  value={formatCurrency(summary.wallets)} icon={Smartphone} iconBg="bg-slate-100"   subtext={`${accounts.filter(a => a.type === "mobile_wallet").length} wallet(s)`} />
@@ -770,7 +809,7 @@ function FinancePageInner() {
                 <Input type="date" value={txDateTo} onChange={e => setTxDateTo(e.target.value)} className="h-8 w-[108px] text-xs" />
                 <div className="ml-auto flex items-center gap-1.5 shrink-0">
                   <Button variant="outline" onClick={handleExportTx} className="h-8 text-xs gap-1.5 px-3">
-                    <Download className="h-3.5 w-3.5" /> CSV
+                    <Download className="h-3.5 w-3.5" /> Excel
                   </Button>
                   <Select value={reportPeriod} onValueChange={setReportPeriod}>
                     <SelectTrigger className="h-8 w-[130px] text-xs">
@@ -794,8 +833,50 @@ function FinancePageInner() {
             </CardContent>
           </Card>
 
-          {/* Table */}
-          <Card className="border-slate-100 shadow-sm">
+          {/* Mobile cards */}
+          <Card className="md:hidden border-slate-100 shadow-sm">
+            <CardContent className="p-0">
+              <div className="divide-y divide-slate-100">
+                {filteredTx.length === 0 ? (
+                  <p className="text-center py-10 text-slate-400 text-xs">No transactions found.</p>
+                ) : filteredTx.map(tx => {
+                  const meta = TX_META[tx.type] ?? TX_META.deposit
+                  const accName = accounts.find(a => a.id === tx.accountId)?.name ?? "-"
+                  const inflow = isInflow(tx.type)
+                  return (
+                    <div key={tx.id} className="px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="outline" className={cn("text-[10px] font-medium px-1.5 py-0 h-5 gap-0.5", meta.color, meta.bg, meta.border)}>
+                          {meta.icon} {meta.label}
+                        </Badge>
+                        <span className={cn("text-xs font-semibold", inflow ? "text-emerald-600" : "text-rose-600")}>
+                          {inflow ? "+" : "-"}{formatCurrency(tx.amount)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 truncate">{tx.description ?? "-"}</p>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>{accName} · {formatDate(tx.date)}</span>
+                        {tx.referenceNumber && <span className="font-mono">{tx.referenceNumber}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {filteredTx.length > 0 && (
+                <div className="px-4 py-2 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between">
+                  <span>Showing {filteredTx.length} of {transactions.length} transactions</span>
+                  <span className="font-semibold text-slate-700">
+                    Net: {formatCurrency(
+                      filteredTx.reduce((s, tx) => isInflow(tx.type) ? s + tx.amount : s - tx.amount, 0)
+                    )}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Table - desktop */}
+          <Card className="hidden md:block border-slate-100 shadow-sm">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table className="min-w-full">
@@ -973,14 +1054,14 @@ function FinancePageInner() {
 
       {/* â•â•â•â• ADD ACCOUNT DIALOG â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={modal === "addAccount"} onOpenChange={o => !o && setModal(null)}>
-        <DialogContent className="w-[96vw] sm:max-w-md">
+        <DialogContent className="w-[96vw] sm:max-w-sm max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold text-slate-900">Add New Account</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-slate-900">Add New Account</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
+          <div className="space-y-2.5 py-1">
+            <div className="space-y-1">
               <Label className="text-xs font-medium text-slate-600">Account Type <span className="text-rose-500">*</span></Label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 {(["bank", "mobile_wallet", "cash"] as FinanceAccountType[]).map(t => {
                   const m = ACCOUNT_TYPE_META[t]
                   return (
@@ -989,13 +1070,13 @@ function FinancePageInner() {
                       type="button"
                       onClick={() => setAccForm(f => ({ ...f, type: t, accountTitle: "", bankName: "", name: t === "cash" ? "Cash" : "" }))}
                       className={cn(
-                        "flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all text-xs font-medium",
+                        "flex flex-col items-center gap-1 rounded-lg border p-1.5 transition-all text-[11px] font-medium",
                         accForm.type === t
                           ? cn("border-indigo-500 bg-indigo-50 text-indigo-700")
-                          : "border-slate-200 hover:border-slate-300 text-slate-600"
+                          : "border-slate-300 hover:border-slate-400 text-slate-600"
                       )}
                     >
-                      <span className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-white", accForm.type === t ? "bg-indigo-500" : m.bg)}>
+                      <span className={cn("w-6 h-6 rounded-md flex items-center justify-center text-white [&_svg]:w-3.5 [&_svg]:h-3.5", accForm.type === t ? "bg-indigo-500" : m.bg)}>
                         {m.icon}
                       </span>
                       {m.label}
@@ -1006,10 +1087,10 @@ function FinancePageInner() {
             </div>
 
             {accForm.type === "bank" && (
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs font-medium text-slate-600">Bank Name</Label>
                 <Select value={accForm.bankName} onValueChange={v => setAccForm(f => ({ ...f, bankName: v, name: f.name || v }))}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select bank..." /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select bank..." /></SelectTrigger>
                   <SelectContent>
                     {BANK_NAMES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                   </SelectContent>
@@ -1018,10 +1099,10 @@ function FinancePageInner() {
             )}
 
             {accForm.type === "mobile_wallet" && (
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs font-medium text-slate-600">Wallet Provider</Label>
                 <Select value={accForm.bankName} onValueChange={v => setAccForm(f => ({ ...f, bankName: v, name: f.name || v }))}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select wallet..." /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select wallet..." /></SelectTrigger>
                   <SelectContent>
                     {WALLET_NAMES.map(w => <SelectItem key={w} value={w}>{w}</SelectItem>)}
                   </SelectContent>
@@ -1029,49 +1110,60 @@ function FinancePageInner() {
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label className="text-xs font-medium text-slate-600">Account Name <span className="text-rose-500">*</span></Label>
               <Input
                 value={accForm.name}
                 onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))}
                 placeholder={accForm.type === "bank" ? "e.g. HBL Saving Account" : accForm.type === "mobile_wallet" ? "e.g. JazzCash Business" : "Cash"}
-                className="h-9 text-sm"
+                className="h-8 text-sm"
               />
             </div>
 
             {accForm.type !== "cash" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Account Title <span className="text-slate-400">(optional)</span></Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-slate-600">Account Title <span className="text-slate-400">(optional)</span></Label>
+                  <Input
+                    value={accForm.accountTitle}
+                    onChange={e => setAccForm(f => ({ ...f, accountTitle: e.target.value }))}
+                    placeholder="e.g. Muhammad Ali"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-slate-600">Account Number <span className="text-slate-400">(optional)</span></Label>
+                  <Input
+                    value={accForm.accountNumber}
+                    onChange={e => setAccForm(f => ({ ...f, accountNumber: e.target.value }))}
+                    placeholder={accForm.type === "mobile_wallet" ? "03XX-XXXXXXX" : "XXXX-XXXX-XXXX"}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            {accForm.type === "cash" && (
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-slate-600">Account Number <span className="text-slate-400">(optional)</span></Label>
                 <Input
-                  value={accForm.accountTitle}
-                  onChange={e => setAccForm(f => ({ ...f, accountTitle: e.target.value }))}
-                  placeholder="e.g. Muhammad Ali"
-                  className="h-9 text-sm"
+                  value={accForm.accountNumber}
+                  onChange={e => setAccForm(f => ({ ...f, accountNumber: e.target.value }))}
+                  placeholder="XXXX-XXXX-XXXX"
+                  className="h-8 text-sm"
                 />
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Account Number <span className="text-slate-400">(optional)</span></Label>
-              <Input
-                value={accForm.accountNumber}
-                onChange={e => setAccForm(f => ({ ...f, accountNumber: e.target.value }))}
-                placeholder={accForm.type === "mobile_wallet" ? "03XX-XXXXXXX" : "XXXX-XXXX-XXXX"}
-                className="h-9 text-sm"
-              />
-            </div>
-
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label className="text-xs font-medium text-slate-600">Opening Balance (Rs)</Label>
-              <Input
-                type="number" onWheel={e => e.currentTarget.blur()}
-                min="0"
+              <MoneyInput
                 value={accForm.openingBalance}
-                onChange={e => setAccForm(f => ({ ...f, openingBalance: e.target.value }))}
+                onChange={v => setAccForm(f => ({ ...f, openingBalance: v }))}
                 placeholder="0"
-                className="h-9 text-sm"
+                className="h-8 text-sm"
               />
-              <p className="text-[10px] text-slate-400">Enter the current amount already in this account, if any.</p>
+              <p className="text-[10px] text-slate-500">Enter the current amount already in this account, if any.</p>
             </div>
           </div>
           <DialogFooter>
@@ -1139,7 +1231,7 @@ function FinancePageInner() {
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
-              <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
+              <MoneyInput value={txForm.amount} onChange={v => setTxForm(f => ({ ...f, amount: v }))} placeholder="0" className="h-9 text-sm" autoFocus />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Date</Label>
@@ -1180,7 +1272,7 @@ function FinancePageInner() {
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
-              <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" max={selectedAccount?.currentBalance} value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" autoFocus />
+              <MoneyInput max={selectedAccount?.currentBalance} value={txForm.amount} onChange={v => setTxForm(f => ({ ...f, amount: v }))} placeholder="0" className="h-9 text-sm" autoFocus />
               {selectedAccount && Number(txForm.amount) > selectedAccount.currentBalance && (
                 <p className="text-[10px] text-rose-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Exceeds available balance</p>
               )}
@@ -1245,7 +1337,7 @@ function FinancePageInner() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
-              <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={transferForm.amount} onChange={e => setTransferForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
+              <MoneyInput value={transferForm.amount} onChange={v => setTransferForm(f => ({ ...f, amount: v }))} placeholder="0" className="h-9 text-sm" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Date</Label>
@@ -1315,7 +1407,7 @@ function FinancePageInner() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-600">Amount (Rs) <span className="text-rose-500">*</span></Label>
-                <Input type="number" onWheel={e => e.currentTarget.blur()} min="1" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="h-9 text-sm" />
+                <MoneyInput value={payForm.amount} onChange={v => setPayForm(f => ({ ...f, amount: v }))} placeholder="0" className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-600">Method</Label>

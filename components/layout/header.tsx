@@ -30,7 +30,7 @@ export function Header() {
         </button>
 
         {/* Breadcrumbs */}
-        <div className="flex-1 min-w-0 truncate max-w-[60vw] sm:max-w-none">
+        <div className="flex-1 min-w-0">
           <Breadcrumbs />
         </div>
 

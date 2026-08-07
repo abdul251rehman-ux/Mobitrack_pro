@@ -7,8 +7,7 @@ import {
   Plus, Search, Grid3X3, List, Headphones, Pencil, Trash2,
   TrendingUp, Package, DollarSign, AlertTriangle, X, Tag,
   Volume2, Zap, Shield, Smartphone, BatteryCharging, Keyboard, HardDrive, Watch,
-  Type, Hash, Layers, FileText,
-  ImageIcon, Upload,
+  Upload,
 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -405,57 +404,51 @@ function AccessoryFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[96vw] max-w-2xl max-h-[90vh] overflow-y-visible p-0 gap-0" style={{ overflowY: "auto" }}>
+      <DialogContent className="w-[96vw] max-w-2xl max-h-[90dvh] overflow-y-visible p-0 gap-0" style={{ overflowY: "auto" }}>
         <DialogTitle className="sr-only">
           {isEditing ? "Edit Accessory" : "Add New Accessory"}
         </DialogTitle>
 
-        {/* ── Gradient header banner ── */}
+        {/* ── Header: compact single-line on mobile, full banner from sm: up ── */}
         <div className={cn(
-          "px-5 pt-5 pb-4 pr-12 rounded-t-2xl",
+          "flex items-center gap-2.5 px-4 py-2.5 pr-12",
+          "sm:gap-3 sm:px-5 sm:pt-5 sm:pb-4 sm:rounded-t-2xl",
           isEditing
-            ? "bg-linear-to-r from-indigo-500 to-indigo-600"
-            : "bg-linear-to-r from-emerald-500 to-teal-600"
+            ? "bg-indigo-600 sm:bg-linear-to-r sm:from-indigo-500 sm:to-indigo-600"
+            : "bg-emerald-600 sm:bg-linear-to-r sm:from-emerald-500 sm:to-teal-600"
         )}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              {isEditing
-                ? <Pencil className="w-5 h-5 text-white" />
-                : <Plus className="w-5 h-5 text-white" />
-              }
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white leading-tight">
-                {isEditing ? "Edit Accessory" : "Add New Accessory"}
-              </h2>
-              <p className="text-xs text-white/70 mt-0.5">
-                {isEditing ? "Update the accessory details below." : "Fill in the details to add a new accessory."}
-              </p>
-            </div>
+          <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            {isEditing
+              ? <Pencil className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
+              : <Plus className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
+            }
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-bold text-white leading-tight truncate">
+              {isEditing ? "Edit Accessory" : "Add New Accessory"}
+            </h2>
+            <p className="hidden sm:block text-xs text-white/70 mt-0.5">
+              {isEditing ? "Update the accessory details below." : "Fill in the details to add a new accessory."}
+            </p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="p-4 space-y-3">
 
-          {/* ── Section 1: Product Info ── */}
-          <div className="rounded-xl border border-slate-200 overflow-visible">
-            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100">
-              <Tag className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Product Info</span>
-            </div>
-            <div className="p-4 space-y-3">
+          {/* ── Product Info ── */}
+          <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="name" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Type className="w-3 h-3" /> Name <span className="text-rose-500">*</span>
+                  <Label htmlFor="name" className="text-xs font-semibold text-slate-600">
+                    Name <span className="text-rose-500">*</span>
                   </Label>
                   <Input id="name" placeholder="e.g. Galaxy Buds2 Pro" {...register("name")}
                     className={cn("bg-slate-50 h-9 text-sm", errors.name && "border-rose-400")} />
                   {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="brand" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Tag className="w-3 h-3" /> Brand <span className="text-rose-500">*</span>
+                  <Label htmlFor="brand" className="text-xs font-semibold text-slate-600">
+                    Brand <span className="text-rose-500">*</span>
                   </Label>
                   {(() => {
                     const allBrands = Array.from(new Set([...MASTER_BRAND_NAMES, ...brands])).sort()
@@ -514,7 +507,7 @@ function AccessoryFormDialog({
                         </div>
                         <p className="text-[10px] text-slate-400">This brand will be saved globally and available across all products.</p>
                       </div>
-                      <DialogFooter className="gap-2">
+                      <DialogFooter className="flex-row justify-end gap-2 space-x-0">
                         <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNewBrand(false)}>
                           Cancel
                         </Button>
@@ -543,15 +536,15 @@ function AccessoryFormDialog({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="sku" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Hash className="w-3 h-3" /> SKU <span className="text-slate-400 font-normal text-[10px]">(optional)</span>
+                  <Label htmlFor="sku" className="text-xs font-semibold text-slate-600">
+                    SKU <span className="text-slate-400 font-normal text-[10px]">(optional)</span>
                   </Label>
                   <Input id="sku" placeholder="e.g. EAR-SAM-0001" {...register("sku")}
                     className="bg-slate-50 h-9 text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                    <Layers className="w-3 h-3" /> Category <span className="text-rose-500">*</span>
+                  <Label className="text-xs font-semibold text-slate-600">
+                    Category <span className="text-rose-500">*</span>
                   </Label>
                   <SearchableSelect
                     value={watch("category") ?? ""}
@@ -605,7 +598,7 @@ function AccessoryFormDialog({
                         </div>
                         <p className="text-[10px] text-slate-400">Saved as an accessory category only - will not appear in mobile phone categories.</p>
                       </div>
-                      <DialogFooter className="gap-2">
+                      <DialogFooter className="flex-row justify-end gap-2 space-x-0">
                         <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNewCategory(false)}>
                           Cancel
                         </Button>
@@ -632,97 +625,71 @@ function AccessoryFormDialog({
                   </Dialog>
                 </div>
               </div>
-            </div>
           </div>
 
-          {/* ── Section 2: Product Image ── */}
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2 bg-pink-50 border-b border-pink-100">
-              <ImageIcon className="w-3.5 h-3.5 text-pink-600" />
-              <span className="text-[11px] font-bold text-pink-700 uppercase tracking-wider">Product Image</span>
-              <span className="text-[10px] text-pink-400 font-normal ml-1">(optional)</span>
-            </div>
-            <div className="p-4">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              {imageUrl ? (
-                <div className="relative group w-full h-44 rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                  <Image
-                    src={imageUrl}
-                    alt="Accessory preview"
-                    fill
-                    className="object-contain p-3"
-                    sizes="100vw"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg text-xs font-semibold text-slate-700 shadow hover:bg-slate-100 transition-colors"
-                    >
-                      <Upload className="w-3.5 h-3.5" /> Change
-                    </button>
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500 rounded-lg text-xs font-semibold text-white shadow hover:bg-rose-600 transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5" /> Remove
-                    </button>
-                  </div>
+          <div className="border-t border-slate-100" />
+
+          {/* ── Product Image (optional) ── */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-slate-600">
+              Photo <span className="text-slate-400 font-normal text-[10px]">(optional)</span>
+            </Label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="relative w-14 h-14 rounded-xl border border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50 hover:bg-indigo-50/40 flex items-center justify-center overflow-hidden shrink-0 transition-colors group"
+              >
+                {imageUrl ? (
+                  <Image src={imageUrl} alt="Accessory preview" fill className="object-contain p-1" sizes="56px" />
+                ) : (
+                  <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                )}
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-8 text-xs">
+                    {imageUrl ? "Change" : "Upload"}
+                  </Button>
+                  {imageUrl && (
+                    <Button type="button" variant="outline" size="sm" onClick={removeImage} className="h-8 text-xs text-rose-600 border-rose-200 hover:bg-rose-50">
+                      Remove
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-36 rounded-xl border-2 border-dashed border-slate-200 hover:border-pink-400 bg-slate-50 hover:bg-pink-50/40 flex flex-col items-center justify-center gap-2 transition-colors group"
-                >
-                  <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-pink-100 flex items-center justify-center transition-colors">
-                    <Upload className="w-5 h-5 text-slate-400 group-hover:text-pink-500 transition-colors" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-slate-500 group-hover:text-pink-600 transition-colors">
-                      Click to upload image
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">PNG, JPG, WEBP - up to 5 MB</p>
-                  </div>
-                </button>
-              )}
+                <p className="text-[10px] text-slate-400 mt-1">PNG, JPG, WEBP - up to 5 MB</p>
+              </div>
             </div>
           </div>
 
-          {/* ── Section 3: Notes & Details ── */}
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2 bg-violet-50 border-b border-violet-100">
-              <FileText className="w-3.5 h-3.5 text-violet-600" />
-              <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Notes & Details</span>
+          <div className="border-t border-slate-100" />
+
+          {/* ── Notes & Details ── */}
+          <div className="space-y-3">
+            <div className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2.5">
+              <p className="text-[11px] text-indigo-700 font-medium">
+                {language === "ur" ? "قیمت اور اسٹاک اس وقت سیٹ ہوتا ہے جب آپ یہ اکسیسری سپلائر سے خریدتے ہیں۔" : "Price and stock are set when you purchase this accessory from a supplier on the Purchase page."}
+              </p>
             </div>
-            <div className="p-4 space-y-3">
-              <div className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2.5">
-                <p className="text-[11px] text-indigo-700 font-medium">
-                  {language === "ur" ? "قیمت اور اسٹاک اس وقت سیٹ ہوتا ہے جب آپ یہ اکسیسری سپلائر سے خریدتے ہیں۔" : "Price and stock are set when you purchase this accessory from a supplier on the Purchase page."}
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                  <Smartphone className="w-3 h-3" /> Compatible Models
-                  <span className="text-slate-400 font-normal">(optional)</span>
-                </Label>
-                <TagInput tags={compatibleModels} onChange={setCompatibleModels} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="description" className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                  <FileText className="w-3 h-3" /> Description
-                  <span className="text-slate-400 font-normal">(optional)</span>
-                </Label>
-                <Textarea id="description" placeholder={language === "ur" ? "اس سامان کے بارے میں لکھیں..." : "Brief description of this accessory..."}
-                  rows={3} {...register("description")} className="bg-slate-50 text-sm resize-none" />
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-600">
+                Compatible Models <span className="text-slate-400 font-normal">(optional)</span>
+              </Label>
+              <TagInput tags={compatibleModels} onChange={setCompatibleModels} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="description" className="text-xs font-semibold text-slate-600">
+                Description <span className="text-slate-400 font-normal">(optional)</span>
+              </Label>
+              <Textarea id="description" placeholder={language === "ur" ? "اس سامان کے بارے میں لکھیں..." : "Brief description of this accessory..."}
+                rows={2} {...register("description")} className="bg-slate-50 text-sm resize-none" />
             </div>
           </div>
 
@@ -761,6 +728,7 @@ function AccessoriesPageInner() {
   const [editingAccessory, setEditingAccessory] = useState<Accessory | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Accessory | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingAccessory, setDeletingAccessory] = useState(false)
 
   // ─── Fetch categories from DB ─────────────────────────────────────────────
 
@@ -916,7 +884,8 @@ function AccessoriesPageInner() {
   }
 
   async function handleDeleteConfirm() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deletingAccessory) return
+    setDeletingAccessory(true)
     try {
       await deleteAccessory(deleteTarget.id)
       toast.success(`${deleteTarget.name} deleted successfully`)
@@ -925,6 +894,8 @@ function AccessoriesPageInner() {
       await fetchData()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to delete accessory")
+    } finally {
+      setDeletingAccessory(false)
     }
   }
 
@@ -1126,7 +1097,7 @@ function AccessoriesPageInner() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <StatCard
           title="Total Products"
           value={String(stats.total)}
@@ -1438,9 +1409,10 @@ function AccessoriesPageInner() {
             ? `Are you sure you want to delete "${deleteTarget.name}"? This action cannot be undone.`
             : "Are you sure you want to delete this accessory?"
         }
-        confirmLabel="Delete"
+        confirmLabel={deletingAccessory ? "Deleting..." : "Delete"}
         variant="destructive"
         onConfirm={handleDeleteConfirm}
+        loading={deletingAccessory}
       />
     </div>
   )

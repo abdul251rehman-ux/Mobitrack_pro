@@ -23,11 +23,13 @@ import {
 import { getUsedPhones, createUsedPhone, updateUsedPhone } from "@/lib/api/inventory"
 import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
+import { StatCard } from "@/components/shared/stat-card"
+import { MoneyInput } from "@/components/ui/money-input"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getCustomers } from "@/lib/api/customers"
-import { getFinanceAccounts, createWithdrawal } from "@/lib/api/finance"
+import { getFinanceAccounts } from "@/lib/api/finance"
 import type { Supplier, Customer } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
@@ -54,6 +56,7 @@ const STATUS_META: Record<PhoneStatus, { bg: string; text: string; label: string
   under_repair:  { bg: "bg-amber-100",  text: "text-amber-700",  label: "Under Repair"  },
   sold:          { bg: "bg-slate-100",  text: "text-slate-600",  label: "Sold"          },
   listed_online: { bg: "bg-indigo-100",   text: "text-indigo-700",   label: "Listed Online" },
+  returned:      { bg: "bg-rose-100",   text: "text-rose-700",   label: "Returned"      },
 }
 
 const PTA_META: Record<UsedPTAStatus, { bg: string; text: string; label: string }> = {
@@ -146,34 +149,30 @@ function PhoneCard({
 
   return (
     <div className={cn(
-      "bg-white rounded-xl border overflow-hidden hover:shadow-md transition-shadow relative group",
+      "bg-white rounded-xl border overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 relative group",
       m.border
     )}>
-      {/* Grade ribbon */}
-      <div className={cn("absolute top-3 left-3 z-10")}>
-        <GradeBadge grade={phone.condition_grade} />
-      </div>
-
-      {/* Status */}
-      <div className="absolute top-3 right-3 z-10">
-        <StatusBadge status={phone.status} />
-      </div>
-
       {/* Photo */}
-      <div className={cn("h-40 flex items-center justify-center", m.bg)}>
+      <div className={cn("relative h-24 flex items-center justify-center", m.bg)}>
         {phone.photos.length > 0 ? (
           <img src={phone.photos[0]} alt={phone.model} className="h-full w-full object-cover" />
         ) : (
-          <Smartphone className={cn("w-16 h-16 opacity-30", m.text)} />
+          <Smartphone className={cn("w-9 h-9 opacity-30", m.text)} />
         )}
+        <div className="absolute top-2 left-2 z-10">
+          <GradeBadge grade={phone.condition_grade} />
+        </div>
+        <div className="absolute top-2 right-2 z-10">
+          <StatusBadge status={phone.status} />
+        </div>
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-3">
+      <div className="p-2.5 space-y-2">
         <div>
-          <p className="text-xs text-slate-400 font-medium">{phone.brand}</p>
-          <h3 className="text-sm font-semibold text-slate-900 leading-tight">{phone.model}</h3>
-          <p className="text-xs text-slate-400">{phone.storage} - {phone.color}</p>
+          <p className="text-[10px] text-slate-400 font-medium tracking-wide">{phone.brand}</p>
+          <h3 className="text-[13px] font-bold text-slate-900 leading-snug truncate">{phone.model}</h3>
+          <p className="text-[10px] text-slate-400 truncate">{phone.storage} · {phone.color}</p>
         </div>
 
         {/* Battery */}
@@ -182,11 +181,11 @@ function PhoneCard({
         {/* Pricing */}
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-xs text-slate-400">Selling</p>
-            <p className="text-base font-bold text-slate-900">{formatCurrency(phone.selling_price)}</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Selling</p>
+            <p className="text-[13px] font-bold text-slate-900">{formatCurrency(phone.selling_price)}</p>
           </div>
           <div className={cn(
-            "text-xs font-semibold px-2 py-0.5 rounded-full",
+            "text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0",
             profit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
           )}>
             {profit >= 0 ? "+" : ""}{margin}%
@@ -194,25 +193,25 @@ function PhoneCard({
         </div>
 
         {/* Actions */}
-        <div className="flex gap-1.5 pt-1 border-t border-slate-100">
+        <div className={cn("grid gap-1 pt-1.5 border-t border-slate-100", phone.status === "in_stock" ? "grid-cols-3" : "grid-cols-2")}>
           <button
             onClick={() => onView(phone)}
-            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+            className="h-7 flex items-center justify-center gap-1 text-[11px] font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
           >
-            <Eye className="w-3.5 h-3.5" /> View
+            <Eye className="w-3 h-3" /> View
           </button>
           <button
             onClick={() => onEdit(phone)}
-            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+            className="h-7 flex items-center justify-center gap-1 text-[11px] font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
           >
-            <Edit2 className="w-3.5 h-3.5" /> Edit
+            <Edit2 className="w-3 h-3" /> Edit
           </button>
           {phone.status === "in_stock" && (
             <button
               onClick={() => onSell(phone)}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+              className="h-7 flex items-center justify-center gap-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"
             >
-              <CheckCircle2 className="w-3.5 h-3.5" /> Sell
+              <CheckCircle2 className="w-3 h-3" /> Sell
             </button>
           )}
         </div>
@@ -326,23 +325,38 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
           )}
 
           {/* Profit Analysis */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-400 mb-1">Total Cost</p>
-              <p className="text-sm font-bold text-slate-900">{formatCurrency(totalCost)}</p>
-              <p className="text-[10px] text-slate-400">Purchase + Refurb</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between sm:block">
+              <div>
+                <p className="text-xs text-slate-400 sm:mb-1">Total Cost</p>
+                <p className="text-[10px] text-slate-400 sm:hidden">Purchase + Refurb</p>
+              </div>
+              <div className="text-right sm:text-left">
+                <p className="text-base sm:text-sm font-bold text-slate-900 whitespace-nowrap">{formatCurrency(totalCost)}</p>
+                <p className="hidden sm:block text-[10px] text-slate-400">Purchase + Refurb</p>
+              </div>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-400 mb-1">Sell Price</p>
-              <p className="text-sm font-bold text-slate-900">{formatCurrency(phone.selling_price)}</p>
-              <p className="text-[10px] text-slate-400">Listed at</p>
+            <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between sm:block">
+              <div>
+                <p className="text-xs text-slate-400 sm:mb-1">Sell Price</p>
+                <p className="text-[10px] text-slate-400 sm:hidden">Listed at</p>
+              </div>
+              <div className="text-right sm:text-left">
+                <p className="text-base sm:text-sm font-bold text-slate-900 whitespace-nowrap">{formatCurrency(phone.selling_price)}</p>
+                <p className="hidden sm:block text-[10px] text-slate-400">Listed at</p>
+              </div>
             </div>
-            <div className={cn("rounded-xl p-3", profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
-              <p className="text-xs text-slate-400 mb-1">Profit</p>
-              <p className={cn("text-sm font-bold", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
-              </p>
-              <p className="text-[10px] text-slate-400">{margin}% margin</p>
+            <div className={cn("rounded-xl p-3 flex items-center justify-between sm:block", profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
+              <div>
+                <p className="text-xs text-slate-400 sm:mb-1">Profit</p>
+                <p className="text-[10px] text-slate-400 sm:hidden">{margin}% margin</p>
+              </div>
+              <div className="text-right sm:text-left">
+                <p className={cn("text-base sm:text-sm font-bold whitespace-nowrap", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
+                  {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
+                </p>
+                <p className="hidden sm:block text-[10px] text-slate-400">{margin}% margin</p>
+              </div>
             </div>
           </div>
 
@@ -550,10 +564,9 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (Rs)</label>
-              <input
-                type="number" onWheel={e => e.currentTarget.blur()}
+              <MoneyInput
                 value={finalPrice}
-                onChange={e => setFinalPrice(e.target.value)}
+                onChange={v => setFinalPrice(v)}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 min={1}
                 required
@@ -669,10 +682,9 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Market Price (New / Avg Used) — Rs</label>
-              <input
-                type="number" onWheel={e => e.currentTarget.blur()}
+              <MoneyInput
                 value={marketPrice}
-                onChange={e => setMarketPrice(e.target.value)}
+                onChange={v => setMarketPrice(v)}
                 placeholder="e.g. 80000"
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
@@ -1020,6 +1032,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [supplierErr, setSupplierErr] = useState(false)
   const [amountPaid, setAmountPaid] = useState("")
   const [accountId, setAccountId] = useState("")
+  const [accountErr, setAccountErr] = useState(false)
   const [purchaseDate, setPurchaseDate] = useState(todayPKT())
   const [rows, setRows] = useState<BulkRow[]>([makeBulkRow()])
   const [locks, setLocks] = useState<LockState>({
@@ -1030,6 +1043,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [saving, setSaving] = useState(false)
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
   const [dirty, setDirty] = useState(false)
+
+  // Default the payment account to the shop's cash account once accounts load,
+  // so the common case (paying cash) doesn't require an extra manual selection.
+  useEffect(() => {
+    if (accountId || accounts.length === 0) return
+    const cashAccount = accounts.find(a => a.isDefaultCash) ?? accounts.find(a => a.type === "cash")
+    if (cashAccount) setAccountId(cashAccount.id)
+  }, [accounts])
 
   // Re-fetch suppliers directly inside the dialog — parent prop may arrive empty
   // if the page-level fetch hadn't finished when the user clicked Bulk Add
@@ -1140,10 +1161,27 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
   const validate = (): boolean => {
     let ok = true
+    setSupplierErr(false)
+    setAccountErr(false)
     if (sourceType === "purchased" && !supplierId) { setSupplierErr(true); ok = false }
     if (sourceType === "walk_in" && !walkinName.trim()) { toast.error("Enter walk-in seller name"); ok = false }
     if (sourceType === "customer_trade_in" && !selectedCustomerId) { toast.error("Select a customer"); ok = false }
     if (!purchaseDate) { toast.error("Select a purchase date"); ok = false }
+    if (Number(amountPaid) > 0 && !accountId) {
+      toast.error("Select a payment account to record this payment")
+      setAccountErr(true)
+      ok = false
+    }
+    // Walk-in / trade-in purchases have no supplier ledger to track a debt
+    // against, so they must be paid in full at the time of purchase.
+    if (sourceType !== "purchased") {
+      const grandTotalForValidation = rows.reduce((s, r) => s + (Number(r.purchase_price) || 0), 0)
+      if (Number(amountPaid) < grandTotalForValidation) {
+        toast.error(`${sourceType === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full`)
+        setAccountErr(true)
+        ok = false
+      }
+    }
 
     const imeisSeen = new Set<string>()
     const updatedRows = rows.map((r, i) => {
@@ -1167,6 +1205,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   }
 
   const handleSave = async () => {
+    if (saving) return
     if (!validate()) {
       toast.error("Fix the highlighted errors before saving")
       return
@@ -1290,8 +1329,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         if (!isNaN(n) && n > maxSeq) maxSeq = n
       }
       const poNumber = `PO-${dateTag}-${String(maxSeq + 1).padStart(3, "0")}`
-      const purchaseItems = rows.map(r => ({
-        productId: r.imei_number,
+      const purchaseItems = rows.map((r, i) => ({
+        productId: (inserted as any)?.[i]?.id as string | undefined,
         productName: `${r.brand} ${r.model.trim()}`,
         productType: "UsedPhone",
         quantity: 1,
@@ -1299,23 +1338,48 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         total: Number(r.purchase_price),
         imeis: [r.imei_number],
       }))
-      const { data: purchaseRecord } = await supabase.from("purchases").insert({
+      const purchaseSourceLabel =
+        sourceType === "purchased" ? resolvedSourceName :
+        sourceType === "walk_in" ? `Walk-in: ${resolvedSourceName}` :
+        `Customer: ${resolvedSourceName}`
+      const { data: purchaseRecord, error: purchaseErr } = await supabase.from("purchases").insert({
         tenant_id: tenantId,
         po_number: poNumber,
         date: purchaseDate,
-        supplier_id: supplierId,
-        supplier_name: supplierName,
+        supplier_id: resolvedSupplierId || null,
+        supplier_name: purchaseSourceLabel,
         subtotal: grandTotal,
         shipping_cost: 0,
-        tax_amount: 0,
-        grand_total: grandTotal,
+        tax: 0,
+        total: grandTotal,
         amount_paid: paid,
         balance_due: balanceDue,
         payment_status: payStatus,
+        delivery_status: "Received",
         payment_method: accountId ? (accounts.find(a => a.id === accountId)?.type === "cash" ? "Cash" : "Bank Transfer") : "Cash",
-        items: purchaseItems,
+        account_id: accountId || null,
         notes: null,
       }).select("id").single()
+      if (purchaseErr) throw new Error(`Failed to record purchase: ${purchaseErr.message}`)
+
+      // purchase_items rows so this purchase shows up correctly (item
+      // count, totals) on the main Purchases list.
+      if (purchaseRecord) {
+        const dbItems = purchaseItems.map(item => ({
+          tenant_id: tenantId,
+          purchase_id: (purchaseRecord as any).id,
+          product_id: item.productId,
+          product_name: item.productName,
+          product_type: "UsedPhone",
+          quantity: item.quantity,
+          returned_qty: 0,
+          unit_cost: item.unitCost,
+          total: item.total,
+          imeis: item.imeis,
+        }))
+        const { error: itemsErr } = await supabase.from("purchase_items").insert(dbItems)
+        if (itemsErr) throw new Error(`Failed to record purchase items: ${itemsErr.message}`)
+      }
 
       // Finance: debit account if payment made
       if (paid > 0 && accountId && purchaseRecord) {
@@ -1323,7 +1387,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
           account_id: accountId, amount: paid,
           reference_type: "Purchase", reference_number: poNumber,
-          description: `Used phones purchase ${poNumber} - ${supplierName}`,
+          description: `Used phones purchase ${poNumber} - ${purchaseSourceLabel}`,
         })
         const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", accountId).single()
         if (accRow) {
@@ -1332,13 +1396,15 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           }).eq("id", accountId)
         }
       }
-      // Update supplier outstanding balance if partial/unpaid
-      if (balanceDue > 0) {
-        const { data: supRow } = await supabase.from("suppliers").select("outstanding_balance").eq("id", supplierId).single()
+      // Update supplier outstanding balance if partial/unpaid - only
+      // applies to real supplier purchases; walk-in/trade-in must be
+      // paid in full (enforced in validate()), so balanceDue is always 0 there.
+      if (sourceType === "purchased" && balanceDue > 0 && resolvedSupplierId) {
+        const { data: supRow } = await supabase.from("suppliers").select("outstanding_balance").eq("id", resolvedSupplierId).single()
         if (supRow) {
           await supabase.from("suppliers").update({
             outstanding_balance: ((supRow as any).outstanding_balance ?? 0) + balanceDue,
-          }).eq("id", supplierId)
+          }).eq("id", resolvedSupplierId)
         }
       }
 
@@ -1387,6 +1453,13 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const allExpanded = rows.every(r => r.expanded)
   const completedCount = rows.filter(r => r.brand && r.model && r.imei_number.length === 15 && Number(r.purchase_price) > 0 && Number(r.selling_price) > 0).length
 
+  // Walk-in / trade-in purchases must be paid in full - keep Amount Paid
+  // locked to the running total so the UI can't drift into a partial payment.
+  const requiresFullPayment = sourceType !== "purchased"
+  useEffect(() => {
+    if (requiresFullPayment) setAmountPaid(grandTotal > 0 ? String(grandTotal) : "")
+  }, [requiresFullPayment, grandTotal])
+
   const toggleExpandAll = () =>
     setRows(prev => prev.map(r => ({ ...r, expanded: !allExpanded })))
 
@@ -1394,36 +1467,40 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     <div className="-m-3 sm:-m-4 md:-m-6 bg-slate-100 flex flex-col" style={{ minHeight: "calc(100vh - 64px)" }}>
 
       {/* â"€â"€ Fixed top bar â"€â"€ */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3 flex-shrink-0 sticky top-0 z-30">
-        <button onClick={handleClose}
-          className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 transition-colors text-sm font-medium shrink-0">
-          <ChevronLeft className="w-4 h-4" /> Back
-        </button>
-        <div className="w-px h-4 bg-slate-200" />
-        <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-bold text-slate-900">Bulk Add Used Phones</h1>
-          <p className="text-xs text-slate-400">
-            {rows.length} phone{rows.length !== 1 ? "s" : ""}
-            {completedCount > 0 && <span className="text-emerald-600"> - {completedCount} ready</span>}
-            {saveProgress && <span className="text-indigo-600 font-medium"> - Saving {saveProgress.done}/{saveProgress.total}...</span>}
-          </p>
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-shrink-0 sticky top-0 z-30">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={handleClose}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 transition-colors text-sm font-medium shrink-0">
+            <ChevronLeft className="w-4 h-4" /> Back
+          </button>
+          <div className="hidden sm:block w-px h-4 bg-slate-200" />
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm font-bold text-slate-900 truncate">Bulk Add Used Phones</h1>
+            <p className="text-xs text-slate-400 truncate">
+              {rows.length} phone{rows.length !== 1 ? "s" : ""}
+              {completedCount > 0 && <span className="text-emerald-600"> - {completedCount} ready</span>}
+              {saveProgress && <span className="text-indigo-600 font-medium"> - Saving {saveProgress.done}/{saveProgress.total}...</span>}
+            </p>
+          </div>
         </div>
-        <button onClick={toggleExpandAll}
-          className="text-xs text-slate-500 hover:text-slate-800 px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shrink-0">
-          {allExpanded ? "Collapse all" : "Expand all"}
-        </button>
-        <button onClick={handleSave} disabled={saving}
-          className="px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center gap-2 shrink-0">
-          {saving
-            ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : <CheckCircle2 className="w-4 h-4" />}
-          Save {rows.length} Phone{rows.length !== 1 ? "s" : ""}
-        </button>
+        <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
+          <button onClick={toggleExpandAll}
+            className="text-xs text-slate-500 hover:text-slate-800 px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shrink-0">
+            {allExpanded ? "Collapse all" : "Expand all"}
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 sm:flex-none justify-center px-4 sm:px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center gap-2 shrink-0">
+            {saving
+              ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <CheckCircle2 className="w-4 h-4" />}
+            Save {rows.length} Phone{rows.length !== 1 ? "s" : ""}
+          </button>
+        </div>
       </div>
 
       {/* â"€â"€ Scrollable page body â"€â"€ */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
 
           {/* â"€â"€ Purchase Order Header card â"€â"€ */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-visible">
@@ -1435,10 +1512,10 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 1</span>
             </div>
             <div className="px-5 py-4">
-              <div className="flex items-end gap-4 flex-wrap">
+              <div className="grid grid-cols-2 sm:flex sm:items-end gap-3 sm:gap-4 sm:flex-wrap">
 
                 {/* Source Type */}
-                <div>
+                <div className="col-span-2 sm:col-auto">
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Source <span className="text-rose-500">*</span></label>
                   <div className="flex gap-1.5">
                     {([
@@ -1449,7 +1526,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       <button key={opt.val} type="button"
                         onClick={() => { setSourceType(opt.val); setSupplierId(""); setSupplierErr(false); setWalkinName(""); setWalkinPhone(""); setWalkinCnic(""); setSelectedCustomerId(""); setSelectedCustomerName("") }}
                         className={cn(
-                          "px-3 h-9 rounded-lg text-xs font-semibold border transition-colors",
+                          "flex-1 sm:flex-initial px-3 h-9 rounded-lg text-xs font-semibold border transition-colors",
                           sourceType === opt.val
                             ? "bg-indigo-600 text-white border-indigo-600"
                             : "bg-white text-slate-600 border-slate-300 hover:border-indigo-400"
@@ -1462,7 +1539,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
                 {/* Supplier (when source = purchased) */}
                 {sourceType === "purchased" && (
-                  <div className="w-64">
+                  <div className="col-span-2 sm:col-auto sm:w-64">
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Supplier <span className="text-rose-500">*</span></label>
                     <CatalogCombo
                       value={localSuppliers.find(s => s.id === supplierId)?.companyName ?? ""}
@@ -1478,7 +1555,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
                 {/* Customer (when source = customer_trade_in) */}
                 {sourceType === "customer_trade_in" && (
-                  <div className="w-64">
+                  <div className="col-span-2 sm:col-auto sm:w-64">
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Customer <span className="text-rose-500">*</span></label>
                     <CatalogCombo
                       value={selectedCustomerName}
@@ -1491,24 +1568,24 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
                 {/* Walk-in fields */}
                 {sourceType === "walk_in" && (
-                  <div className="flex flex-wrap gap-3">
+                  <div className="col-span-2 grid grid-cols-2 sm:flex sm:flex-wrap gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">Seller Name <span className="text-rose-500">*</span></label>
                       <input value={walkinName} onChange={e => setWalkinName(e.target.value)}
                         placeholder="e.g. Muhammad Ali"
-                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-44" />
+                        className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white sm:w-44" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone</label>
                       <input value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)}
                         placeholder="03001234567"
-                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-36" />
+                        className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white sm:w-36" />
                     </div>
-                    <div>
+                    <div className="col-span-2 sm:col-auto">
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">CNIC <span className="text-slate-400 font-normal">(optional)</span></label>
                       <input value={walkinCnic} onChange={e => setWalkinCnic(e.target.value.replace(/[^0-9-]/g, "").slice(0, 15))}
                         placeholder="42101-1234567-1"
-                        className="h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-40" />
+                        className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white sm:w-40" />
                     </div>
                   </div>
                 )}
@@ -1518,13 +1595,13 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Purchase Date <span className="text-rose-500">*</span></label>
                   <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)}
                     className={cn(
-                      "h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors bg-white",
+                      "w-full h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors bg-white",
                       !purchaseDate ? "border-rose-400 bg-rose-50" : "border-slate-300"
                     )} />
                 </div>
 
                 {/* Lock hint */}
-                <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pb-1">
+                <div className="col-span-2 sm:col-auto text-[11px] text-slate-400 flex items-center gap-1.5 sm:pb-1">
                   <Lock className="w-3 h-3 text-indigo-400 shrink-0" />
                   <span>{language === "ur" ? <>لاک <Lock className="w-2.5 h-2.5 inline text-indigo-400" /> کریں کوئی بھی خانہ — اگلے فون میں خود کاپی ہو گا</> : <>Lock <Lock className="w-2.5 h-2.5 inline text-indigo-400" /> any field on a phone card to copy it to the next</>}</span>
                 </div>
@@ -1600,12 +1677,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                   <div className="border-t border-slate-100">
 
                     {/* â"€â"€ Row 1: Brand - Model - Color - Storage / RAM â"€â"€ */}
-                    <div className="px-4 pt-4 pb-3">
+                    <div className="px-3 sm:px-4 pt-4 pb-3">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Device Info</p>
-                      <div className="grid grid-cols-12 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
 
-                        {/* Brand - col 2 */}
-                        <div className="col-span-2">
+                        {/* Brand - full width on mobile */}
+                        <div className="sm:col-span-2">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                             Brand <span className="text-rose-500">*</span>
                           </label>
@@ -1622,8 +1699,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           />
                         </div>
 
-                        {/* Model - col 4 */}
-                        <div className="col-span-4">
+                        {/* Model - full width on mobile, most important field */}
+                        <div className="sm:col-span-4">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                             Model <span className="text-rose-500">*</span>
                           </label>
@@ -1641,64 +1718,65 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           />
                         </div>
 
-                        {/* Color - col 2 */}
-                        <div className="col-span-2">
-                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Color</label>
-                          <CatalogCombo
-                            label="Color"
-                            value={row.color}
-                            onChange={v => updateRow(row.id, "color", v)}
-                            options={colors}
-                            onAdd={onAddColor} onEdit={onEditColor} onDelete={onDeleteColor}
-                            placeholder="e.g. Black"
-                            locked={locks.color}
-                            onToggleLock={() => toggleLock("color")}
-                          />
-                        </div>
+                        {/* Color / Storage / RAM - paired 2-up on mobile, short fields */}
+                        <div className="grid grid-cols-2 sm:grid-cols-6 sm:col-span-6 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Color</label>
+                            <CatalogCombo
+                              label="Color"
+                              value={row.color}
+                              onChange={v => updateRow(row.id, "color", v)}
+                              options={colors}
+                              onAdd={onAddColor} onEdit={onEditColor} onDelete={onDeleteColor}
+                              placeholder="e.g. Black"
+                              locked={locks.color}
+                              onToggleLock={() => toggleLock("color")}
+                            />
+                          </div>
 
-                        {/* Storage - col 2 */}
-                        <div className="col-span-2">
-                          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Storage</label>
-                          <CatalogCombo
-                            label="Storage"
-                            value={row.storage}
-                            onChange={v => updateRow(row.id, "storage", v)}
-                            options={storageOptions}
-                            onAdd={onAddStorage} onEdit={onEditStorage} onDelete={onDeleteStorage}
-                            placeholder="e.g. 128GB"
-                            locked={locks.storage}
-                            onToggleLock={() => toggleLock("storage")}
-                          />
-                        </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Storage</label>
+                            <CatalogCombo
+                              label="Storage"
+                              value={row.storage}
+                              onChange={v => updateRow(row.id, "storage", v)}
+                              options={storageOptions}
+                              onAdd={onAddStorage} onEdit={onEditStorage} onDelete={onDeleteStorage}
+                              placeholder="e.g. 128GB"
+                              locked={locks.storage}
+                              onToggleLock={() => toggleLock("storage")}
+                            />
+                          </div>
 
-                        {/* RAM (android) or Battery % (apple) - col 2 */}
-                        <div className="col-span-2">
-                          {isApple ? (
-                            <>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Battery %</label>
-                              <div className="relative">
-                                <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
-                                  onChange={e => updateRow(row.id, "battery_health", e.target.value)}
-                                  placeholder="91" min="1" max="100"
-                                  className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
-                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">RAM</label>
-                              <CatalogCombo
-                                label="RAM"
-                                value={row.ram}
-                                onChange={v => updateRow(row.id, "ram", v)}
-                                options={ramOptions}
-                                onAdd={onAddRam} onEdit={onEditRam} onDelete={onDeleteRam}
-                                placeholder="e.g. 8GB"
-                                locked={locks.ram}
-                                onToggleLock={() => toggleLock("ram")}
-                              />
-                            </>
-                          )}
+                          {/* RAM (android) or Battery % (apple) */}
+                          <div className="col-span-2 sm:col-span-2">
+                            {isApple ? (
+                              <>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Battery %</label>
+                                <div className="relative">
+                                  <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
+                                    onChange={e => updateRow(row.id, "battery_health", e.target.value)}
+                                    placeholder="91" min="1" max="100"
+                                    className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
+                                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">RAM</label>
+                                <CatalogCombo
+                                  label="RAM"
+                                  value={row.ram}
+                                  onChange={v => updateRow(row.id, "ram", v)}
+                                  options={ramOptions}
+                                  onAdd={onAddRam} onEdit={onEditRam} onDelete={onDeleteRam}
+                                  placeholder="e.g. 8GB"
+                                  locked={locks.ram}
+                                  onToggleLock={() => toggleLock("ram")}
+                                />
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1707,12 +1785,12 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     <div className="border-t border-dashed border-slate-100" />
 
                     {/* â"€â"€ Row 2: IMEI - Battery% (android only) - Grade - Screen - Body â"€â"€ */}
-                    <div className="px-4 pt-3 pb-3">
+                    <div className="px-3 sm:px-4 pt-3 pb-3">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Condition</p>
-                      <div className="grid grid-cols-12 gap-3 items-start">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
 
-                        {/* IMEI - col 3 */}
-                        <div className="col-span-3">
+                        {/* IMEI - full width */}
+                        <div className="sm:col-span-3">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">IMEI <span className="text-rose-500">*</span></label>
                           <div className="relative">
                             <input value={row.imei_number}
@@ -1731,89 +1809,92 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </div>
                         </div>
 
-                        {/* Battery % - col 1 (android only) */}
-                        {!isApple && (
-                          <div className="col-span-1">
-                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Bat %</label>
-                            <div className="relative">
-                              <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
-                                onChange={e => updateRow(row.id, "battery_health", e.target.value)}
-                                placeholder="85" min="1" max="100"
-                                className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
-                              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
+                        {/* Battery % (android only) + Grade - paired on mobile */}
+                        <div className={cn("grid gap-3", isApple ? "sm:col-span-4" : "grid-cols-3 sm:col-span-3 sm:grid-cols-3")}>
+                          {!isApple && (
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Bat %</label>
+                              <div className="relative">
+                                <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
+                                  onChange={e => updateRow(row.id, "battery_health", e.target.value)}
+                                  placeholder="85" min="1" max="100"
+                                  className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
+                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Grade pills - 2 rows of 3 so each pill stays comfortably tappable */}
+                          <div className={isApple ? "" : "col-span-2"}>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <button type="button" onClick={() => toggleLock("condition_grade")}
+                                title={locks.condition_grade ? "Locked" : "Click to lock grade"}
+                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                  locks.condition_grade ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                                {locks.condition_grade ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </button>
+                              <label className="text-xs font-semibold text-slate-600">Grade</label>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
+                                const m = GRADE_META[g]
+                                return (
+                                  <button key={g} type="button" onClick={() => updateRow(row.id, "condition_grade", g)}
+                                    className={cn(
+                                      "h-9 rounded-lg text-xs font-bold border-2 transition-all",
+                                      row.condition_grade === g
+                                        ? cn(m.bg, m.text, m.border, "shadow-sm")
+                                        : "border-slate-200 text-slate-400 hover:border-slate-300 bg-white"
+                                    )}>
+                                    {g}
+                                  </button>
+                                )
+                              })}
                             </div>
                           </div>
-                        )}
-
-                        {/* Grade pills - col 3 */}
-                        <div className={cn(isApple ? "col-span-4" : "col-span-3")}>
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <button type="button" onClick={() => toggleLock("condition_grade")}
-                              title={locks.condition_grade ? "Locked" : "Click to lock grade"}
-                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.condition_grade ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                              {locks.condition_grade ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            </button>
-                            <label className="text-xs font-semibold text-slate-600">Grade</label>
-                          </div>
-                          <div className="flex gap-1">
-                            {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
-                              const m = GRADE_META[g]
-                              return (
-                                <button key={g} type="button" onClick={() => updateRow(row.id, "condition_grade", g)}
-                                  className={cn(
-                                    "flex-1 h-9 rounded-lg text-xs font-bold border-2 transition-all",
-                                    row.condition_grade === g
-                                      ? cn(m.bg, m.text, m.border, "shadow-sm")
-                                      : "border-slate-200 text-slate-400 hover:border-slate-300 bg-white"
-                                  )}>
-                                  {g}
-                                </button>
-                              )
-                            })}
-                          </div>
                         </div>
 
-                        {/* Screen - col 2 */}
-                        <div className="col-span-2">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <button type="button" onClick={() => toggleLock("screen_condition")}
-                              title={locks.screen_condition ? "Locked" : "Click to lock"}
-                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.screen_condition ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                              {locks.screen_condition ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            </button>
-                            <label className="text-xs font-semibold text-slate-600">Screen</label>
+                        {/* Screen + Body - paired on mobile */}
+                        <div className="grid grid-cols-2 gap-3 sm:col-span-4 sm:grid-cols-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <button type="button" onClick={() => toggleLock("screen_condition")}
+                                title={locks.screen_condition ? "Locked" : "Click to lock"}
+                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                  locks.screen_condition ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                                {locks.screen_condition ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </button>
+                              <label className="text-xs font-semibold text-slate-600">Screen</label>
+                            </div>
+                            <select value={row.screen_condition} onChange={e => updateRow(row.id, "screen_condition", e.target.value as ScreenCondition)}
+                              className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                                locks.screen_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
+                              <option value="perfect">Perfect</option>
+                              <option value="minor_scratches">Scratches</option>
+                              <option value="cracked">Cracked</option>
+                              <option value="replaced">Replaced</option>
+                            </select>
                           </div>
-                          <select value={row.screen_condition} onChange={e => updateRow(row.id, "screen_condition", e.target.value as ScreenCondition)}
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
-                              locks.screen_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
-                            <option value="perfect">Perfect</option>
-                            <option value="minor_scratches">Scratches</option>
-                            <option value="cracked">Cracked</option>
-                            <option value="replaced">Replaced</option>
-                          </select>
-                        </div>
 
-                        {/* Body - col 2 */}
-                        <div className={cn(isApple ? "col-span-2" : "col-span-2")}>
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <button type="button" onClick={() => toggleLock("body_condition")}
-                              title={locks.body_condition ? "Locked" : "Click to lock"}
-                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.body_condition ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                              {locks.body_condition ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            </button>
-                            <label className="text-xs font-semibold text-slate-600">Body</label>
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <button type="button" onClick={() => toggleLock("body_condition")}
+                                title={locks.body_condition ? "Locked" : "Click to lock"}
+                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                  locks.body_condition ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                                {locks.body_condition ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </button>
+                              <label className="text-xs font-semibold text-slate-600">Body</label>
+                            </div>
+                            <select value={row.body_condition} onChange={e => updateRow(row.id, "body_condition", e.target.value as BodyCondition)}
+                              className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                                locks.body_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
+                              <option value="perfect">Perfect</option>
+                              <option value="minor_wear">Minor Wear</option>
+                              <option value="dents">Dents</option>
+                              <option value="heavy_damage">Heavy</option>
+                            </select>
                           </div>
-                          <select value={row.body_condition} onChange={e => updateRow(row.id, "body_condition", e.target.value as BodyCondition)}
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
-                              locks.body_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
-                            <option value="perfect">Perfect</option>
-                            <option value="minor_wear">Minor Wear</option>
-                            <option value="dents">Dents</option>
-                            <option value="heavy_damage">Heavy</option>
-                          </select>
                         </div>
                       </div>
                     </div>
@@ -1822,53 +1903,54 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     <div className="border-t border-dashed border-slate-100" />
 
                     {/* â"€â"€ Row 3: Pricing - BUY - SELL - Warranty - PTA - Notes â"€â"€ */}
-                    <div className="px-4 pt-3 pb-4">
+                    <div className="px-3 sm:px-4 pt-3 pb-4">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Pricing</p>
-                      <div className="grid grid-cols-12 gap-3 items-start">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
 
-                        {/* Buy Price - col 2 */}
-                        <div className="col-span-2">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <button type="button" onClick={() => toggleLock("purchase_price")}
-                              title={locks.purchase_price ? "Locked" : "Click to lock buy price"}
-                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.purchase_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                              {locks.purchase_price ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            </button>
-                            <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-rose-500">*</span></label>
+                        {/* Buy Price + Sell Price - paired on mobile, natural pair */}
+                        <div className="grid grid-cols-2 gap-3 sm:col-span-4 sm:grid-cols-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <button type="button" onClick={() => toggleLock("purchase_price")}
+                                title={locks.purchase_price ? "Locked" : "Click to lock buy price"}
+                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                  locks.purchase_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                                {locks.purchase_price ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </button>
+                              <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-rose-500">*</span></label>
+                            </div>
+                            <MoneyInput value={row.purchase_price}
+                              onChange={v => updateRow(row.id, "purchase_price", v)}
+                              placeholder="0" min="0"
+                              className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
+                                (!row.purchase_price || Number(row.purchase_price) <= 0) && hasError
+                                  ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
+                                  : locks.purchase_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
                           </div>
-                          <input type="number" onWheel={e => e.currentTarget.blur()} value={row.purchase_price}
-                            onChange={e => updateRow(row.id, "purchase_price", e.target.value)}
-                            placeholder="0" min="0"
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
-                              (!row.purchase_price || Number(row.purchase_price) <= 0) && hasError
-                                ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
-                                : locks.purchase_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
+
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <button type="button" onClick={() => toggleLock("selling_price")}
+                                title={locks.selling_price ? "Locked" : "Click to lock sell price"}
+                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                  locks.selling_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                                {locks.selling_price ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </button>
+                              <label className="text-xs font-semibold text-slate-600">Sell Price <span className="text-rose-500">*</span></label>
+                            </div>
+                            <MoneyInput value={row.selling_price}
+                              onChange={v => updateRow(row.id, "selling_price", v)}
+                              placeholder="0" min="0"
+                              className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
+                                (!row.selling_price || Number(row.selling_price) <= 0) && hasError
+                                  ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
+                                  : locks.selling_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
+                          </div>
                         </div>
 
-                        {/* Sell Price - col 2 */}
-                        <div className="col-span-2">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <button type="button" onClick={() => toggleLock("selling_price")}
-                              title={locks.selling_price ? "Locked" : "Click to lock sell price"}
-                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.selling_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                              {locks.selling_price ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            </button>
-                            <label className="text-xs font-semibold text-slate-600">Sell Price <span className="text-rose-500">*</span></label>
-                          </div>
-                          <input type="number" onWheel={e => e.currentTarget.blur()} value={row.selling_price}
-                            onChange={e => updateRow(row.id, "selling_price", e.target.value)}
-                            placeholder="0" min="0"
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
-                              (!row.selling_price || Number(row.selling_price) <= 0) && hasError
-                                ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
-                                : locks.selling_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
-                        </div>
-
-                        {/* Profit display - col 2 */}
-                        {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 ? (
-                          <div className="col-span-2 flex flex-col justify-end">
+                        {/* Margin - full width on mobile when shown */}
+                        {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 && (
+                          <div className="sm:col-span-2">
                             <label className="block text-xs font-semibold text-slate-400 mb-1.5">Margin</label>
                             <div className={cn("h-9 flex items-center px-3 rounded-lg text-sm font-bold border",
                               rowProfit >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-600 border-rose-200")}>
@@ -1879,53 +1961,54 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                               </span>
                             </div>
                           </div>
-                        ) : <div className="col-span-2" />}
+                        )}
 
-                        {/* Warranty - col 2 */}
-                        <div className="col-span-2">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <button type="button" onClick={() => toggleLock("warranty_days")}
-                              title={locks.warranty_days ? "Locked" : "Click to lock warranty"}
-                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.warranty_days ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                              {locks.warranty_days ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            </button>
-                            <label className="text-xs font-semibold text-slate-600">Warranty</label>
+                        {/* Warranty + PTA - paired on mobile */}
+                        <div className={cn("grid grid-cols-2 gap-3", Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 ? "sm:col-span-3" : "sm:col-span-5")}>
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <button type="button" onClick={() => toggleLock("warranty_days")}
+                                title={locks.warranty_days ? "Locked" : "Click to lock warranty"}
+                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                  locks.warranty_days ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                                {locks.warranty_days ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </button>
+                              <label className="text-xs font-semibold text-slate-600">Warranty</label>
+                            </div>
+                            <select value={row.warranty_days} onChange={e => updateRow(row.id, "warranty_days", e.target.value)}
+                              className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                                locks.warranty_days ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
+                              <option value="0">No warranty</option>
+                              <option value="3">3 days</option>
+                              <option value="7">7 days</option>
+                              <option value="14">14 days</option>
+                              <option value="30">1 month</option>
+                              <option value="90">3 months</option>
+                            </select>
                           </div>
-                          <select value={row.warranty_days} onChange={e => updateRow(row.id, "warranty_days", e.target.value)}
-                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
-                              locks.warranty_days ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
-                            <option value="0">No warranty</option>
-                            <option value="3">3 days</option>
-                            <option value="7">7 days</option>
-                            <option value="14">14 days</option>
-                            <option value="30">1 month</option>
-                            <option value="90">3 months</option>
-                          </select>
+
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <button type="button" onClick={() => toggleLock("pta_status")}
+                                title={locks.pta_status ? "Locked" : "Click to lock PTA"}
+                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                  locks.pta_status ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                                {locks.pta_status ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </button>
+                              <label className="text-xs font-semibold text-slate-600">PTA</label>
+                            </div>
+                            <select value={row.pta_status} onChange={e => updateRow(row.id, "pta_status", e.target.value as UsedPTAStatus)}
+                              className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                                locks.pta_status ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
+                              <option value="approved">PTA Approved</option>
+                              <option value="non_pta">Non-PTA</option>
+                              {row.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
+                            </select>
+                          </div>
                         </div>
 
-                        {/* PTA - col 1 */}
-                        <div className="col-span-1">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <button type="button" onClick={() => toggleLock("pta_status")}
-                              title={locks.pta_status ? "Locked" : "Click to lock PTA"}
-                              className={cn("flex items-center justify-center w-4 h-4 rounded border transition-colors shrink-0",
-                                locks.pta_status ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                              {locks.pta_status ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            </button>
-                            <label className="text-xs font-semibold text-slate-600">PTA</label>
-                          </div>
-                          <select value={row.pta_status} onChange={e => updateRow(row.id, "pta_status", e.target.value as UsedPTAStatus)}
-                            className={cn("w-full h-9 border rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
-                              locks.pta_status ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
-                            <option value="approved">PTA Approved</option>
-                            <option value="non_pta">Non-PTA</option>
-                            {row.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
-                          </select>
-                        </div>
-
-                        {/* Notes - fills remaining cols */}
-                        <div className="col-span-3">
+                        {/* Notes - full width */}
+                        <div className="sm:col-span-3">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">Notes</label>
                           <input value={row.condition_notes} onChange={e => updateRow(row.id, "condition_notes", e.target.value)}
                             placeholder="Accessories, issues, remarks..."
@@ -1950,18 +2033,18 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
           {/* â"€â"€ Order Summary card - bottom of page â"€â"€ */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-              <div>
+            <div className="px-4 sm:px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <h2 className="text-sm font-bold text-slate-800">Order Summary</h2>
                 <p className="text-xs text-slate-400 mt-0.5">Total cost - payment - ledger entry</p>
               </div>
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">Step 3</span>
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md shrink-0">Step 3</span>
             </div>
-            <div className="px-5 py-4">
-              <div className="grid grid-cols-3 gap-6">
+            <div className="px-4 sm:px-5 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
 
                 {/* Items breakdown */}
-                <div className="col-span-2 space-y-1">
+                <div className="sm:col-span-2 space-y-1">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Items</p>
                   {rows.filter(r => r.brand || r.model || Number(r.purchase_price) > 0).length === 0 ? (
                     <p className="text-sm text-slate-400 italic">No phones added yet</p>
@@ -1973,10 +2056,10 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         {r.color && <span className="text-slate-400"> - {r.color}</span>}
                         {r.storage && <span className="text-slate-400"> - {r.storage}</span>}
                       </span>
-                      <span className="text-xs text-slate-400 font-mono shrink-0">
+                      <span className="hidden sm:inline text-xs text-slate-400 font-mono shrink-0">
                         {r.imei_number.length === 15 ? r.imei_number : '-'}
                       </span>
-                      <span className="text-sm font-semibold text-slate-800 shrink-0 w-24 text-right">
+                      <span className="text-sm font-semibold text-slate-800 shrink-0 w-20 sm:w-24 text-right">
                         {Number(r.purchase_price) > 0 ? formatCurrency(Number(r.purchase_price)) : <span className="text-slate-300">-</span>}
                       </span>
                     </div>
@@ -1992,17 +2075,30 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     <div className="space-y-2.5">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1.5">Amount Paid (Rs)</label>
-                        <input type="number" onWheel={e => e.currentTarget.blur()} min={0} placeholder="0" value={amountPaid}
-                          onChange={e => setAmountPaid(e.target.value)}
-                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
+                        <MoneyInput min={0} placeholder="0" value={amountPaid}
+                          onChange={v => { if (!requiresFullPayment) setAmountPaid(v) }}
+                          disabled={requiresFullPayment}
+                          className={cn(
+                            "w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors",
+                            requiresFullPayment && "bg-slate-50 text-slate-500 cursor-not-allowed"
+                          )} />
+                        {requiresFullPayment && (
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            {sourceType === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full - no partial/unpaid balance is tracked for these.
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1.5">Payment Account</label>
-                        <select value={accountId} onChange={e => setAccountId(e.target.value)}
-                          className="w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors">
+                        <select value={accountId} onChange={e => { setAccountId(e.target.value); setAccountErr(false) }}
+                          className={cn(
+                            "w-full h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 bg-white transition-colors",
+                            accountErr ? "border-rose-400 focus:ring-rose-400" : "border-slate-300 focus:ring-indigo-500"
+                          )}>
                           <option value="">No account</option>
                           {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
+                        {accountErr && <p className="text-xs text-rose-500 mt-1">Select a payment account to record this payment</p>}
                       </div>
                     </div>
                   </div>
@@ -2189,7 +2285,17 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
   const [newRamName, setNewRamName] = useState("")
   const [addingRam, setAddingRam] = useState(false)
 
+  const [submitting, setSubmitting] = useState(false)
+  const [accountErr, setAccountErr] = useState(false)
   const set = (key: keyof FormData, val: any) => setForm(prev => ({ ...prev, [key]: val }))
+
+  // Default the payment account to the shop's cash account once accounts load,
+  // so the common case (paying cash) doesn't require an extra manual selection.
+  useEffect(() => {
+    if (editPhone || form.payment_account_id || accounts.length === 0) return
+    const cashAccount = accounts.find(a => a.isDefaultCash) ?? accounts.find(a => a.type === "cash")
+    if (cashAccount) set("payment_account_id", cashAccount.id)
+  }, [accounts])
   const toggleCheck = (key: "functional_issues" | "accessories_included", id: string) => {
     setForm(prev => {
       const arr = prev[key]
@@ -2197,7 +2303,15 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     })
   }
 
+  // Walk-in / trade-in purchases must be paid in full - keep Amount Paid
+  // locked to the purchase price so the UI can't drift into a partial payment.
+  const requiresFullPayment = !editPhone && form.source_type !== "purchased"
+  useEffect(() => {
+    if (requiresFullPayment) set("payment_amount", form.purchase_price || "")
+  }, [requiresFullPayment, form.purchase_price])
+
   const validateStep = () => {
+    setAccountErr(false)
     if (step === 0) {
       if (!form.brand || !form.model || !form.imei_number)
         return "Fill in brand, model, and IMEI"
@@ -2211,6 +2325,19 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     if (step === 2) {
       if (!form.selling_price || isNaN(Number(form.selling_price)) || Number(form.selling_price) <= 0)
         return "Enter a valid selling price"
+    }
+    // Not step-specific: catches the case even if Submit is clicked from a later step
+    if (Number(form.payment_amount) > 0 && !form.payment_account_id) {
+      setAccountErr(true)
+      return "Select a payment account to record this payment"
+    }
+    // Walk-in / trade-in purchases have no supplier ledger to track a debt
+    // against, so they must be paid in full at the time of purchase.
+    if (!editPhone && form.source_type !== "purchased") {
+      const total = (Number(form.purchase_price) || 0)
+      if (Number(form.payment_amount) < total) {
+        return `${form.source_type === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full`
+      }
     }
     return null
   }
@@ -2228,7 +2355,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     setForm(prev => ({ ...prev, photos: [...prev.photos, ...urls] }))
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (submitting) return
     const err = validateStep()
     if (err) { toast.error(err); return }
     // Resolve source fields based on type
@@ -2237,7 +2365,9 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     const isSupplier         = form.source_type === "purchased"
 
     const paid = Number(form.payment_amount) || 0
-    onSave({
+    setSubmitting(true)
+    try {
+      await onSave({
       brand: form.brand, model: form.model, color: form.color,
       storage: form.storage, ram: form.ram,
       imei_number: form.imei_number,
@@ -2266,9 +2396,12 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       pta_status: form.pta_status,
       status: form.status,
       photos: form.photos,
-      _paymentAmount: paid > 0 ? paid : undefined,
-      _paymentAccountId: paid > 0 && form.payment_account_id ? form.payment_account_id : undefined,
-    })
+        _paymentAmount: paid > 0 ? paid : undefined,
+        _paymentAccountId: paid > 0 && form.payment_account_id ? form.payment_account_id : undefined,
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const totalCost = (Number(form.purchase_price) || 0) + (Number(form.refurbishment_cost) || 0)
@@ -2284,20 +2417,31 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     <>
       <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-        <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl h-[95vh] sm:h-auto sm:max-h-[90vh] flex flex-col">
+        <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl h-[95dvh] sm:h-auto sm:max-h-[90dvh] flex flex-col">
           {/* Header */}
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
             <h2 className="text-base sm:text-lg font-bold text-slate-900">{editPhone ? "Edit Used Phone" : "Add Used Phone"}</h2>
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><X className="w-4 h-4" /></button>
           </div>
 
-          {/* Step indicators */}
-          <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-slate-100 flex-shrink-0 overflow-x-auto">
-            <div className="flex items-center gap-1 min-w-max">
+          {/* Step indicators — compact progress bar on mobile, full pill row from sm: up */}
+          <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-slate-100 flex-shrink-0">
+            {/* Mobile: progress bar + current step label */}
+            <div className="sm:hidden">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-indigo-700">Step {step + 1} of {STEPS.length} · {STEPS[step]}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+              </div>
+            </div>
+
+            {/* sm and up: full pill row with labels */}
+            <div className="hidden sm:flex items-center gap-1">
               {STEPS.map((s, i) => (
                 <React.Fragment key={s}>
                   <div className={cn(
-                    "flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-full transition-all whitespace-nowrap",
+                    "flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-all whitespace-nowrap",
                     i === step ? "bg-indigo-100 text-indigo-700" :
                     i < step  ? "bg-emerald-100 text-emerald-700" :
                     "text-slate-400"
@@ -2310,10 +2454,9 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     )}>
                       {i < step ? <span>&#10003;</span> : i + 1}
                     </span>
-                    <span className="hidden sm:inline">{s}</span>
-                    <span className="sm:hidden">{s.split(" ")[0]}</span>
+                    <span>{s}</span>
                   </div>
-                  {i < STEPS.length - 1 && <div className="flex-1 h-px bg-slate-200 min-w-1 sm:min-w-2" />}
+                  {i < STEPS.length - 1 && <div className="flex-1 h-px bg-slate-200 min-w-2" />}
                 </React.Fragment>
               ))}
             </div>
@@ -2487,7 +2630,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     {([
                       { type: "walk_in"           as SourceType, label: "Walk-in Seller", icon: "🚶", desc: "Person off the street" },
                       { type: "customer_trade_in" as SourceType, label: "Our Customer",   icon: "🤝", desc: "Existing customer" },
-                      { type: "purchased"         as SourceType, label: "Supplier",       icon: "Ã°Å¸ÂÂª", desc: "Wholesaler / dealer" },
+                      { type: "purchased"         as SourceType, label: "Supplier",       icon: "🏪", desc: "Wholesaler / dealer" },
                     ]).map(opt => (
                       <button
                         key={opt.type}
@@ -2588,7 +2731,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     <input type="date" value={form.purchased_date} onChange={e => set("purchased_date", e.target.value)} className={inputCls} />
                   </Field>
                   <Field label="Purchase Price (Rs)" required>
-                    <input type="number" onWheel={e => e.currentTarget.blur()} value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
+                    <MoneyInput value={form.purchase_price} onChange={v => set("purchase_price", v)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
               </div>
@@ -2697,10 +2840,10 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Refurbishment Cost (Rs)">
-                    <input type="number" onWheel={e => e.currentTarget.blur()} value={form.refurbishment_cost} onChange={e => set("refurbishment_cost", e.target.value)} placeholder="0" min={0} className={inputCls} />
+                    <MoneyInput value={form.refurbishment_cost} onChange={v => set("refurbishment_cost", v)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                   <Field label="Selling Price (Rs)" required>
-                    <input type="number" onWheel={e => e.currentTarget.blur()} value={form.selling_price} onChange={e => set("selling_price", e.target.value)} placeholder="0" min={0} className={inputCls} />
+                    <MoneyInput value={form.selling_price} onChange={v => set("selling_price", v)} placeholder="0" min={0} className={inputCls} />
                   </Field>
                 </div>
                 {/* Profit preview */}
@@ -2747,17 +2890,26 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Payment</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Field label="Amount Paid (Rs)">
-                        <input
-                          type="number" onWheel={e => e.currentTarget.blur()}
+                        <MoneyInput
                           value={form.payment_amount}
-                          onChange={e => set("payment_amount", e.target.value)}
+                          onChange={v => { if (!requiresFullPayment) set("payment_amount", v) }}
                           placeholder={`0 of ${form.purchase_price || "?"}`}
                           min={0}
-                          className={inputCls}
+                          disabled={requiresFullPayment}
+                          className={cn(inputCls, requiresFullPayment && "bg-slate-100 text-slate-500 cursor-not-allowed")}
                         />
+                        {requiresFullPayment && (
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            {form.source_type === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full.
+                          </p>
+                        )}
                       </Field>
                       <Field label="Pay From Account">
-                        <select value={form.payment_account_id} onChange={e => set("payment_account_id", e.target.value)} className={selectCls}>
+                        <select
+                          value={form.payment_account_id}
+                          onChange={e => { set("payment_account_id", e.target.value); setAccountErr(false) }}
+                          className={cn(selectCls, accountErr && "border-rose-400 focus:ring-rose-400")}
+                        >
                           <option value="">-- Select account --</option>
                           {accounts.map(a => (
                             <option key={a.id} value={a.id}>
@@ -2910,9 +3062,10 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors"
+                disabled={submitting}
+                className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-60"
               >
-                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {editPhone ? "Save" : "Add"}
+                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {submitting ? "Saving..." : editPhone ? "Save" : "Add"}
               </button>
             )}
           </div>
@@ -3227,21 +3380,100 @@ function UsedPhonesPageInner() {
           purchased_date: phoneData.purchased_date ?? todayPKT(),
           sold_date: undefined,
         })
-        // Deduct from finance account if payment was made
-        if (_paymentAmount && _paymentAmount > 0 && _paymentAccountId) {
-          try {
-            await createWithdrawal({
-              accountId: _paymentAccountId,
-              amount: _paymentAmount,
-              date: phoneData.purchased_date ?? todayPKT(),
-              description: `Used phone purchase: ${phoneData.brand ?? ""} ${phoneData.model ?? ""} (IMEI: ${phoneData.imei_number ?? ""})`,
+
+        // Record purchase in purchases table so it shows up on the main
+        // Purchases list, same as Bulk Add - one PO per phone here.
+        try {
+          const tenantId = await getTenantId()
+          const purchaseDate = phoneData.purchased_date ?? todayPKT()
+          const sourceType = phoneData.source_type ?? "walk_in"
+          const purchasePrice = phoneData.purchase_price ?? 0
+          const paid = _paymentAmount && _paymentAmount > 0 ? _paymentAmount : 0
+          const balanceDue = Math.max(0, purchasePrice - paid)
+          const payStatus = paid <= 0 ? "Unpaid" : paid >= purchasePrice ? "Paid" : "Partial"
+          const supplierId = (phoneData as any).supplier_id as string | undefined
+          const sourceLabel =
+            sourceType === "purchased" ? ((phoneData as any).supplier_name || "") :
+            sourceType === "walk_in" ? `Walk-in: ${phoneData.source_customer_name ?? ""}` :
+            `Customer: ${phoneData.source_customer_name ?? ""}`
+
+          const dateTag = purchaseDate.replace(/-/g, "")
+          const { data: poRows } = await supabase.from("purchases").select("po_number")
+            .eq("tenant_id", tenantId).eq("date", purchaseDate).like("po_number", `PO-${dateTag}-%`)
+          let maxSeq = 0
+          for (const row of (poRows ?? [])) {
+            const parts = (row.po_number as string).split("-")
+            const n = parseInt(parts[parts.length - 1], 10)
+            if (!isNaN(n) && n > maxSeq) maxSeq = n
+          }
+          const poNumber = `PO-${dateTag}-${String(maxSeq + 1).padStart(3, "0")}`
+
+          const { data: purchaseRecord, error: purchaseErr } = await supabase.from("purchases").insert({
+            tenant_id: tenantId,
+            po_number: poNumber,
+            date: purchaseDate,
+            supplier_id: sourceType === "purchased" ? (supplierId || null) : null,
+            supplier_name: sourceLabel,
+            subtotal: purchasePrice,
+            shipping_cost: 0,
+            tax: 0,
+            total: purchasePrice,
+            amount_paid: paid,
+            balance_due: balanceDue,
+            payment_status: payStatus,
+            delivery_status: "Received",
+            payment_method: _paymentAccountId ? (financeAccounts.find(a => a.id === _paymentAccountId)?.type === "cash" ? "Cash" : "Bank Transfer") : "Cash",
+            account_id: _paymentAccountId || null,
+            notes: null,
+          }).select("id").single()
+          if (purchaseErr) throw new Error(purchaseErr.message)
+
+          if (purchaseRecord) {
+            const { error: itemErr } = await supabase.from("purchase_items").insert({
+              tenant_id: tenantId,
+              purchase_id: (purchaseRecord as any).id,
+              product_id: created.id,
+              product_name: `${phoneData.brand ?? ""} ${phoneData.model ?? ""}`.trim(),
+              product_type: "UsedPhone",
+              quantity: 1,
+              returned_qty: 0,
+              unit_cost: purchasePrice,
+              total: purchasePrice,
+              imeis: [phoneData.imei_number ?? ""],
             })
+            if (itemErr) throw new Error(itemErr.message)
+          }
+
+          // Deduct from finance account if payment was made
+          if (paid > 0 && _paymentAccountId) {
+            await supabase.from("finance_transactions").insert({
+              tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
+              account_id: _paymentAccountId, amount: paid,
+              reference_type: "Purchase", reference_number: poNumber,
+              description: `Used phone purchase ${poNumber} - ${sourceLabel}`,
+            })
+            const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", _paymentAccountId).single()
+            if (accRow) {
+              await supabase.from("finance_accounts").update({
+                current_balance: (accRow as any).current_balance - paid,
+              }).eq("id", _paymentAccountId)
+            }
             // Refresh finance accounts list so balances stay current
             getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
-          } catch (finErr) {
-            toast.error(`Phone saved but payment recording failed: ${finErr instanceof Error ? finErr.message : "Unknown error"}`)
           }
+          // Update supplier outstanding balance if partial/unpaid - supplier purchases only
+          if (sourceType === "purchased" && balanceDue > 0 && supplierId) {
+            const { data: supRow } = await supabase.from("suppliers").select("outstanding_balance").eq("id", supplierId).single()
+            if (supRow) {
+              await supabase.from("suppliers").update({
+                outstanding_balance: ((supRow as any).outstanding_balance ?? 0) + balanceDue,
+              }).eq("id", supplierId)
+            }
+          }
+        } catch (purchaseRecordErr) {
+          toast.error(`Phone saved but purchase record failed: ${purchaseRecordErr instanceof Error ? purchaseRecordErr.message : "Unknown error"}`)
         }
+
         setPhones(prev => [created, ...prev])
         toast.success("Phone added successfully")
       }
@@ -3350,92 +3582,69 @@ function UsedPhonesPageInner() {
         </div>
       </div>
 
-      {/* Stats — Row 1: Inventory summary + 6 grades */}
-      <div className="space-y-2">
-        <div className="grid grid-cols-8 gap-2">
-          {/* Inventory Summary */}
-          <div className="col-span-2 bg-white rounded-xl border border-slate-200 px-3 py-2.5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Inventory</p>
-              <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <p className="text-xl font-bold text-slate-900 leading-none">{stats.total}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Total devices</p>
-              </div>
-              <div className="flex-1 grid grid-cols-2 gap-0.5 text-[10px]">
-                <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-medium text-center">
-                  {phones.filter(p=>p.status==="in_stock").length} in stock
-                </span>
-                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium text-center">
-                  {phones.filter(p=>p.status==="under_repair").length} repair
-                </span>
-                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-center">
-                  {phones.filter(p=>p.status==="sold").length} sold
-                </span>
-                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded font-medium text-center">
-                  {phones.filter(p=>p.status==="listed_online").length} online
-                </span>
-              </div>
-            </div>
-          </div>
+      {/* Stats — core KPIs, same grid pattern as the rest of the app (no horizontal scroll) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+        <StatCard
+          title="Total Devices"
+          value={String(stats.total)}
+          icon={Smartphone}
+          iconBg="bg-indigo-100"
+          subtext={`${phones.filter(p => p.status === "in_stock").length} in stock`}
+        />
+        <StatCard
+          title="Under Repair"
+          value={String(phones.filter(p => p.status === "under_repair").length)}
+          icon={Wrench}
+          iconBg="bg-amber-100"
+          subtext="being refurbished"
+        />
+        <StatCard
+          title="Invested"
+          value={formatCurrency(stats.totalInvested)}
+          icon={DollarSign}
+          iconBg="bg-slate-100"
+          subtext="purchase + refurb"
+        />
+        <StatCard
+          title="Revenue"
+          value={formatCurrency(stats.revenueSold)}
+          icon={TrendingUp}
+          iconBg="bg-cyan-100"
+          subtext={`${phones.filter(p => p.status === "sold").length} sold`}
+        />
+        <StatCard
+          className="col-span-2 sm:col-span-3 lg:col-span-1"
+          centerOnMobile
+          title="Profit"
+          value={`${stats.profitSold >= 0 ? "+" : ""}${formatCurrency(stats.profitSold)}`}
+          icon={ArrowUpRight}
+          iconBg="bg-emerald-100"
+          subtext="completed sales"
+        />
+      </div>
 
-          {/* Grade breakdown — 6 cards */}
-          {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
-            const m = GRADE_META[g]
-            const count = stats.gradeCount[g]
-            return (
-              <div
-                key={g}
-                onClick={() => { setGradeFilter(gradeFilter === g ? "" : g); resetPage() }}
-                className={cn(
-                  "bg-white rounded-xl border px-2.5 py-2.5 cursor-pointer transition-all hover:shadow-sm",
-                  gradeFilter === g ? cn(m.border, "ring-2", m.ring) : "border-slate-200"
-                )}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <GradeBadge grade={g} />
-                  <span className="text-[9px] text-slate-400">Grade</span>
-                </div>
-                <p className="text-lg font-bold text-slate-900 leading-none">{count}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  {phones.filter(p => p.condition_grade === g && p.status === "in_stock").length} avail.
-                </p>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Row 2: Financial summary — 3 cards */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Invested</p>
-              <DollarSign className="w-3.5 h-3.5 text-slate-400" />
-            </div>
-            <p className="text-base font-bold text-slate-900 leading-none">{formatCurrency(stats.totalInvested)}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Purchase + refurb</p>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Revenue</p>
-              <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-            </div>
-            <p className="text-base font-bold text-slate-900 leading-none">{formatCurrency(stats.revenueSold)}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">{phones.filter(p=>p.status==="sold").length} sold</p>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Profit</p>
-              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />
-            </div>
-            <p className={cn("text-base font-bold leading-none", stats.profitSold >= 0 ? "text-emerald-700" : "text-rose-700")}>
-              {stats.profitSold >= 0 ? "+" : ""}{formatCurrency(stats.profitSold)}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Completed sales</p>
-          </div>
-        </div>
+      {/* Grade filter — 2 rows of 3 on mobile for breathing room, single row from sm: up */}
+      <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 sm:gap-1.5 sm:overflow-x-auto sm:scrollbar-none">
+        {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
+          const m = GRADE_META[g]
+          const count = stats.gradeCount[g]
+          const active = gradeFilter === g
+          return (
+            <button
+              key={g}
+              onClick={() => { setGradeFilter(active ? "" : g); resetPage() }}
+              className={cn(
+                "flex items-center justify-center gap-1.5 sm:justify-start sm:shrink-0 rounded-full border py-1.5 sm:py-1 pl-1 pr-2.5 text-xs font-medium transition-all",
+                active ? cn(m.bg, m.text, m.border, "ring-1", m.ring) : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+              )}
+            >
+              <span className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold", m.bg, m.text)}>
+                {g}
+              </span>
+              {count}
+            </button>
+          )
+        })}
       </div>
 
       {/* Search + controls */}
@@ -3468,8 +3677,8 @@ function UsedPhonesPageInner() {
               </span>
             )}
           </button>
-          {/* View toggle */}
-          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+          {/* View toggle - list view needs table width, so only offer it from sm up; phones always get cards */}
+          <div className="hidden sm:flex items-center border border-slate-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode("grid")}
               className={cn("p-1.5 transition-colors", viewMode === "grid" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50")}
@@ -3538,11 +3747,11 @@ function UsedPhonesPageInner() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Min Price (Rs)</label>
-              <input type="number" onWheel={e => e.currentTarget.blur()} value={minPrice} onChange={e => { setMinPrice(e.target.value); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <MoneyInput value={minPrice} onChange={v => { setMinPrice(v); resetPage() }} placeholder="0" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Max Price (Rs)</label>
-              <input type="number" onWheel={e => e.currentTarget.blur()} value={maxPrice} onChange={e => { setMaxPrice(e.target.value); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <MoneyInput value={maxPrice} onChange={v => { setMaxPrice(v); resetPage() }} placeholder="Any" className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Min Battery %</label>
@@ -3580,35 +3789,43 @@ function UsedPhonesPageInner() {
           <button onClick={clearFilters} className="mt-4 text-indigo-600 text-sm hover:underline">Clear filters</button>
         </div>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {paginated.map(phone => (
             <PhoneCard key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} onSell={handleSell} />
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Device</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Battery</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">PTA</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Total Cost</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Sell / Profit</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Date</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map(phone => (
-                <PhoneRow key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} onSell={handleSell} />
-              ))}
-            </tbody>
-          </table>
+        <>
+          {/* List view needs table width - phones always get cards regardless of the saved view mode */}
+          <div className="sm:hidden grid grid-cols-2 gap-3">
+            {paginated.map(phone => (
+              <PhoneCard key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} onSell={handleSell} />
+            ))}
           </div>
-        </div>
+          <div className="hidden sm:block bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Device</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Battery</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">PTA</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Total Cost</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Sell / Profit</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Date</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map(phone => (
+                  <PhoneRow key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} onSell={handleSell} />
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Pagination */}

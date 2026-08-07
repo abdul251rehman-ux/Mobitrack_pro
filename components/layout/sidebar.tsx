@@ -108,24 +108,26 @@ function SidebarContent({
   const { user, logout, hasPermission } = useAuth()
   const { language, t } = useLanguage()
 
+  // Nav labels stay in English (basic words everyone reads) with a short
+  // Urdu hint in brackets - unlike the rest of the app, where Urdu mode
+  // replaces English outright. "New Sale" / "New Purchase" live under the
+  // action.* prefix (shared with the quick-action tiles elsewhere), every
+  // other item under nav.*.
   function navLabel(label: string) {
     if (language !== "ur") return label
-    const key = `nav.${label}` as any
-    try {
-      const urdu = t(key)
-      if (urdu && urdu !== label) return `${label} (${urdu})`
-    } catch {}
-    return label
+    const key = (label === "New Sale" || label === "New Purchase" ? `action.${label}` : `nav.${label}`) as any
+    // t()'s fallback is the raw key string when a key doesn't exist at all -
+    // pass `label` explicitly so a missing translation just shows plain
+    // English instead of leaking "nav.Something" onto the screen.
+    const urdu = t(key, label)
+    return urdu !== label ? `${label} (${urdu})` : label
   }
 
   function sectionLabel(section: string) {
     if (language !== "ur") return section
     const key = `nav.section.${section}` as any
-    try {
-      const urdu = t(key)
-      if (urdu && urdu !== section) return `${section} · ${urdu}`
-    } catch {}
-    return section
+    const urdu = t(key, section)
+    return urdu !== section ? `${section} (${urdu})` : section
   }
   const [openAccordion, setOpenAccordion] = useState<string | null>(
     pathname.startsWith("/catalog") ? "Catalog"
@@ -270,7 +272,7 @@ function SidebarContent({
                           "flex items-center justify-center rounded-md mb-px py-2 transition-all duration-150 group relative",
                           active
                             ? "bg-indigo-600 text-white shadow-sm shadow-indigo-900/40"
-                            : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
+                            : "text-slate-300 hover:bg-white/10 hover:text-white"
                         )}
                       >
                         <ChildIcon className="flex-shrink-0 w-4 h-4" />
@@ -290,16 +292,16 @@ function SidebarContent({
                         "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md mb-px transition-all duration-150 group",
                         anyChildActive
                           ? "text-slate-200 bg-white/5"
-                          : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
+                          : "text-slate-300 hover:bg-white/10 hover:text-white"
                       )}
                     >
-                      <Icon className={cn("flex-shrink-0 w-4 h-4", anyChildActive ? "text-cyan-400" : "text-slate-500 group-hover:text-slate-300")} />
-                      <span className={cn("text-[12px] font-medium flex-1 text-left truncate", anyChildActive ? "text-slate-200" : "text-slate-400 group-hover:text-slate-200")}>
+                      <Icon className={cn("flex-shrink-0 w-4 h-4", anyChildActive ? "text-cyan-400" : "text-slate-400 group-hover:text-white")} />
+                      <span className={cn("text-[12px] font-medium flex-1 text-left truncate", anyChildActive ? "text-slate-200" : "text-slate-300 group-hover:text-white")}>
                         {navLabel(item.label)}
                       </span>
                       <ChevronDown
                         className={cn(
-                          "w-3 h-3 text-slate-600 transition-transform duration-200",
+                          "w-3 h-3 text-slate-500 group-hover:text-slate-300 transition-transform duration-200",
                           isOpen && "rotate-180"
                         )}
                       />
@@ -319,11 +321,11 @@ function SidebarContent({
                                 "flex items-center gap-2 px-2 py-1.5 rounded-md transition-all duration-150 group",
                                 active
                                   ? "bg-cyan-600/20 text-cyan-300"
-                                  : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
+                                  : "text-slate-300 hover:bg-white/10 hover:text-white"
                               )}
                             >
-                              <ChildIcon className={cn("flex-shrink-0 w-3.5 h-3.5", active ? "text-cyan-400" : "text-slate-600 group-hover:text-slate-400")} />
-                              <span className={cn("text-[11px] font-medium", active ? "text-cyan-300" : "text-slate-500 group-hover:text-slate-200")}>
+                              <ChildIcon className={cn("flex-shrink-0 w-3.5 h-3.5", active ? "text-cyan-400" : "text-slate-400 group-hover:text-slate-200")} />
+                              <span className={cn("text-[11px] font-medium", active ? "text-cyan-300" : "text-slate-300 group-hover:text-white")}>
                                 {navLabel(child.label)}
                               </span>
                               {active && <span className="ml-auto w-1 h-1 rounded-full bg-cyan-400" />}
@@ -349,12 +351,12 @@ function SidebarContent({
                     sidebarCollapsed ? "justify-center w-full py-2" : "gap-2.5 px-2 py-1.5",
                     active
                       ? "bg-indigo-600 text-white shadow-sm shadow-indigo-900/30"
-                      : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white"
                   )}
                 >
-                  <Icon className={cn("flex-shrink-0 w-4 h-4", active ? "text-white" : "text-slate-500 group-hover:text-slate-300")} />
+                  <Icon className={cn("flex-shrink-0 w-4 h-4", active ? "text-white" : "text-slate-400 group-hover:text-white")} />
                   {!sidebarCollapsed && (
-                    <span className={cn("text-[12px] font-medium truncate", active ? "text-white" : "text-slate-400 group-hover:text-slate-200")}>
+                    <span className={cn("text-[12px] font-medium truncate", active ? "text-white" : "text-slate-300 group-hover:text-white")}>
                       {navLabel(item.label)}
                     </span>
                   )}

@@ -170,6 +170,7 @@ export interface DbSupplier {
   city: string
   total_purchases: number
   outstanding_balance: number
+  opening_balance: number
   rating: number
   status: string
   notes: string | null
@@ -192,6 +193,7 @@ export interface DbCustomer {
   last_purchase_date: string | null
   loyalty_tier: string
   credit_limit: number | null
+  opening_balance: number
   notes: string | null
   created_at: string
   updated_at: string
@@ -765,6 +767,7 @@ export function toSupplier(db: DbSupplier): Supplier {
     city: db.city,
     totalPurchases: db.total_purchases,
     outstandingBalance: db.outstanding_balance,
+    openingBalance: db.opening_balance ?? 0,
     rating: db.rating,
     status: db.status as Supplier['status'],
     notes: db.notes ?? undefined,
@@ -781,6 +784,7 @@ export function toDbSupplier(s: Partial<Supplier>, tenantId: string): Partial<Db
   if (s.city !== undefined) db.city = s.city
   if (s.totalPurchases !== undefined) db.total_purchases = s.totalPurchases
   if (s.outstandingBalance !== undefined) db.outstanding_balance = s.outstandingBalance
+  if (s.openingBalance !== undefined) db.opening_balance = s.openingBalance ?? 0
   if (s.rating !== undefined) db.rating = s.rating
   if (s.status !== undefined) db.status = s.status
   if (s.notes !== undefined) db.notes = s.notes || null
@@ -807,6 +811,7 @@ export function toCustomer(db: DbCustomer): Customer {
     lastPurchaseDate: db.last_purchase_date ?? undefined,
     loyaltyTier: tier,
     creditLimit: db.credit_limit ?? undefined,
+    openingBalance: db.opening_balance ?? 0,
     notes: db.notes ?? undefined,
   }
 }
@@ -830,6 +835,7 @@ export function toDbCustomer(c: Partial<Customer>, tenantId: string): Partial<Db
   if (c.lastPurchaseDate !== undefined) db.last_purchase_date = c.lastPurchaseDate || null
   if (c.loyaltyTier !== undefined && c.totalSpent === undefined) db.loyalty_tier = c.loyaltyTier
   if (c.creditLimit !== undefined) db.credit_limit = c.creditLimit ?? null
+  if (c.openingBalance !== undefined) db.opening_balance = c.openingBalance ?? 0
   if (c.notes !== undefined) db.notes = c.notes || null
   return db as Partial<DbCustomer>
 }

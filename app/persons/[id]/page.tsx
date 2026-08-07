@@ -15,6 +15,7 @@ import {
 import { getFinanceAccounts } from "@/lib/api/finance"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
+import { MoneyInput } from "@/components/ui/money-input"
 import { PageLoader } from "@/components/shared/page-loader"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 
@@ -133,6 +134,7 @@ export default function PersonDetailPage() {
   }
 
   async function handleSave() {
+    if (saving) return
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return }
     if (!accountId) { toast.error("Select a finance account"); return }
@@ -158,7 +160,7 @@ export default function PersonDetailPage() {
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     setDeleting(true)
     try {
       await deletePersonTransaction(deleteTarget.id, {
@@ -269,29 +271,8 @@ export default function PersonDetailPage() {
           </div>
         ) : (
           <>
-            {/* Opening balance row */}
-            {(person.openingBalance !== 0) && (
-              <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                <div className="w-7 h-7 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
-                  <Wallet className="w-3.5 h-3.5 text-slate-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-600">Opening Balance</p>
-                  <p className="text-[10px] text-slate-400">Starting balance</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className={`text-xs font-bold ${person.openingBalance > 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                    {person.openingBalance > 0 ? "+" : ""}{formatCurrency(Math.abs(person.openingBalance))}
-                  </p>
-                  <p className={`text-[10px] font-semibold ${person.openingBalance > 0 ? "text-rose-500" : "text-emerald-500"}`}>
-                    {formatCurrency(Math.abs(person.openingBalance))} {person.openingBalance > 0 ? "Dr" : "Cr"}
-                  </p>
-                </div>
-              </div>
-            )}
-
             <div className="divide-y divide-slate-100">
-              {ledgerRows.map(txn => {
+              {[...ledgerRows].reverse().map(txn => {
                 const isGave = txn.type === "gave"
                 const theyOweNow = txn.runningBalance >= 0
                 return (
@@ -331,6 +312,27 @@ export default function PersonDetailPage() {
                 )
               })}
             </div>
+
+            {/* Opening balance row */}
+            {(person.openingBalance !== 0) && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border-t border-slate-100">
+                <div className="w-7 h-7 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                  <Wallet className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-600">Opening Balance</p>
+                  <p className="text-[10px] text-slate-400">Starting balance</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-xs font-bold ${person.openingBalance > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {person.openingBalance > 0 ? "+" : ""}{formatCurrency(Math.abs(person.openingBalance))}
+                  </p>
+                  <p className={`text-[10px] font-semibold ${person.openingBalance > 0 ? "text-rose-500" : "text-emerald-500"}`}>
+                    {formatCurrency(Math.abs(person.openingBalance))} {person.openingBalance > 0 ? "Dr" : "Cr"}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Footer balance */}
             <div className={`px-4 py-3 border-t flex items-center justify-between ${isTheyOwe ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100"}`}>
@@ -373,11 +375,10 @@ export default function PersonDetailPage() {
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
                     Amount (Rs) *
                   </label>
-                  <input
-                    type="number" onWheel={e => e.currentTarget.blur()}
+                  <MoneyInput
                     min={1}
                     value={amount}
-                    onChange={e => setAmount(e.target.value)}
+                    onChange={v => setAmount(v)}
                     placeholder="0"
                     autoFocus
                     className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -480,6 +481,7 @@ export default function PersonDetailPage() {
         cancelLabel="Cancel"
         variant="destructive"
         onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
   )

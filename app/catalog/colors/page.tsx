@@ -31,6 +31,8 @@ function ColorsPageInner() {
   const [deleteTarget, setDeleteTarget] = useState<ColorItem | null>(null)
   const [formName, setFormName] = useState("")
   const [formError, setFormError] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function fetchAll() {
     setLoading(true)
@@ -79,7 +81,9 @@ function ColorsPageInner() {
   }
 
   async function handleSave() {
+    if (saving) return
     if (!validate()) return
+    setSaving(true)
     try {
       const tenantId = await getTenantId()
       if (editTarget) {
@@ -95,17 +99,20 @@ function ColorsPageInner() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
+    } finally {
+      setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     if (deleteTarget.isSystem) { toast.error("System colors cannot be deleted"); return }
     if (deleteTarget.usageCount > 0) {
       toast.error(`Cannot delete - used in ${deleteTarget.usageCount} phone record${deleteTarget.usageCount !== 1 ? "s" : ""}`)
       setDeleteTarget(null)
       return
     }
+    setDeleting(true)
     try {
       const { error } = await supabase.from("colors").delete().eq("id", deleteTarget.id)
       if (error) throw error
@@ -114,6 +121,8 @@ function ColorsPageInner() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -220,17 +229,17 @@ function ColorsPageInner() {
                 placeholder="e.g. Midnight Black"
                 value={formName}
                 onChange={e => { setFormName(e.target.value); setFormError("") }}
-                className={cn("h-8 text-xs", formError ? "border-red-400" : "")}
+                className={cn("h-8 text-xs", formError ? "border-rose-400" : "")}
                 autoFocus
                 onKeyDown={e => { if (e.key === "Enter") handleSave() }}
               />
               {formError && <p className="text-[10px] text-rose-500">{formError}</p>}
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
-              {editTarget ? "Save" : "Add Color"}
+          <DialogFooter className="flex-row justify-end gap-2 space-x-0">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editTarget ? "Save" : "Add Color"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -241,9 +250,10 @@ function ColorsPageInner() {
         onOpenChange={open => !open && setDeleteTarget(null)}
         title="Delete Color"
         description={`Delete "${deleteTarget?.name}"? This cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
   )

@@ -46,6 +46,7 @@ export interface Supplier {
   city: string;
   totalPurchases: number;
   outstandingBalance: number;
+  openingBalance?: number;
   rating: number;
   status: "Active" | "Inactive";
   notes?: string;
@@ -65,6 +66,7 @@ export interface Customer {
   lastPurchaseDate?: string;
   loyaltyTier: "Bronze" | "Silver" | "Gold" | "Platinum";
   creditLimit?: number;
+  openingBalance?: number;
   notes?: string;
 }
 
@@ -229,7 +231,7 @@ export interface PurchaseItem {
   id?: string;               // purchase_items row id — needed for returned_qty updates
   productId: string;
   productName: string;
-  productType: "Mobile" | "Accessory";
+  productType: "Mobile" | "Accessory" | "UsedPhone";
   quantity: number;
   returnedQty: number;       // how many already returned across all past returns
   unitCost: number;

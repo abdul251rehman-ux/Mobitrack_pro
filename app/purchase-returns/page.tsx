@@ -19,9 +19,11 @@ import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDatePKT, todayPKT, cn } from "@/lib/utils"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
+import { PermissionGate } from "@/components/shared/permission-gate"
 import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -162,7 +164,7 @@ function refundMethodFromType(type: string): string {
 
 // â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-export default function PurchaseReturnsPage() {
+function PurchaseReturnsPageInner() {
   const searchParams = useSearchParams()
 
   const [returnsList,     setReturnsList]     = useState<PurchaseReturn[]>([])
@@ -204,7 +206,7 @@ export default function PurchaseReturnsPage() {
             setSelectedPurchaseId(match.id)
             setNewSupplierId(match.supplierId)
             setNewSupplierName(match.supplierName)
-            setLineItems(buildLineItems(match))
+            setLineItems(await buildLineItems(match))
             setShowCreate(true)
           }
         }
@@ -217,12 +219,54 @@ export default function PurchaseReturnsPage() {
     load()
   }, [])
 
-  // FIX 2 & 3: Build line items using returnedQty so maxQty = what's actually returnable
-  function buildLineItems(purchase: Purchase): ReturnLineItem[] {
+  // FIX 2 & 3: Build line items using returnedQty so maxQty = what's actually returnable.
+  // Also caps maxQty at what is physically still in stock (not sold/already returned),
+  // since a unit can only be returned to the supplier if we still have it.
+  async function buildLineItems(purchase: Purchase): Promise<ReturnLineItem[]> {
+    const tenantId = await getTenantId()
+
+    const allImeis = purchase.items.flatMap(item => item.imeis ?? [])
+    const imeiStatusMap = new Map<string, string>()
+    if (allImeis.length > 0) {
+      const { data: imeiRows } = await supabase
+        .from("imei_records")
+        .select("imei_number, device_status")
+        .eq("tenant_id", tenantId)
+        .in("imei_number", allImeis)
+      for (const row of imeiRows ?? []) {
+        imeiStatusMap.set((row as any).imei_number, (row as any).device_status)
+      }
+    }
+
+    const accessoryIds = purchase.items.filter(i => i.productType === "Accessory").map(i => i.productId)
+    const accessoryStockMap = new Map<string, number>()
+    if (accessoryIds.length > 0) {
+      const { data: accRows } = await supabase
+        .from("accessories")
+        .select("id, stock")
+        .eq("tenant_id", tenantId)
+        .in("id", accessoryIds)
+      for (const row of accRows ?? []) {
+        accessoryStockMap.set((row as any).id, (row as any).stock)
+      }
+    }
+
     return purchase.items
       .map(item => {
         const alreadyReturned = item.returnedQty ?? 0
-        const maxQty = item.quantity - alreadyReturned
+        let maxQty = item.quantity - alreadyReturned
+        let imeis = item.imeis ?? []
+
+        if (item.productType === "Mobile" || item.productType === "UsedPhone") {
+          // Only IMEIs still in_stock (not sold, not already returned) can go back to supplier
+          imeis = imeis.filter(imei => imeiStatusMap.get(imei) === "in_stock")
+          maxQty = Math.min(maxQty, imeis.length)
+        } else if (item.productType === "Accessory") {
+          // Aggregate stock may be lower than quantity-returnedQty if some units were sold
+          const currentStock = accessoryStockMap.get(item.productId) ?? maxQty
+          maxQty = Math.min(maxQty, currentStock)
+        }
+
         return {
           purchaseItemId: item.id ?? "",
           productId:      item.productId,
@@ -234,11 +278,11 @@ export default function PurchaseReturnsPage() {
           alreadyReturned,
           unitCost:       item.unitCost,
           reason:         "Defective",
-          imeis:          item.imeis ?? [],
+          imeis,
           selected:       false,
         }
       })
-      .filter(item => item.maxQty > 0) // FIX 3: hide fully-returned items
+      .filter(item => item.maxQty > 0) // FIX 3: hide fully-returned / fully-sold items
   }
 
   function dbToReturn(row: Record<string, unknown>): PurchaseReturn {
@@ -295,13 +339,23 @@ export default function PurchaseReturnsPage() {
     ).slice(0, 10)
   }, [purchases, purchaseSearchQuery])
 
-  function selectPurchase(purchase: Purchase) {
+  const [loadingLineItems, setLoadingLineItems] = useState(false)
+
+  async function selectPurchase(purchase: Purchase) {
     setSelectedPurchaseId(purchase.id)
     setPurchaseSearchQuery(`${purchase.poNumber} - ${purchase.supplierName}`)
     setShowPurchaseDropdown(false)
     setNewSupplierId(purchase.supplierId)
     setNewSupplierName(purchase.supplierName)
-    setLineItems(buildLineItems(purchase))
+    setLineItems([])
+    setLoadingLineItems(true)
+    try {
+      setLineItems(await buildLineItems(purchase))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load returnable items")
+    } finally {
+      setLoadingLineItems(false)
+    }
   }
 
   function updateLine(idx: number, field: keyof ReturnLineItem, value: unknown) {
@@ -493,6 +547,29 @@ export default function PurchaseReturnsPage() {
             }
           }
         }
+
+        if (line.productType === "UsedPhone") {
+          // used_phones has no stock count - each row is one physical device,
+          // so returning it means marking that row as no longer in inventory.
+          if (line.productId) {
+            const { data: used } = await supabase
+              .from("used_phones")
+              .select("id, status")
+              .eq("id", line.productId)
+              .eq("tenant_id", tenantId)
+              .single()
+            if (used) {
+              if ((used as any).status !== "in_stock") {
+                toast.warning(`Phone (IMEI ${line.imeis[0] ?? ""}) is not in stock - skipped from return.`)
+              } else {
+                await supabase.from("used_phones").update({ status: "returned" }).eq("id", line.productId)
+                rollback.push(async () => {
+                  await supabase.from("used_phones").update({ status: (used as any).status }).eq("id", line.productId)
+                })
+              }
+            }
+          }
+        }
       }
 
       // â"€â"€ Step 4: Financial effects by resolution â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -667,7 +744,7 @@ export default function PurchaseReturnsPage() {
       />
 
       {/* â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-4">
         <StatCard title="Total Returns"  value={String(stats.total)}              subtext="All time"        icon={RotateCcw}    iconBg="bg-rose-100"    />
         <StatCard title="Pending"        value={String(stats.pending)}            subtext="Awaiting action" icon={Clock}        iconBg="bg-amber-100"   />
         <StatCard title="Completed"      value={String(stats.completed)}          subtext="Resolved"        icon={CheckCircle2} iconBg="bg-emerald-100" />
@@ -773,7 +850,7 @@ export default function PurchaseReturnsPage() {
           CREATE DIALOG
       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={showCreate} onOpenChange={v => { if (!v) { setShowCreate(false); resetForm() } }}>
-        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto w-[96vw] p-4 sm:p-6">
+        <DialogContent className="max-w-2xl max-h-[92dvh] overflow-y-auto w-[96vw] p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900">New Purchase Return</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
@@ -847,11 +924,19 @@ export default function PurchaseReturnsPage() {
             )}
 
             {/* â"€â"€ Items â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+            {loadingLineItems && (
+              <div className="text-xs text-slate-400 py-4 text-center">Checking stock status of items...</div>
+            )}
+            {!loadingLineItems && selectedPurchaseId && lineItems.length === 0 && (
+              <div className="text-xs text-slate-400 py-4 text-center">
+                No returnable items - all units from this purchase are either sold or already returned.
+              </div>
+            )}
             {lineItems.length > 0 && (
               <div>
                 <Label className="text-xs font-semibold text-slate-600 mb-2 block">
                   Items - check items to return
-                  <span className="font-normal text-slate-400 ml-2">(only showing returnable items)</span>
+                  <span className="font-normal text-slate-400 ml-2">(only items still in stock are shown)</span>
                 </Label>
                 <div className="space-y-2">
                   {lineItems.map((line, idx) => (
@@ -871,7 +956,9 @@ export default function PurchaseReturnsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-semibold text-slate-800 truncate">{line.productName}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">{line.productType}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                              {line.productType === "UsedPhone" ? "Used Phone" : line.productType}
+                            </span>
                           </div>
 
                           {/* FIX 2 & 3: Show returnable qty clearly */}
@@ -903,8 +990,8 @@ export default function PurchaseReturnsPage() {
                               </div>
                               <div>
                                 <Label className="text-[10px] text-slate-500 mb-1 block">Unit Cost</Label>
-                                <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={line.unitCost}
-                                  onChange={e => updateLine(idx, "unitCost", parseFloat(e.target.value) || 0)}
+                                <MoneyInput min={0} value={line.unitCost}
+                                  onChange={v => updateLine(idx, "unitCost", parseFloat(v) || 0)}
                                   className="h-6 text-xs" />
                               </div>
                               <div>
@@ -1080,7 +1167,7 @@ export default function PurchaseReturnsPage() {
           VIEW DIALOG
       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Dialog open={!!viewReturn} onOpenChange={v => { if (!v) setViewReturn(null) }}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto w-[96vw] p-4 sm:p-6">
+        <DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto w-[96vw] p-4 sm:p-6">
           {viewReturn && (
             <>
               <DialogHeader>
@@ -1164,5 +1251,13 @@ export default function PurchaseReturnsPage() {
         </DialogContent>
       </Dialog>
     </PageWrapper>
+  )
+}
+
+export default function PurchaseReturnsPage() {
+  return (
+    <PermissionGate permission="purchases.view">
+      <PurchaseReturnsPageInner />
+    </PermissionGate>
   )
 }

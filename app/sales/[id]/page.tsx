@@ -57,6 +57,7 @@ export default function SaleDetailPage() {
   const [sale, setSale] = useState<Sale | null>(null)
   const [loading, setLoading] = useState(true)
   const [confirmRefund, setConfirmRefund] = useState(false)
+  const [refunding, setRefunding] = useState(false)
   const [shopInfo, setShopInfo] = useState<ShopInfo>({ shopName: "Mobile Shop", shopAddress: "", shopPhone: "" })
 
   useEffect(() => {
@@ -77,13 +78,16 @@ export default function SaleDetailPage() {
   }, [id, router])
 
   async function handleRefund() {
-    if (!sale) return
+    if (!sale || refunding) return
+    setRefunding(true)
     try {
       await updateSaleStatus(sale.id, "Refunded")
       setSale(prev => prev ? { ...prev, status: "Refunded" } : prev)
       toast.success("Sale marked as Refunded")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to refund")
+    } finally {
+      setRefunding(false)
     }
     setConfirmRefund(false)
   }
@@ -177,7 +181,7 @@ export default function SaleDetailPage() {
         </div>
 
         {/* Info grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-4 divide-y sm:divide-x sm:divide-y-0 divide-slate-100">
           <div className="p-4">
             <div className="flex items-center gap-1.5 mb-1">
               <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -384,10 +388,11 @@ export default function SaleDetailPage() {
         onOpenChange={(open) => !open && setConfirmRefund(false)}
         title="Process Refund"
         description={`Are you sure you want to refund ${sale.invoiceNumber}? This will mark the sale as Refunded.`}
-        confirmLabel="Yes, Refund"
+        confirmLabel={refunding ? "Processing..." : "Yes, Refund"}
         cancelLabel="Cancel"
         onConfirm={handleRefund}
         variant="destructive"
+        loading={refunding}
       />
     </div>
   )

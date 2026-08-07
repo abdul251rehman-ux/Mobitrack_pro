@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type UserRole = "Admin" | "Manager" | "Cashier"
+export type UserRole = "Admin" | "Manager" | "Cashier" | string
 
 export interface AuthUser {
   id: string
@@ -16,40 +16,61 @@ export interface AuthUser {
   role: UserRole
   avatar?: string
   status: string
+  permissions: string[] | "*"
 }
 
 /** @deprecated Use AuthUser instead */
 export type AppUser = AuthUser
 
-// ─── Permission matrix ──────────────────────────────────────────────────────
+// ─── All available permission keys ──────────────────────────────────────────
 
-const ROLE_PERMISSIONS: Record<UserRole, string[] | "*"> = {
+export const ALL_MODULES = [
+  { key: "sales",           label: "Sales",             actions: ["view","create","edit","delete"] },
+  { key: "purchases",       label: "Purchases",         actions: ["view","create","edit","delete"] },
+  { key: "returns",         label: "Sale Returns",      actions: ["view","create","edit","delete"] },
+  { key: "inventory",       label: "Inventory",         actions: ["view","edit"] },
+  { key: "products",        label: "Products",          actions: ["view","create","edit","delete"] },
+  { key: "catalog",         label: "Catalog",           actions: ["view","edit"] },
+  { key: "customers",       label: "Customers",         actions: ["view","create","edit","delete"] },
+  { key: "suppliers",       label: "Suppliers",         actions: ["view","create","edit","delete"] },
+  { key: "expenses",        label: "Expenses",          actions: ["view","create","edit","delete"] },
+  { key: "payments",        label: "Finance / Payments",actions: ["view","create","edit"] },
+  { key: "ledger",          label: "Ledger",            actions: ["view"] },
+  { key: "reports",         label: "Reports",           actions: ["view"] },
+  { key: "rebate",          label: "Rebate",            actions: ["view","create","edit","delete"] },
+  { key: "staff",           label: "Staff",             actions: ["view","create","edit","delete"] },
+  { key: "settings",        label: "Settings",          actions: ["general"] },
+  { key: "audit-log",       label: "Audit Log",         actions: ["view"] },
+] as const
+
+// Default permissions for built-in roles (used as templates when creating staff)
+export const ROLE_PERMISSION_TEMPLATES: Record<string, string[] | "*"> = {
   Admin: "*",
   Manager: [
-    "sales.create", "sales.view", "sales.edit", "sales.delete",
-    "purchases.create", "purchases.view", "purchases.edit", "purchases.delete",
-    "products.create", "products.view", "products.edit", "products.delete",
-    "customers.create", "customers.view", "customers.edit", "customers.delete",
-    "suppliers.create", "suppliers.view", "suppliers.edit", "suppliers.delete",
-    "inventory.view", "inventory.edit",
-    "expenses.create", "expenses.view", "expenses.edit", "expenses.delete",
-    "returns.create", "returns.view", "returns.edit",
-    "warranty.create", "warranty.view", "warranty.edit",
-    "repairs.create", "repairs.view", "repairs.edit",
-    "reports.view",
-    "payments.create", "payments.view", "payments.edit",
-    "shops.create", "shops.view", "shops.edit", "shops.delete",
-    "catalog.view", "catalog.edit",
+    "sales.view","sales.create","sales.edit","sales.delete",
+    "purchases.view","purchases.create","purchases.edit","purchases.delete",
+    "returns.view","returns.create","returns.edit",
+    "products.view","products.create","products.edit","products.delete",
+    "catalog.view","catalog.edit",
+    "customers.view","customers.create","customers.edit","customers.delete",
+    "suppliers.view","suppliers.create","suppliers.edit","suppliers.delete",
+    "inventory.view","inventory.edit",
+    "expenses.view","expenses.create","expenses.edit","expenses.delete",
+    "payments.view","payments.create","payments.edit",
     "ledger.view",
+    "reports.view",
+    "rebate.view","rebate.create","rebate.edit",
+    "staff.view",
     "settings.general",
     "audit-log.view",
   ],
   Cashier: [
-    "sales.create", "sales.view",
-    "customers.view", "customers.create",
+    "sales.view","sales.create",
+    "customers.view","customers.create",
     "products.view",
     "inventory.view",
   ],
+  Custom: [],
 }
 
 // ─── Context types ───────────────────────────────────────────────────────────
@@ -79,7 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // On mount: restore session from localStorage (expires after SESSION_TTL_MS)
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -91,6 +111,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem(STORAGE_KEY)
         } else {
           const { _loginedAt: _, ...authUser } = parsed
+          // Backfill permissions for sessions saved before this field existed
+          if (authUser.role === "Admin") {
+            authUser.permissions = "*"
+          } else if (!Array.isArray(authUser.permissions) || authUser.permissions.length === 0) {
+            authUser.permissions = ROLE_PERMISSION_TEMPLATES[authUser.role] ?? []
+          }
           setUser(authUser)
         }
       }
@@ -100,57 +126,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  // ── login: check email + password against profiles table ──────────────────
-
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
-    try {
-      const { data: rows, error } = await supabase
-        .from("profiles")
-        .select("id, tenant_id, name, email, phone, role, avatar_url, status, password")
-        .eq("email", email.toLowerCase().trim())
-        .order("created_at", { ascending: false })
-        .limit(1)
-
-      const data = rows?.[0] ?? null
-
-      if (error || !data) {
-        console.error("Login: user not found", error?.message)
-        return false
-      }
-
-      // Check password
-      if (data.password !== password) {
-        console.error("Login: wrong password")
-        return false
-      }
-
-      // Check active status
-      if (data.status?.toLowerCase() === "inactive") {
-        console.error("Login: account inactive")
-        return false
-      }
-
-      const authUser: AuthUser = {
-        id: data.id,
-        tenantId: data.tenant_id,
-        name: data.name ?? "",
-        email: data.email ?? "",
-        phone: data.phone ?? "",
-        role: data.role as UserRole,
-        avatar: data.avatar_url ?? undefined,
-        status: data.status ?? "Active",
-      }
-
-      setUser(authUser)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...authUser, _loginedAt: Date.now() }))
-      return true
-    } catch (err) {
-      console.error("Login exception:", err)
-      return false
+    // Fail fast with a clear message when there's no network at all, rather
+    // than letting the request hang and surface as a generic/misleading error.
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      throw new Error("You're offline - check your internet connection and try again.")
     }
-  }, [])
 
-  // ── signUp: create tenant + profile ───────────────────────────────────────
+    const { data: rows, error } = await supabase
+      .from("profiles")
+      .select("id, tenant_id, name, email, phone, role, avatar_url, status, password, permissions")
+      .eq("email", email.toLowerCase().trim())
+      .order("created_at", { ascending: false })
+      .limit(1)
+
+    // A real connection/DB error (network down, Supabase unreachable, etc.)
+    // must not be reported as "wrong password" - surface it distinctly.
+    if (error) throw new Error("Could not reach the server - check your internet connection and try again.")
+
+    const data = rows?.[0] ?? null
+
+    if (!data) return false
+    if (data.password !== password) return false
+    if (data.status?.toLowerCase() === "inactive") return false
+
+    // Resolve permissions: DB field takes priority; fallback to role template
+    let permissions: string[] | "*"
+    if (data.role === "Admin") {
+      permissions = "*"
+    } else if (Array.isArray(data.permissions) && data.permissions.length > 0) {
+      permissions = data.permissions as string[]
+    } else {
+      permissions = (ROLE_PERMISSION_TEMPLATES[data.role] ?? []) as string[]
+    }
+
+    const authUser: AuthUser = {
+      id: data.id,
+      tenantId: data.tenant_id,
+      name: data.name ?? "",
+      email: data.email ?? "",
+      phone: data.phone ?? "",
+      role: data.role as UserRole,
+      avatar: data.avatar_url ?? undefined,
+      status: data.status ?? "Active",
+      permissions,
+    }
+
+    setUser(authUser)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...authUser, _loginedAt: Date.now() }))
+    return true
+  }, [])
 
   const signUp = useCallback(
     async (
@@ -159,18 +184,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       metadata: { name: string; phone: string; shopName: string }
     ): Promise<{ success: boolean; error?: string }> => {
       try {
-        // Check if email already exists
         const { data: existing } = await supabase
           .from("profiles")
           .select("id")
           .eq("email", email.toLowerCase().trim())
           .single()
 
-        if (existing) {
-          return { success: false, error: "Email already registered" }
-        }
+        if (existing) return { success: false, error: "Email already registered" }
 
-        // Create tenant
         const { data: tenant, error: tenantErr } = await supabase
           .from("tenants")
           .insert({
@@ -186,7 +207,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { success: false, error: "Failed to create shop: " + tenantErr?.message }
         }
 
-        // Create profile
         const { error: profileErr } = await supabase
           .from("profiles")
           .insert({
@@ -198,18 +218,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: "Admin",
             status: "Active",
             password: password,
+            permissions: null,
           })
 
         if (profileErr) {
-          // Rollback tenant
           await supabase.from("tenants").delete().eq("id", tenant.id)
           return { success: false, error: "Failed to create profile: " + profileErr.message }
         }
 
-        // Create tenant settings
         await supabase.from("tenant_settings").insert({ tenant_id: tenant.id })
 
-        // Seed default catalog for this tenant
         const tid = tenant.id
         await Promise.all([
           supabase.from("brands").insert([
@@ -272,21 +290,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   )
 
-  // ── logout ─────────────────────────────────────────────────────────────────
-
   const logout = useCallback(async () => {
     setUser(null)
     localStorage.removeItem(STORAGE_KEY)
   }, [])
 
-  // ── hasPermission ──────────────────────────────────────────────────────────
-
   const hasPermission = useCallback(
     (permission: string): boolean => {
       if (!user) return false
-      const perms = ROLE_PERMISSIONS[user.role]
-      if (perms === "*") return true
-      return perms.includes(permission)
+      if (user.permissions === "*") return true
+      if (!Array.isArray(user.permissions)) return false
+      return user.permissions.includes(permission)
     },
     [user]
   )
@@ -301,8 +315,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   )
 }
-
-// ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useAuth() {
   const context = useContext(AuthContext)

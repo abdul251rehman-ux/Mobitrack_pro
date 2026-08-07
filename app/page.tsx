@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { format, subMonths, subDays, startOfWeek, endOfWeek, subWeeks, addDays, parseISO, differenceInDays } from "date-fns"
+import { useLanguage } from "@/context/language-context"
 
 /* â"€â"€â"€ Custom Tooltips â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 const SparkTooltip = ({ active, payload }: any) => {
@@ -70,6 +71,7 @@ type Period = "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "y
 /* â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const TODAY = todayPKT()
   const [period, setPeriod] = useState<Period>("month")
   const [dateFrom, setDateFrom] = useState("")
@@ -306,23 +308,23 @@ export default function DashboardPage() {
   const totalPurchasesCount = purchases.length
 
   const periodLabel = {
-    yesterday: "Yesterday",
-    thisWeek: "This Week",
-    lastWeek: "Last Week",
-    month: "This Month",
-    lastMonth: "Last Month",
-    year: "This Year",
-    range: dateFrom && dateTo ? `${dateFrom} - ${dateTo}` : "Custom Range",
+    yesterday: t("dash.Yesterday"),
+    thisWeek: t("dash.This Week"),
+    lastWeek: t("dash.Last Week"),
+    month: t("dash.This Month"),
+    lastMonth: t("dash.Last Month"),
+    year: t("dash.This Year"),
+    range: dateFrom && dateTo ? `${dateFrom} - ${dateTo}` : t("dash.Custom Range"),
   }[period]
 
   const FILTER_OPTIONS: { value: Period; label: string; icon: React.ElementType; desc: string }[] = [
-    { value: "yesterday", label: "Yesterday",    icon: Clock,        desc: "Sales from yesterday" },
-    { value: "thisWeek",  label: "This Week",    icon: CalendarDays, desc: "Mon - today" },
-    { value: "lastWeek",  label: "Last Week",    icon: CalendarDays, desc: "Mon - Sun, prev week" },
-    { value: "month",     label: "This Month",   icon: Calendar,     desc: format(todayParsed, "MMMM yyyy") },
-    { value: "lastMonth", label: "Last Month",   icon: Calendar,     desc: format(subMonths(todayParsed, 1), "MMMM yyyy") },
-    { value: "year",      label: "This Year",    icon: TrendingUp,   desc: currentYearKey },
-    { value: "range",     label: "Custom Range", icon: CalendarDays, desc: "Pick a date range" },
+    { value: "yesterday", label: t("dash.Yesterday"),    icon: Clock,        desc: t("dash.Sales from yesterday") },
+    { value: "thisWeek",  label: t("dash.This Week"),    icon: CalendarDays, desc: t("dash.Mon to today") },
+    { value: "lastWeek",  label: t("dash.Last Week"),    icon: CalendarDays, desc: t("dash.Mon to Sun prev") },
+    { value: "month",     label: t("dash.This Month"),   icon: Calendar,     desc: format(todayParsed, "MMMM yyyy") },
+    { value: "lastMonth", label: t("dash.Last Month"),   icon: Calendar,     desc: format(subMonths(todayParsed, 1), "MMMM yyyy") },
+    { value: "year",      label: t("dash.This Year"),    icon: TrendingUp,   desc: currentYearKey },
+    { value: "range",     label: t("dash.Custom Range"), icon: CalendarDays, desc: t("dash.Pick a date range") },
   ]
 
   if (loading) {
@@ -348,20 +350,20 @@ export default function DashboardPage() {
         <div className="absolute right-6 top-2 w-12 h-12 rounded-full bg-white/8" />
         <div className="relative flex items-center justify-between">
           <div>
-            <p className="text-indigo-200 text-xs font-medium">Welcome back,</p>
+            <p className="text-indigo-200 text-xs font-medium">{t("dash.Welcome back")}</p>
             <h1 className="text-white text-lg sm:text-xl font-bold tracking-tight leading-tight">{user?.name || "User"}</h1>
             <p className="text-indigo-200 text-xs mt-0.5">{formatDate(TODAY)} - {shopName}</p>
           </div>
           <div className="hidden md:flex items-center gap-4">
             <div className="text-right">
-              <p className="text-indigo-200 text-[11px]">Today's Sales</p>
+              <p className="text-indigo-200 text-[11px]">{t("dash.Today Sales")}</p>
               <p className="text-white text-lg font-bold leading-tight">
                 {formatCurrency(sales.filter(s => s.date === TODAY).reduce((s, x) => s + x.total, 0))}
               </p>
             </div>
             <div className="w-px h-8 bg-white/20" />
             <div className="text-right">
-              <p className="text-indigo-200 text-[11px]">Transactions</p>
+              <p className="text-indigo-200 text-[11px]">{t("dash.Transactions")}</p>
               <p className="text-white text-lg font-bold leading-tight">
                 {sales.filter(s => s.date === TODAY).length}
               </p>
@@ -373,12 +375,12 @@ export default function DashboardPage() {
       {/* â"€â"€ Quick Actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
         {[
-          { href: "/sales/new",            icon: Plus,        label: "New Sale",     bg: "from-indigo-500 to-indigo-600",       shadow: "shadow-indigo-200"   },
-          { href: "/purchases/new",        icon: ShoppingBag, label: "New Purchase", bg: "from-violet-500 to-violet-600",   shadow: "shadow-violet-200" },
-          { href: "/products/mobiles",     icon: Smartphone,  label: "Add Mobile",   bg: "from-emerald-500 to-emerald-600", shadow: "shadow-emerald-200"},
-          { href: "/products/accessories", icon: Package,     label: "Accessories",  bg: "from-amber-500 to-amber-600",     shadow: "shadow-amber-200"  },
-          { href: "/customers",            icon: Users,       label: "Customers",    bg: "from-rose-500 to-rose-600",       shadow: "shadow-rose-200"   },
-          { href: "/reports",              icon: BarChart2,   label: "Reports",      bg: "from-cyan-500 to-cyan-600",       shadow: "shadow-cyan-200"   },
+          { href: "/sales/new",            icon: Plus,        label: t("action.New Sale"),     bg: "from-indigo-500 to-indigo-600",       shadow: "shadow-indigo-200"   },
+          { href: "/purchases/new",        icon: ShoppingBag, label: t("action.New Purchase"), bg: "from-violet-500 to-violet-600",   shadow: "shadow-violet-200" },
+          { href: "/products/mobiles",     icon: Smartphone,  label: t("dash.Add Mobile"),   bg: "from-emerald-500 to-emerald-600", shadow: "shadow-emerald-200"},
+          { href: "/products/accessories", icon: Package,     label: t("nav.Accessories"),  bg: "from-amber-500 to-amber-600",     shadow: "shadow-amber-200"  },
+          { href: "/customers",            icon: Users,       label: t("nav.Customers"),    bg: "from-rose-500 to-rose-600",       shadow: "shadow-rose-200"   },
+          { href: "/reports",              icon: BarChart2,   label: t("dash.Reports"),      bg: "from-cyan-500 to-cyan-600",       shadow: "shadow-cyan-200"   },
         ].map(({ href, icon: Icon, label, bg, shadow }) => (
           <Link key={href} href={href}>
             <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-white border border-slate-100 p-2.5 sm:p-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer text-center group shadow-sm">
@@ -440,7 +442,7 @@ export default function DashboardPage() {
             <div className="sm:hidden fixed inset-0 z-[9999] flex flex-col justify-end" onClick={() => setShowFilterMenu(false)}>
               <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
               <div
-                className="relative bg-white rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto"
+                className="relative bg-white rounded-t-3xl shadow-2xl max-h-[85dvh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}
               >
                 <div className="flex justify-center pt-3 pb-1">
@@ -513,20 +515,20 @@ export default function DashboardPage() {
         <div className="sm:hidden space-y-2">
           {([
             {
-              label: "Sales Revenue", value: formatCurrency(periodRevenue),
-              sub: `${filteredSales.length} transactions`,
+              label: t("dash.Sales Revenue"), value: formatCurrency(periodRevenue),
+              sub: `${filteredSales.length} ${t("dash.transactions")}`,
               icon: ShoppingCart, grad: "from-indigo-500 to-indigo-600",
               shadow: "shadow-indigo-200/60",
             },
             {
-              label: "Purchases", value: formatCurrency(periodPurchases),
-              sub: `${filteredPurchases.length} orders`,
+              label: t("dash.Purchases"), value: formatCurrency(periodPurchases),
+              sub: `${filteredPurchases.length} ${t("dash.orders")}`,
               icon: TrendingUp, grad: "from-violet-500 to-violet-600",
               shadow: "shadow-violet-200/60",
             },
             {
-              label: "Gross Profit", value: formatCurrency(Math.max(0, Math.round(periodProfit))),
-              sub: `${periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% margin`,
+              label: t("dash.Gross Profit"), value: formatCurrency(Math.max(0, Math.round(periodProfit))),
+              sub: `${periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% ${t("dash.margin")}`,
               icon: DollarSign, grad: "from-emerald-500 to-emerald-600",
               shadow: "shadow-emerald-200/60",
             },
@@ -652,18 +654,18 @@ export default function DashboardPage() {
       {/* â"€â"€ Stat Counters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
         {([
-          { label: "Total Products",  value: totalProducts,       icon: Package,      color: "text-indigo-600",    bg: "bg-indigo-50",    border: "border-indigo-100",    href: "/products/mobiles" },
-          { label: "Customers",       value: customers.length,    icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100",  href: "/customers"        },
-          { label: "Suppliers",       value: suppliers.length,    icon: Truck,        color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100", href: "/suppliers"        },
-          { label: "Total Sales",     value: totalSalesCount,     icon: ShoppingCart, color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-100",   href: "/sales"            },
-          { label: "Total Purchases", value: totalPurchasesCount, icon: TrendingUp,   color: "text-rose-600",    bg: "bg-rose-50",    border: "border-rose-100",    href: "/purchases"        },
-        ] as const).map(({ label, value, icon: Icon, color, bg, border, href }, idx) => (
+          { label: t("dash.Total Products"),  value: totalProducts,       icon: Package,      color: "text-indigo-600",    bg: "bg-indigo-50",    border: "border-indigo-100",    href: "/products/mobiles" },
+          { label: t("nav.Customers"),        value: customers.length,    icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100",  href: "/customers"        },
+          { label: t("dash.Suppliers"),       value: suppliers.length,    icon: Truck,        color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100", href: "/suppliers"        },
+          { label: t("dash.Total Sales"),     value: totalSalesCount,     icon: ShoppingCart, color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-100",   href: "/sales"            },
+          { label: t("fin.Total Purchases"),  value: totalPurchasesCount, icon: TrendingUp,   color: "text-rose-600",    bg: "bg-rose-50",    border: "border-rose-100",    href: "/purchases"        },
+        ]).map(({ label, value, icon: Icon, color, bg, border, href }, idx) => (
           <Link key={href} href={href} className={idx === 4 ? "col-span-2 sm:col-span-1" : ""}>
-            <div className={`flex items-center gap-3 rounded-xl bg-white border ${border} px-3 py-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer shadow-sm h-full`}>
+            <div className={`flex items-center gap-3 rounded-xl bg-white border ${border} px-3 py-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer shadow-sm h-full ${idx === 4 ? "justify-center sm:justify-start" : ""}`}>
               <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
-              <div className="min-w-0">
+              <div className={`min-w-0 ${idx === 4 ? "text-center sm:text-left" : ""}`}>
                 <p className="text-xl font-bold text-slate-800 leading-none">{value}</p>
                 <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">{label}</p>
               </div>
@@ -749,19 +751,26 @@ export default function DashboardPage() {
             {/* Mobile card list */}
             <div className="divide-y divide-slate-50 md:hidden">
               {recentSales.map(sale => (
-                <div key={sale.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50/70 transition-colors gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded shrink-0">{sale.invoiceNumber}</span>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-800 text-xs truncate">{sale.customerName}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(sale.date)}</p>
+                <Link key={sale.id} href={`/sales/${sale.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50/70 active:bg-slate-100 transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-indigo-700 text-xs font-bold">
+                      {sale.customerName.trim().split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-slate-800 text-sm truncate">{sale.customerName}</p>
+                      <span className="font-bold text-slate-800 text-sm shrink-0">{formatCurrency(sale.total)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="font-mono text-[10px] text-slate-400 truncate">{sale.invoiceNumber}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-slate-400">{formatDate(sale.date)}</span>
+                        <StatusBadge status={sale.status} />
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-bold text-slate-800 text-xs">{formatCurrency(sale.total)}</span>
-                    <StatusBadge status={sale.status} />
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
             {/* Desktop table */}
@@ -821,19 +830,26 @@ export default function DashboardPage() {
             {/* Mobile card list */}
             <div className="divide-y divide-slate-50 md:hidden">
               {recentPurchases.map(p => (
-                <div key={p.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50/70 transition-colors gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="font-mono text-[10px] font-bold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded shrink-0">{p.poNumber}</span>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-800 text-xs truncate">{p.supplierName}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(p.date)}</p>
+                <Link key={p.id} href={`/purchases/${p.id}/edit`} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50/70 active:bg-slate-100 transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-violet-700 text-xs font-bold">
+                      {p.supplierName.trim().split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-slate-800 text-sm truncate">{p.supplierName}</p>
+                      <span className="font-bold text-slate-800 text-sm shrink-0">{formatCurrency(p.total)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="font-mono text-[10px] text-slate-400 truncate">{p.poNumber}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-slate-400">{formatDate(p.date)}</span>
+                        <StatusBadge status={p.paymentStatus} />
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-bold text-slate-800 text-xs">{formatCurrency(p.total)}</span>
-                    <StatusBadge status={p.paymentStatus} />
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
             {/* Desktop table */}

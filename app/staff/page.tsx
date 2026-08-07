@@ -263,7 +263,7 @@ function StaffPageInner() {
   useEffect(() => { fetchStaff() }, [])
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     setDeleting(true)
     try {
       const tenantId = await getTenantId()
@@ -322,7 +322,96 @@ function StaffPageInner() {
             {isAdmin && <p className="text-xs mt-1">Click "Add Staff" to get started</p>}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile cards */}
+          <div className="sm:hidden divide-y divide-slate-100">
+            {staff.map(member => {
+              const effectivePerms = member.role === "Admin"
+                ? "*"
+                : (member.permissions ?? ROLE_PERMISSION_TEMPLATES[member.role] ?? []) as string[] | "*"
+              const permCount = effectivePerms === "*" ? "All" : `${(effectivePerms as string[]).length}`
+              const isExpanded = expandedPerms === member.id
+              return (
+                <div key={member.id} className="p-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={member.name} id={member.id} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5 truncate">
+                        {member.name}
+                        {member.id === currentUser?.id && (
+                          <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-medium shrink-0">You</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate">{member.email}</p>
+                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-indigo-600"
+                          onClick={() => setEditTarget(member)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        {member.id !== currentUser?.id && (
+                          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600"
+                            onClick={() => setDeleteTarget(member)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {member.phone && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-slate-400" /> {member.phone}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <RoleBadge role={member.role} permissions={member.permissions} />
+                    <span className={cn(
+                      "text-xs font-medium px-2 py-0.5 rounded-full border",
+                      member.status === "Active"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200"
+                    )}>
+                      {member.status}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedPerms(isExpanded ? null : member.id)}
+                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 transition-colors"
+                  >
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-semibold",
+                      effectivePerms === "*" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600"
+                    )}>
+                      {permCount}
+                    </span>
+                    <span className="text-[11px]">permissions</span>
+                    {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                  {isExpanded && (
+                    effectivePerms === "*" ? (
+                      <p className="text-xs text-violet-700 font-medium">Full access to everything — Admin</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(effectivePerms as string[]).map(p => (
+                          <span key={p} className="text-[10px] bg-slate-50 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                            {p}
+                          </span>
+                        ))}
+                        {(effectivePerms as string[]).length === 0 && (
+                          <span className="text-xs text-slate-400">No permissions assigned</span>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
@@ -434,6 +523,7 @@ function StaffPageInner() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
@@ -466,6 +556,7 @@ function StaffPageInner() {
         confirmLabel={deleting ? "Removing..." : "Remove"}
         onConfirm={handleDelete}
         variant="destructive"
+        loading={deleting}
       />
     </div>
   )
@@ -508,6 +599,7 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
   }
 
   async function onSubmit(data: AddForm) {
+    if (saving) return
     setSaving(true)
     try {
       const tenantId = await getTenantId()
@@ -559,16 +651,16 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="w-[96vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
             <Plus className="w-4 h-4 text-indigo-600" /> Add Staff Member
           </DialogTitle>
           <DialogDescription className="text-xs text-slate-500">Create login credentials and set permissions</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1 min-w-0">
           {/* Basic info */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Full Name *</Label>
               <div className="relative">
@@ -587,7 +679,7 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Email (Login ID) *</Label>
               <div className="relative">
@@ -697,6 +789,7 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
   }
 
   async function onSubmit(data: EditForm) {
+    if (saving) return
     setSaving(true)
     try {
       const tenantId = await getTenantId()
@@ -746,15 +839,15 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
 
   return (
     <Dialog open={true} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="w-[96vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
             <Pencil className="w-4 h-4 text-indigo-600" /> Edit Staff Member
           </DialogTitle>
           <DialogDescription className="text-xs text-slate-500">{member.email}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Full Name *</Label>
               <Input {...register("name")} className="h-9 text-sm" />
@@ -767,7 +860,7 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Status *</Label>
               <Select value={watch("status")} onValueChange={v => setValue("status", v as any)}>

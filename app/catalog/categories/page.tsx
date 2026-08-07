@@ -197,7 +197,7 @@ function CategoriesPageInner() {
       />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
           { title: "Total Categories",   value: stats.total,      sub: `${stats.totalUnits} total units`,  Icon: Layers,     bg: "bg-indigo-500"  },
           { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA - Non-PTA - JV",               Icon: Smartphone, bg: "bg-cyan-500"    },
@@ -205,8 +205,8 @@ function CategoriesPageInner() {
           { title: "Total Units",        value: stats.totalUnits, sub: "Across all categories",             Icon: Package,    bg: "bg-slate-500"   },
         ].map(card => (
           <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 leading-none">{card.title}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 leading-tight min-w-0">{card.title}</p>
               <div className={`w-6 h-6 rounded-md ${card.bg} flex items-center justify-center shrink-0`}>
                 <card.Icon className="w-3.5 h-3.5 text-white" />
               </div>
@@ -218,12 +218,12 @@ function CategoriesPageInner() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0">
         {(["All", "iPhone", "Android"] as FilterType[]).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
               filter === f
                 ? "bg-indigo-600 text-white border-indigo-600"
                 : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"

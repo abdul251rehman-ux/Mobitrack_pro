@@ -329,6 +329,27 @@ export default function SupplierDetailPage() {
                 data={supplierPurchases}
                 searchKey="poNumber"
                 searchPlaceholder="Search by PO number..."
+                renderCard={(purchase) => {
+                  const qty = purchase.items.reduce((sum, i) => sum + i.quantity, 0)
+                  return (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-blue-600">{purchase.poNumber}</span>
+                        <StatusBadge status={purchase.paymentStatus} />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>{purchase.items.length} line{purchase.items.length !== 1 ? "s" : ""} · {qty} units</span>
+                        <span>{formatDate(purchase.date)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                        <span className="font-bold text-slate-900">{formatCurrency(purchase.total)}</span>
+                        {purchase.balanceDue > 0
+                          ? <span className="font-semibold text-red-600">Due {formatCurrency(purchase.balanceDue)}</span>
+                          : <span className="text-blue-700">Paid {formatCurrency(purchase.amountPaid)}</span>}
+                      </div>
+                    </div>
+                  )
+                }}
               />
             </div>
           )}

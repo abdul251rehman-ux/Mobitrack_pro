@@ -139,6 +139,8 @@ function SettingsPageInner() {
   const [editUser, setEditUser] = useState<AppUser | null>(null)
   const [toggleTarget, setToggleTarget] = useState<AppUser | null>(null)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [savingUser, setSavingUser] = useState(false)
+  const [togglingStatus, setTogglingStatus] = useState(false)
   const importFileRef = useRef<HTMLInputElement>(null)
 
   const userForm = useForm<UserForm>({
@@ -215,7 +217,9 @@ function SettingsPageInner() {
     setUserDialogOpen(true)
   }
   async function onUserSubmit(data: UserForm) {
+    if (savingUser) return
     const status = data.status ? "Active" : "Inactive"
+    setSavingUser(true)
     try {
       if (editUser) {
         if (!data.password && !editUser) {
@@ -230,7 +234,7 @@ function SettingsPageInner() {
           : u))
         toast.success(`${data.name} updated`)
       } else {
-        if (!data.password) { toast.error("Password is required for new users"); return }
+        if (!data.password) { toast.error("Password is required for new users"); setSavingUser(false); return }
         const created = await createProfile({ name: data.name, email: data.email, role: data.role, password: data.password, status })
         setUsers(prev => [{ id: created.id, name: data.name, email: data.email, role: data.role as UserRole, status, lastLogin: "Never" }, ...prev])
         toast.success(`${data.name} added - they can now log in`)
@@ -238,11 +242,14 @@ function SettingsPageInner() {
       setUserDialogOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save user")
+    } finally {
+      setSavingUser(false)
     }
   }
   async function confirmToggleStatus() {
-    if (!toggleTarget) return
+    if (!toggleTarget || togglingStatus) return
     const next: UserStatus = toggleTarget.status === "Active" ? "Inactive" : "Active"
+    setTogglingStatus(true)
     try {
       await updateProfileFull(toggleTarget.id, {
         name: toggleTarget.name, email: toggleTarget.email,
@@ -252,6 +259,8 @@ function SettingsPageInner() {
       toast.success(`${toggleTarget.name} is now ${next.toLowerCase()}`)
     } catch {
       toast.error("Failed to update status")
+    } finally {
+      setTogglingStatus(false)
     }
     setToggleTarget(null)
   }
@@ -643,8 +652,8 @@ function SettingsPageInner() {
                   <Switch checked={userForm.watch("status")} onCheckedChange={(v) => userForm.setValue("status", v)} className="data-[state=checked]:bg-indigo-600" />
                 </div>
                 <DialogFooter className="gap-2">
-                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setUserDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" size="sm" className="h-8 text-xs">{editUser ? "Save Changes" : "Add User"}</Button>
+                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setUserDialogOpen(false)} disabled={savingUser}>Cancel</Button>
+                  <Button type="submit" size="sm" className="h-8 text-xs" disabled={savingUser}>{savingUser ? "Saving..." : editUser ? "Save Changes" : "Add User"}</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -657,6 +666,7 @@ function SettingsPageInner() {
             confirmLabel={toggleTarget?.status === "Active" ? "Deactivate" : "Activate"}
             variant={toggleTarget?.status === "Active" ? "destructive" : "default"}
             onConfirm={confirmToggleStatus}
+            loading={togglingStatus}
           />
         </TabsContent>
 

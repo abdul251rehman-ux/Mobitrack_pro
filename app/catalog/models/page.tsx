@@ -41,6 +41,8 @@ function ModelsPageInner() {
   const [formName, setFormName] = useState("")
   const [formBrand, setFormBrand] = useState("")
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function fetchAll() {
     setLoading(true)
@@ -130,7 +132,9 @@ function ModelsPageInner() {
   }
 
   async function handleSave() {
+    if (saving) return
     if (!validate()) return
+    setSaving(true)
     try {
       const tenantId = await getTenantId()
       const selectedBrand = brands.find(b => b.name.toLowerCase() === formBrand.trim().toLowerCase())
@@ -161,12 +165,15 @@ function ModelsPageInner() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save model")
+    } finally {
+      setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     if (deleteTarget.isSystem) { toast.error("System models cannot be deleted"); return }
+    setDeleting(true)
     try {
       const realId = deleteTarget.id.replace(/^(iphone|android)-/, "")
       const table = deleteTarget.deviceType === "iphone" ? "iphone_models" : "android_models"
@@ -177,6 +184,8 @@ function ModelsPageInner() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete model")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -197,7 +206,7 @@ function ModelsPageInner() {
       />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
           { title: "Total Models",    value: stats.total,   sub: "All brands",       color: "bg-indigo-500" },
           { title: "iPhone Models",   value: stats.iphone,  sub: "Apple only",       color: "bg-slate-600"  },
@@ -367,10 +376,10 @@ function ModelsPageInner() {
               Tip: Editing a model name will NOT update historical purchase records - only future purchases will use the new name.
             </p>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
-              {editTarget ? "Save Changes" : "Add Model"}
+          <DialogFooter className="flex-row justify-end gap-2 space-x-0">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editTarget ? "Save Changes" : "Add Model"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -382,9 +391,10 @@ function ModelsPageInner() {
         onOpenChange={open => !open && setDeleteTarget(null)}
         title="Delete Model"
         description={`Delete "${deleteTarget?.name}" (${deleteTarget?.brandName})? This won't affect existing purchase records.`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
   )

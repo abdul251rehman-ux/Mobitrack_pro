@@ -20,8 +20,10 @@ import { formatCurrency, cn, todayPKT } from "@/lib/utils"
 import { useLanguage } from "@/context/language-context"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
+import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -146,33 +148,14 @@ function StatusBadge({ status }: { status: "Paid" | "Pending" }) {
     : <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><Clock className="h-3 w-3" /> Pending</span>
 }
 
-// â"€â"€â"€ Stat Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-
-function StatCard({ label, amount, count, countLabel, iconBg, icon, trend }: {
-  label: string; amount: number; count: number; countLabel: string
-  icon: React.ReactNode; iconBg: string; trend?: string
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-xl bg-white px-4 py-3 border border-slate-100 border-t-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200" style={{}}>
-      <div className="flex items-center justify-between mb-2">
-        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shadow-sm", iconBg)}>
-          {icon}
-        </div>
-      </div>
-      <p className="text-xl font-bold text-slate-900 leading-none tracking-tight mb-1 truncate">{formatCurrency(amount)}</p>
-      <p className="text-[11px] font-semibold text-slate-500">{label}</p>
-      <p className="text-[10px] text-slate-400 mt-0.5">{count} {countLabel}{trend ? ` - ${trend}` : ""}</p>
-    </div>
-  )
-}
-
 // â"€â"€â"€ Add/Edit Drawer â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccountId }: {
+function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defaultAccountId }: {
   open: boolean
   onClose: () => void
   editing: Expense | null
   onSave: (form: ExpenseForm) => void
+  saving: boolean
   accounts: FinanceAccount[]
   defaultAccountId: string
 }) {
@@ -216,10 +199,10 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
   }
 
   function handleSave() {
+    if (saving) return
     const errs = validate()
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     onSave(form)
-    onClose()
   }
 
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
@@ -303,7 +286,7 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
                   <Label className="text-xs font-semibold text-slate-600">Amount (Rs)<span className="text-rose-500">*</span></Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">Rs</span>
-                    <Input type="number" onWheel={e => e.currentTarget.blur()} min={0} value={form.amount} onChange={e => up("amount", e.target.value)}
+                    <MoneyInput value={form.amount} onChange={v => up("amount", v)}
                       placeholder="0" className={cn("pl-9 h-9 text-sm font-bold", errors.amount && "border-rose-400")} />
                   </div>
                   {errors.amount && <p className="text-xs text-rose-500">{errors.amount}</p>}
@@ -483,10 +466,10 @@ function ExpenseDrawer({ open, onClose, editing, onSave, accounts, defaultAccoun
 
         {/* Footer */}
         <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={onClose} className="w-28">Cancel</Button>
-          <Button type="button" onClick={handleSave}
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving} className="w-28">Cancel</Button>
+          <Button type="button" onClick={handleSave} disabled={saving}
             className={cn("ml-auto px-6", editing ? "bg-indigo-600 hover:bg-indigo-700" : "bg-rose-600 hover:bg-rose-700")}>
-            {editing ? "Save Changes" : "Add Expense"}
+            {saving ? "Saving..." : editing ? "Save Changes" : "Add Expense"}
           </Button>
         </div>
       </div>
@@ -542,6 +525,7 @@ function ExpensesPageInner() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null)
+  const [savingExpense, setSavingExpense] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -624,6 +608,8 @@ function ExpensesPageInner() {
   function handleOpenEdit(e: Expense) { setEditing(e); setDrawerOpen(true) }
 
   async function handleSave(form: ExpenseForm) {
+    if (savingExpense) return
+    setSavingExpense(true)
     try {
       const amount = parseFloat(form.amount)
       const expenseData = {
@@ -676,7 +662,11 @@ function ExpensesPageInner() {
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save expense")
+      return
+    } finally {
+      setSavingExpense(false)
     }
+    setDrawerOpen(false)
   }
 
   async function handleDelete() {
@@ -734,28 +724,26 @@ function ExpensesPageInner() {
         />
 
         {/* â"€â"€ Stats Row â"€â"€ */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
           <StatCard
-            label="Today's Expenses" amount={stats.today.amount} count={stats.today.count}
-            countLabel="transactions" icon={<TrendingDown className="h-4 w-4 text-white" />}
-            iconBg="bg-rose-500"
+            title="Today's Expenses" value={formatCurrency(stats.today.amount)}
+            subtext={`${stats.today.count} transaction${stats.today.count !== 1 ? "s" : ""}`}
+            icon={TrendingDown} iconBg="bg-rose-100" subtextOnMobile
           />
           <StatCard
-            label="This Month" amount={stats.month.amount} count={stats.month.count}
-            countLabel="expenses" icon={<Calendar className="h-4 w-4 text-white" />}
-            iconBg="bg-indigo-600"
-            trend={format(_now, "MMM yyyy")}
+            title="This Month" value={formatCurrency(stats.month.amount)}
+            subtext={`${stats.month.count} expense${stats.month.count !== 1 ? "s" : ""} - ${format(_now, "MMM yyyy")}`}
+            icon={Calendar} iconBg="bg-indigo-100" subtextOnMobile
           />
           <StatCard
-            label="This Year" amount={stats.year.amount} count={stats.year.count}
-            countLabel="expenses" icon={<BarChart3 className="h-4 w-4 text-white" />}
-            iconBg="bg-cyan-600"
-            trend={THIS_YEAR}
+            title="This Year" value={formatCurrency(stats.year.amount)}
+            subtext={`${stats.year.count} expense${stats.year.count !== 1 ? "s" : ""} - ${THIS_YEAR}`}
+            icon={BarChart3} iconBg="bg-cyan-100" subtextOnMobile
           />
           <StatCard
-            label="Pending Payment" amount={stats.pending.amount} count={stats.pending.count}
-            countLabel="unpaid" icon={<Clock className="h-4 w-4 text-white" />}
-            iconBg="bg-amber-500"
+            title="Pending Payment" value={formatCurrency(stats.pending.amount)}
+            subtext={`${stats.pending.count} unpaid`}
+            icon={Clock} iconBg="bg-amber-100" subtextOnMobile
           />
         </div>
 
@@ -765,12 +753,12 @@ function ExpensesPageInner() {
           {/* â"€â"€ Left: Table area â"€â"€ */}
           <div className="space-y-3">
 
-            {/* Tabs */}
-            <div className="flex gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm overflow-x-auto">
+            {/* Tabs - wraps into rows on narrow screens instead of scrolling off-screen */}
+            <div className="flex flex-wrap gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
               {TABS.map(({ key, label, count }) => (
                 <button key={key} type="button" onClick={() => setTab(key)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                    "flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all",
                     tab === key
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -1087,7 +1075,7 @@ function ExpensesPageInner() {
         </div>
 
       {/* Drawer + Delete dialog */}
-      <ExpenseDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editing} onSave={handleSave} accounts={financeAccounts} defaultAccountId={defaultAccountId} />
+      <ExpenseDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editing} onSave={handleSave} saving={savingExpense} accounts={financeAccounts} defaultAccountId={defaultAccountId} />
       <DeleteDialog open={!!deleteTarget} expense={deleteTarget} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   )

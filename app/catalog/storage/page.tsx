@@ -31,6 +31,8 @@ function StoragePageInner() {
   const [deleteTarget, setDeleteTarget] = useState<StorageItem | null>(null)
   const [formName, setFormName] = useState("")
   const [formError, setFormError] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function fetchAll() {
     setLoading(true)
@@ -79,7 +81,9 @@ function StoragePageInner() {
   }
 
   async function handleSave() {
+    if (saving) return
     if (!validate()) return
+    setSaving(true)
     try {
       const tenantId = await getTenantId()
       if (editTarget) {
@@ -95,17 +99,20 @@ function StoragePageInner() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
+    } finally {
+      setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleting) return
     if (deleteTarget.isSystem) { toast.error("System entries cannot be deleted"); return }
     if (deleteTarget.usageCount > 0) {
       toast.error(`Cannot delete - used in ${deleteTarget.usageCount} phone record${deleteTarget.usageCount !== 1 ? "s" : ""}`)
       setDeleteTarget(null)
       return
     }
+    setDeleting(true)
     try {
       const { error } = await supabase.from("storage_options").delete().eq("id", deleteTarget.id)
       if (error) throw error
@@ -114,6 +121,8 @@ function StoragePageInner() {
       await fetchAll()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -234,10 +243,10 @@ function StoragePageInner() {
               {formError && <p className="text-[10px] text-rose-500">{formError}</p>}
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs" onClick={handleSave}>
-              {editTarget ? "Save" : "Add"}
+          <DialogFooter className="flex-row justify-end gap-2 space-x-0">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editTarget ? "Save" : "Add"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -248,9 +257,10 @@ function StoragePageInner() {
         onOpenChange={open => !open && setDeleteTarget(null)}
         title="Delete Storage Option"
         description={`Delete "${deleteTarget?.name}"?`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
   )

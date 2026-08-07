@@ -47,8 +47,8 @@ export function PermissionGate({
   if (!allowed) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center px-4">
-        <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
-          <ShieldOff className="w-8 h-8 text-red-400" />
+        <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+          <ShieldOff className="w-8 h-8 text-rose-400" />
         </div>
         <div>
           <h2 className="text-lg font-bold text-slate-800">Access Denied</h2>

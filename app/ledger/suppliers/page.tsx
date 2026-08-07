@@ -19,10 +19,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
+import { StatCard } from "@/components/shared/stat-card"
 import { DetailDrawer, DetailDrawerHeader, DetailDrawerBody, DetailDrawerFooter } from "@/components/shared/detail-drawer"
+import { useLanguage } from "@/context/language-context"
 
 type LedgerEntry = {
   id: string
@@ -31,15 +35,25 @@ type LedgerEntry = {
   description: string
   debit: number
   credit: number
+  /** True purchase/payment amounts before same-day down-payment netting - used for stat totals, not balance */
+  grossCredit: number
+  grossDebit: number
   balance: number
   type: "purchase" | "payment" | "opening" | "rebate"
   supplierName?: string
   rebateEntry?: RebateEntry
+  /** Fully Paid / Partial / Unpaid - purchase rows only, shown in the drawer, not the row text */
+  payStatus?: string
+  /** Line items - purchase rows only, shown as a proper itemized list in the drawer */
+  items?: { name: string; qty: number; unitCost: number; total: number }[]
+  /** Position in its source array (already newest-first from the API) - breaks same-date ties by true recency */
+  recency: number
 }
 
 const PAGE_SIZE = 15
 
 function SupplierLedgerPageInner() {
+  const { t } = useLanguage()
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
@@ -85,6 +99,7 @@ function SupplierLedgerPageInner() {
   }
 
   async function handlePaySupplier() {
+    if (paying) return
     if (!selectedSupplierId || !payAmount || parseFloat(payAmount) <= 0) {
       toast.error("Enter a valid amount"); return
     }
@@ -163,6 +178,13 @@ function SupplierLedgerPageInner() {
 
   const selectedSupplier = suppliers.find((s) => s.id === selectedSupplierId)
 
+  // Auto-fill Opening Balance from the supplier's saved value when switching
+  // suppliers - still a plain useState the user can type over for a one-off
+  // view, same convention as app/ledger/customers/page.tsx.
+  useEffect(() => {
+    setOpeningBalance(selectedSupplier?.openingBalance ?? 0)
+  }, [selectedSupplierId])
+
   // All suppliers who have at least one purchase recorded
   const activeSuppliers = useMemo(() => {
     const withPurchases = new Set(purchases.map(p => p.supplierId))
@@ -176,27 +198,47 @@ function SupplierLedgerPageInner() {
       ? purchases.filter((p) => p.supplierId === selectedSupplierId)
       : purchases
 
+    const filteredPayments = selectedSupplierId
+      ? supplierPayments.filter((sp) => sp.entityId === selectedSupplierId)
+      : supplierPayments
+
+    // A payment made on the same day as (and referencing) its purchase is the purchase's
+    // down-payment, not a separate event - fold it into the purchase row instead of a second line.
+    // Payments made later against the same PO are genuinely separate events and keep their own row.
+    const downPaymentIds = new Set<string>()
     filteredPurchases.forEach((p) => {
+      const match = filteredPayments.find(sp =>
+        sp.referenceNumber === p.poNumber && sp.date === p.date && !downPaymentIds.has(sp.id)
+      )
+      if (match) downPaymentIds.add(match.id)
+    })
+
+    // filteredPurchases/Payments/Rebates are each already newest-first from the API (created_at desc).
+    // Record each entry's position in its source array so same-date ties can be broken by true
+    // creation recency instead of accidental array order (which .reverse() for display would corrupt).
+    filteredPurchases.forEach((p, idx) => {
       const supName = suppliers.find((s) => s.id === p.supplierId)?.companyName || p.supplierName
       const names   = p.items.map(i => i.productName.trim()).filter(Boolean)
       const preview = names.length <= 2
         ? names.join(", ")
         : `${names[0]}, ${names[1]} +${names.length - 2} more`
+      const downPayment = filteredPayments.find(sp => downPaymentIds.has(sp.id) && sp.referenceNumber === p.poNumber)
       const payStatus = p.paymentStatus === "Paid" ? "Fully Paid"
-        : p.paymentStatus === "Partial" ? `Partial — Rs ${p.amountPaid.toLocaleString("en-PK")} paid`
+        : p.paymentStatus === "Partial" ? "Partial"
         : "Unpaid"
       raw.push({
         id: p.id, date: p.date, reference: p.poNumber,
-        description: `${preview || `${p.items.length} item(s)`}  ·  ${payStatus}`,
-        debit: 0, credit: p.total, type: "purchase", supplierName: supName,
+        description: preview || `${p.items.length} item(s)`,
+        // Net effect on the balance: full purchase value minus any down-payment made at the same time
+        debit: 0, credit: p.total - (downPayment?.amount ?? 0),
+        grossCredit: p.total, grossDebit: downPayment?.amount ?? 0,
+        type: "purchase", supplierName: supName, payStatus, recency: -idx,
+        items: p.items.map(i => ({ name: i.productName.trim(), qty: i.quantity, unitCost: i.unitCost, total: i.total })),
       })
     })
 
-    const filteredPayments = selectedSupplierId
-      ? supplierPayments.filter((sp) => sp.entityId === selectedSupplierId)
-      : supplierPayments
-
-    filteredPayments.forEach((sp) => {
+    filteredPayments.forEach((sp, idx) => {
+      if (downPaymentIds.has(sp.id)) return // folded into its purchase row above (still counted in grossDebit there)
       const notes = (sp.notes ?? "")
         .replace(/^(Payment for|Outstanding for)\s+PO-[\w-]+\s*/i, "")
         .replace(/^\(|\)$/g, "")
@@ -205,7 +247,9 @@ function SupplierLedgerPageInner() {
         id: sp.id, date: sp.date,
         reference: sp.referenceNumber || sp.id.slice(0, 8),
         description: `Payment to Supplier${notes ? `  ·  ${notes}` : ""}  ·  ${sp.method}`,
-        debit: sp.amount, credit: 0, type: "payment", supplierName: sp.entityName,
+        debit: sp.amount, credit: 0,
+        grossCredit: 0, grossDebit: sp.amount,
+        type: "payment", supplierName: sp.entityName, recency: -idx,
       })
     })
 
@@ -213,25 +257,28 @@ function SupplierLedgerPageInner() {
     const filteredRebates = selectedSupplierId
       ? rebates.filter(r => r.supplierId === selectedSupplierId)
       : rebates
-    filteredRebates.forEach(r => {
+    filteredRebates.forEach((r, idx) => {
       raw.push({
         id: r.id,
         date: r.postedAt ? r.postedAt.slice(0, 10) : r.createdAt.slice(0, 10),
         reference: r.type === "rebate" ? "REBATE" : "RATE-DIFF",
         description: `${r.type === "rebate" ? "Rebate Credit" : "Rate Difference Credit"} — ${r.model} · ${r.units} units × ${formatCurrency(r.ratePerUnit)}${r.notes ? ` · ${r.notes}` : ""}`,
-        debit: r.total, credit: 0, type: "rebate" as const,
+        debit: r.total, credit: 0,
+        grossCredit: 0, grossDebit: r.total,
+        type: "rebate" as const,
         supplierName: r.supplierName,
-        rebateEntry: r,
+        rebateEntry: r, recency: -idx,
       })
     })
 
-    // Sort: purchases before payments/rebates on same date
+    // Ascending chronological order (oldest first) so the running balance accumulates correctly.
+    // Same-date ties: purchases before payments/rebates, then by true creation recency (not array order).
     raw.sort((a, b) => {
       const d = a.date.localeCompare(b.date)
       if (d !== 0) return d
       if (a.type === "purchase" && b.type !== "purchase") return -1
       if (a.type !== "purchase" && b.type === "purchase") return  1
-      return 0
+      return a.recency - b.recency
     })
 
     const result: LedgerEntry[] = []
@@ -243,7 +290,8 @@ function SupplierLedgerPageInner() {
         description: "Opening Balance",
         debit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
         credit: openingBalance > 0 ? openingBalance : 0,
-        balance: openingBalance, type: "opening",
+        grossCredit: 0, grossDebit: 0,
+        balance: openingBalance, type: "opening", recency: 0,
       })
     }
 
@@ -270,9 +318,10 @@ function SupplierLedgerPageInner() {
   }, [allEntries, dateFrom, dateTo, search])
 
   const txEntries = filtered.filter((e) => e.type !== "opening")
-  const totalDebit = txEntries.filter(e => e.type === "payment").reduce((s, e) => s + e.debit, 0)
+  const totalDebit = txEntries.filter(e => e.type === "payment").reduce((s, e) => s + e.grossDebit, 0)
+    + txEntries.filter(e => e.type === "purchase").reduce((s, e) => s + e.grossDebit, 0)
   const totalRebateCredit = txEntries.filter(e => e.type === "rebate").reduce((s, e) => s + e.debit, 0)
-  const totalCredit = txEntries.reduce((s, e) => s + e.credit, 0)
+  const totalCredit = txEntries.reduce((s, e) => s + e.grossCredit, 0)
   const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
 
   const displayEntries = [...filtered].reverse()
@@ -294,7 +343,11 @@ function SupplierLedgerPageInner() {
     ])
     const tenant = await getTenant()
     const supplierLabel = selectedSupplier ? selectedSupplier.companyName : "All Suppliers"
-    const periodParts = [dateFrom && "From: " + dateFrom, dateTo && "To: " + dateTo].filter(Boolean)
+    const periodParts = [
+      dateFrom && "From: " + dateFrom,
+      dateTo && "To: " + dateTo,
+      search && `Search: "${search}"`,
+    ].filter(Boolean)
     const subtitle = [supplierLabel, ...periodParts, filtered.length + " entries"].join(" | ")
 
     const columns: import("@/lib/pdf/report").ReportColumn[] = [
@@ -322,8 +375,10 @@ function SupplierLedgerPageInner() {
       shopName:    tenant?.name    ?? "Mobile Shop",
       shopAddress: [tenant?.address, tenant?.city].filter(Boolean).join(", "),
       shopPhone:   tenant?.phone   ?? "",
+      shopLogo:    tenant?.logo    || undefined,
       title:       "Supplier Ledger",
       subtitle,
+      orientation: "landscape",
       columns,
       rows,
       summary: [
@@ -386,18 +441,18 @@ function SupplierLedgerPageInner() {
     <div className="space-y-4">
       {/* Header */}
       <PageHeader
-        title="Supplier Ledger"
-        description="View financial records and outstanding payables for any supplier"
+        title={t("ledger.supplier.Title")}
+        description={t("ledger.supplier.Description")}
         action={
           <div className="flex gap-1.5">
             <Button onClick={openPayDialog} size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
-              <Banknote className="w-3.5 h-3.5" />Pay Supplier
+              <Banknote className="w-3.5 h-3.5" />{t("ledger.supplier.Pay Supplier")}
             </Button>
             <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
-              <FileText className="w-3.5 h-3.5" />PDF
+              <FileText className="w-3.5 h-3.5" />{t("ledger.supplier.PDF")}
             </button>
             <button onClick={handleExportExcel} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
-              <Download className="w-3.5 h-3.5" />Excel
+              <Download className="w-3.5 h-3.5" />{t("ledger.supplier.Excel")}
             </button>
           </div>
         }
@@ -423,7 +478,7 @@ function SupplierLedgerPageInner() {
                       type="button"
                       onClick={() => { setSelectedSupplierId(""); setPage(1) }}
                       className="shrink-0 p-1 rounded-full hover:bg-orange-200 text-orange-400 hover:text-orange-700 transition-colors"
-                      title="Clear selection"
+                      title={t("ledger.supplier.Clear selection")}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -434,31 +489,41 @@ function SupplierLedgerPageInner() {
                       <div className="w-4 h-4 rounded-full bg-orange-400 flex items-center justify-center shrink-0">
                         <span className="text-white text-[8px] font-bold">S</span>
                       </div>
-                      <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider">Select Supplier</span>
+                      <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider">{t("ledger.supplier.Select Supplier")}</span>
                     </div>
-                    <select
-                      value={selectedSupplierId}
-                      onChange={(e) => { setSelectedSupplierId(e.target.value); setPage(1) }}
-                      className="w-full h-8 px-2.5 text-xs bg-transparent text-slate-700 font-medium focus:outline-none appearance-none cursor-pointer"
+                    <Select
+                      value={selectedSupplierId || "__all"}
+                      onValueChange={(v) => { setSelectedSupplierId(v === "__all" ? "" : v); setPage(1) }}
                     >
-                      <option value="">All Suppliers ({activeSuppliers.length})</option>
-                      {activeSuppliers.map((s) => (
-                        <option key={s.id} value={s.id}>{s.companyName} - {s.city}</option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-8 px-2.5 text-xs bg-transparent border-0 text-slate-700 font-medium focus:ring-0 focus:ring-offset-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all">{t("ledger.supplier.All Suppliers")} ({activeSuppliers.length})</SelectItem>
+                        {activeSuppliers.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.companyName} - {s.city}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">From Date</label>
-              <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.supplier.From Date")}</label>
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
+                  className="w-full h-8 pl-7 pr-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+              </div>
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">To Date</label>
-              <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
-                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{t("ledger.supplier.To Date")}</label>
+              <div className="relative">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
+                  className="w-full h-8 pl-7 pr-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+              </div>
             </div>
           </div>
           {/* Search */}
@@ -469,7 +534,7 @@ function SupplierLedgerPageInner() {
                 type="text"
                 value={search}
                 onChange={e => { setSearch(e.target.value); setPage(1) }}
-                placeholder="Search description, reference, supplier, date..."
+                placeholder={t("ledger.supplier.Search placeholder")}
                 className="w-full h-8 pl-8 pr-3 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               {search && (
@@ -482,76 +547,59 @@ function SupplierLedgerPageInner() {
 
           {selectedSupplierId && (
             <div className="mt-2 flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Opening Balance (Rs)</label>
-              <input type="number" onWheel={e => e.currentTarget.blur()} value={openingBalance} onChange={(e) => { setOpeningBalance(Number(e.target.value)); setPage(1) }}
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">{t("ledger.supplier.Opening Balance")}</label>
+              <MoneyInput value={openingBalance} onChange={(v) => { setOpeningBalance(Number(v)); setPage(1) }}
                 className="w-32 h-8 px-2.5 rounded-lg border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="0" />
-              <span className="text-[10px] text-slate-400">Positive = we need to pay them · Negative = we paid extra (advance)</span>
+              <span className="text-[10px] text-slate-400">{t("ledger.supplier.Opening hint")}</span>
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-        <Card className="border-l-4 border-l-rose-500">
-          <CardContent className="px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Purchases</p>
-              <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
-            </div>
-            <p className="text-lg font-bold text-slate-900 leading-none">{formatCurrency(totalCredit)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Total we bought from supplier</p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Paid</p>
-              <TrendingDown className="w-3.5 h-3.5 text-emerald-400" />
-            </div>
-            <p className="text-lg font-bold text-slate-900 leading-none">{formatCurrency(totalDebit)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Payments made to supplier</p>
-          </CardContent>
-        </Card>
-        <Card className={`border-l-4 ${closingBalance > 0 ? "border-l-rose-500" : closingBalance < 0 ? "border-l-emerald-500" : "border-l-slate-300"}`}>
-          <CardContent className="px-3 py-2.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Outstanding</p>
-              {closingBalance > 0 ? <TrendingUp className="w-3.5 h-3.5 text-rose-400" /> : closingBalance < 0 ? <TrendingDown className="w-3.5 h-3.5 text-emerald-400" /> : <Minus className="w-3.5 h-3.5 text-slate-400" />}
-            </div>
-            <p className={`text-lg font-bold leading-none ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-              {formatCurrency(Math.abs(closingBalance))}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-1">
-              {closingBalance > 0 ? "We need to pay this supplier" : closingBalance < 0 ? "We paid extra (advance)" : "Account settled"}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
+        <StatCard
+          title={t("ledger.supplier.Total Purchases")} value={formatCurrency(totalCredit)}
+          subtext={t("ledger.supplier.We bought")}
+          icon={TrendingUp} iconBg="bg-rose-100"
+        />
+        <StatCard
+          title={t("ledger.supplier.Total Paid")} value={formatCurrency(totalDebit)}
+          subtext={t("ledger.supplier.Payments made")}
+          icon={TrendingDown} iconBg="bg-emerald-100"
+        />
+        <StatCard
+          title={t("ledger.supplier.Outstanding")} value={formatCurrency(Math.abs(closingBalance))}
+          subtext={closingBalance > 0 ? t("ledger.supplier.We need to pay") : closingBalance < 0 ? t("ledger.supplier.We paid extra") : t("ledger.supplier.Account settled")}
+          icon={closingBalance > 0 ? TrendingUp : closingBalance < 0 ? TrendingDown : Minus}
+          iconBg={closingBalance > 0 ? "bg-rose-100" : closingBalance < 0 ? "bg-emerald-100" : "bg-slate-100"}
+          valueClassName={closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}
+        />
       </div>
 
       {/* Ledger table / empty state */}
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="text-xs text-slate-400">No transactions found for this supplier in the selected period.</p>
+            <p className="text-xs text-slate-400">{t("ledger.supplier.No tx")}</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader className="px-3 py-2 border-b border-slate-100">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-slate-800">
-                {selectedSupplier ? selectedSupplier.companyName + " - Account Statement" : "All Suppliers - Account Statement"}
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-slate-800 truncate min-w-0">
+                {selectedSupplier ? selectedSupplier.companyName + " - " + t("ledger.supplier.Account Statement") : t("ledger.supplier.All Suppliers Statement") + " - " + t("ledger.supplier.Account Statement")}
               </CardTitle>
-              <div className="flex items-center gap-2.5 text-[10px] text-slate-400">
+              <div className="hidden sm:flex items-center gap-2.5 text-[10px] text-slate-400 shrink-0">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />Purchase (Cr)
+                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />{t("ledger.supplier.Purchase Cr")}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Payment (Dr)
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />{t("ledger.supplier.Payment Dr")}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />Rebate (Dr)
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />{t("ledger.supplier.Rebate Dr")}
                 </span>
               </div>
             </div>
@@ -560,34 +608,48 @@ function SupplierLedgerPageInner() {
             {/* Mobile */}
             <div className="md:hidden divide-y divide-slate-100">
               {paginated.map((entry) => (
-                <div key={entry.id} className="flex">
-                  <div className={`w-1 flex-shrink-0 ${accentColor(entry.type)}`} />
-                  <div className="flex-1 px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] text-slate-400">{formatDate(entry.date)}</p>
-                        <p className={`text-xs font-medium mt-0.5 leading-snug ${entry.type === "opening" ? "text-slate-500 italic" : "text-slate-800"}`}>{entry.description}</p>
-                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">{entry.reference}</p>
+                <button
+                  key={entry.id}
+                  onClick={() => setDrawerEntry(entry)}
+                  className="flex w-full text-left hover:bg-slate-50/70 active:bg-slate-100 transition-colors"
+                >
+                  <div className={`w-1 shrink-0 ${accentColor(entry.type)}`} />
+                  <div className="flex-1 min-w-0 px-3 py-2.5 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-slate-400">{formatDate(entry.date)}</p>
+                      {entry.payStatus && entry.payStatus !== "Fully Paid" && (
+                        <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                          {entry.payStatus === "Partial" ? t("status.Partial") : t("status.Unpaid")}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-xs font-medium leading-snug truncate ${entry.type === "opening" ? "text-slate-500 italic" : "text-slate-800"}`}>
+                      {entry.description}
+                    </p>
+                    <p className="text-[10px] font-mono text-slate-400">{entry.reference}</p>
+                    <div className="flex items-center justify-between gap-2 pt-1 mt-1 border-t border-slate-50">
+                      <div className="flex items-center gap-2 text-xs font-semibold">
+                        {entry.debit > 0 && <span className="text-emerald-600">{t("ledger.supplier.Dr")} {formatCurrency(entry.debit)}</span>}
+                        {entry.credit > 0 && <span className="text-rose-600">{t("ledger.supplier.Cr")} {formatCurrency(entry.credit)}</span>}
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        {entry.debit > 0 && <p className="text-xs font-semibold text-emerald-600">Dr {formatCurrency(entry.debit)}</p>}
-                        {entry.credit > 0 && <p className="text-xs font-semibold text-rose-600">Cr {formatCurrency(entry.credit)}</p>}
-                        <p className={`text-[10px] font-bold mt-0.5 ${entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                          Bal: {formatCurrency(Math.abs(entry.balance))}{entry.balance > 0 ? " Cr" : entry.balance < 0 ? " Dr" : ""}
-                        </p>
-                      </div>
+                      <p className={`text-xs font-bold shrink-0 ${entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                        {formatCurrency(Math.abs(entry.balance))}{entry.balance > 0 ? ` ${t("ledger.supplier.Cr")}` : entry.balance < 0 ? ` ${t("ledger.supplier.Dr")}` : ""}
+                      </p>
                     </div>
                   </div>
-                </div>
+                  <div className="flex items-center pr-2 shrink-0">
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                  </div>
+                </button>
               ))}
               <div className="px-3 py-2 bg-slate-50 border-t-2 border-slate-200">
-                <div className="flex justify-between text-xs"><span className="font-semibold text-slate-600">Total Purchases</span><span className="font-bold text-rose-700">{formatCurrency(totalCredit)}</span></div>
-                <div className="flex justify-between text-xs mt-1"><span className="font-semibold text-slate-600">Total Paid</span><span className="font-bold text-emerald-700">{formatCurrency(totalDebit)}</span></div>
-                {totalRebateCredit > 0 && <div className="flex justify-between text-xs mt-1"><span className="font-semibold text-slate-600">Rebates / Rate Diff</span><span className="font-bold text-emerald-700">{formatCurrency(totalRebateCredit)}</span></div>}
+                <div className="flex justify-between text-xs"><span className="font-semibold text-slate-600">{t("ledger.supplier.Total Purchases")}</span><span className="font-bold text-rose-700">{formatCurrency(totalCredit)}</span></div>
+                <div className="flex justify-between text-xs mt-1"><span className="font-semibold text-slate-600">{t("ledger.supplier.Total Paid")}</span><span className="font-bold text-emerald-700">{formatCurrency(totalDebit)}</span></div>
+                {totalRebateCredit > 0 && <div className="flex justify-between text-xs mt-1"><span className="font-semibold text-slate-600">{t("ledger.supplier.Rebates")}</span><span className="font-bold text-emerald-700">{formatCurrency(totalRebateCredit)}</span></div>}
                 <div className="flex justify-between text-xs mt-1 pt-1 border-t border-slate-200">
-                  <span className="font-semibold text-slate-700">Outstanding</span>
+                  <span className="font-semibold text-slate-700">{t("ledger.supplier.Outstanding")}</span>
                   <span className={`font-bold ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                    {formatCurrency(Math.abs(closingBalance))}{closingBalance > 0 ? " Cr" : closingBalance < 0 ? " Dr" : ""}
+                    {formatCurrency(Math.abs(closingBalance))}{closingBalance > 0 ? ` ${t("ledger.supplier.Cr")}` : closingBalance < 0 ? ` ${t("ledger.supplier.Dr")}` : ""}
                   </span>
                 </div>
               </div>
@@ -598,13 +660,13 @@ function SupplierLedgerPageInner() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80">
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Date</th>
-                    {!selectedSupplierId && <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Supplier</th>}
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Reference</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Description</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">Debit</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider whitespace-nowrap">Credit</th>
-                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Balance</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.supplier.Date")}</th>
+                    {!selectedSupplierId && <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.supplier.Supplier col")}</th>}
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.supplier.Reference")}</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{t("ledger.supplier.Description col")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-emerald-500 uppercase tracking-wider whitespace-nowrap">{t("ledger.supplier.Debit")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-rose-500 uppercase tracking-wider whitespace-nowrap">{t("ledger.supplier.Credit")}</th>
+                    <th className="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t("ledger.supplier.Balance")}</th>
                     <th className="px-3 py-2 w-8" />
                   </tr>
                 </thead>
@@ -614,7 +676,12 @@ function SupplierLedgerPageInner() {
                       <td className="px-3 py-2 text-slate-500 whitespace-nowrap text-xs">{formatDate(entry.date)}</td>
                       {!selectedSupplierId && <td className="px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap">{entry.supplierName || "-"}</td>}
                       <td className="px-3 py-2 font-mono text-xs text-slate-400 whitespace-nowrap">{entry.reference}</td>
-                      <td className="px-3 py-2 text-xs text-slate-700">{entry.description}</td>
+                      <td className="px-3 py-2 text-xs text-slate-700">
+                        {entry.description}
+                        {entry.payStatus && entry.payStatus !== "Fully Paid" && (
+                          <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">{entry.payStatus === "Partial" ? t("status.Partial") : t("status.Unpaid")}</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right text-xs font-medium whitespace-nowrap">
                         {entry.debit > 0
                           ? <span className={entry.type === "rebate" ? "text-emerald-700 font-bold" : "text-emerald-600"}>{formatCurrency(entry.debit)}</span>
@@ -625,10 +692,10 @@ function SupplierLedgerPageInner() {
                       </td>
                       <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${entry.balance > 0 ? "text-rose-600" : entry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                         {formatCurrency(Math.abs(entry.balance))}
-                        <span className="font-medium ml-0.5">{entry.balance > 0 ? " Cr" : entry.balance < 0 ? " Dr" : ""}</span>
+                        <span className="font-medium ml-0.5">{entry.balance > 0 ? ` ${t("ledger.supplier.Cr")}` : entry.balance < 0 ? ` ${t("ledger.supplier.Dr")}` : ""}</span>
                       </td>
                       <td className="px-2 py-2 text-center">
-                        <button onClick={() => setDrawerEntry(entry)} className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors" title="View details">
+                        <button onClick={() => setDrawerEntry(entry)} className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors" title={t("ledger.supplier.View details")}>
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                       </td>
@@ -638,19 +705,19 @@ function SupplierLedgerPageInner() {
                 <tfoot>
                   {totalRebateCredit > 0 && (
                     <tr className="border-t border-slate-100 bg-emerald-50/60">
-                      <td colSpan={!selectedSupplierId ? 4 : 3} className="px-3 py-1.5 text-xs text-emerald-600 text-right font-medium">Rebates / Rate Diff</td>
+                      <td colSpan={!selectedSupplierId ? 4 : 3} className="px-3 py-1.5 text-xs text-emerald-600 text-right font-medium">{t("ledger.supplier.Rebates")}</td>
                       <td className="px-3 py-1.5 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalRebateCredit)}</td>
                       <td className="px-3 py-1.5 text-right text-xs text-slate-300">-</td>
                       <td colSpan={2} />
                     </tr>
                   )}
                   <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                    <td colSpan={!selectedSupplierId ? 4 : 3} className="px-3 py-2 text-xs text-slate-500 text-right">Totals</td>
+                    <td colSpan={!selectedSupplierId ? 4 : 3} className="px-3 py-2 text-xs text-slate-500 text-right">{t("ledger.supplier.Totals")}</td>
                     <td className="px-3 py-2 text-right text-xs font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(totalDebit + totalRebateCredit)}</td>
                     <td className="px-3 py-2 text-right text-xs font-bold text-rose-700 whitespace-nowrap">{formatCurrency(totalCredit)}</td>
                     <td className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${closingBalance > 0 ? "text-rose-600" : closingBalance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                       {formatCurrency(Math.abs(closingBalance))}
-                      <span className="font-medium ml-0.5">{closingBalance > 0 ? " Cr" : closingBalance < 0 ? " Dr" : ""}</span>
+                      <span className="font-medium ml-0.5">{closingBalance > 0 ? ` ${t("ledger.supplier.Cr")}` : closingBalance < 0 ? ` ${t("ledger.supplier.Dr")}` : ""}</span>
                     </td>
                     <td className="px-2 py-2" />
                   </tr>
@@ -662,7 +729,7 @@ function SupplierLedgerPageInner() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400">
-                  {(page - 1) * PAGE_SIZE + 1}-"{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} {t("sale.list.of")} {filtered.length}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
@@ -687,74 +754,71 @@ function SupplierLedgerPageInner() {
           <DialogHeader>
             <DialogTitle className="text-sm font-bold flex items-center gap-2">
               <Banknote className="w-4 h-4 text-emerald-600" />
-              Pay Supplier
+              {t("ledger.supplier.Pay Supplier")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Paying to</span>
+              <span className="text-xs text-slate-500">{t("ledger.supplier.Paying to")}</span>
               <span className="text-xs font-bold text-slate-800">{selectedSupplier?.companyName}</span>
             </div>
             {closingBalance > 0 && (
               <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 flex items-center justify-between">
-                <span className="text-xs text-rose-600">Outstanding balance</span>
+                <span className="text-xs text-rose-600">{t("ledger.supplier.Outstanding balance")}</span>
                 <span className="text-sm font-bold text-rose-700">{formatCurrency(closingBalance)}</span>
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-xs">Amount (Rs)<span className="text-rose-500">*</span></Label>
-              <Input
-                type="number" onWheel={e => e.currentTarget.blur()} min={1} placeholder="0"
+              <Label className="text-xs">{t("ledger.supplier.Amount")}<span className="text-rose-500">*</span></Label>
+              <MoneyInput
+                min={1} placeholder="0"
                 value={payAmount}
-                onChange={e => setPayAmount(e.target.value)}
+                onChange={v => setPayAmount(v)}
                 className="h-8 text-sm font-semibold"
                 autoFocus
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label className="text-xs">Date</Label>
+                <Label className="text-xs">{t("ledger.supplier.Date")}</Label>
                 <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="h-8 text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Method</Label>
-                <select
-                  value={payMethod}
-                  onChange={e => setPayMethod(e.target.value)}
-                  className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                >
-                  <option>Cash</option>
-                  <option>Bank Transfer</option>
-                  <option>Cheque</option>
-                  <option>JazzCash</option>
-                  <option>EasyPaisa</option>
-                </select>
+                <Label className="text-xs">{t("ledger.supplier.Method")}</Label>
+                <Select value={payMethod} onValueChange={setPayMethod}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="Cheque">Cheque</SelectItem>
+                    <SelectItem value="JazzCash">JazzCash</SelectItem>
+                    <SelectItem value="EasyPaisa">EasyPaisa</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Pay From Account <span className="text-rose-500">*</span></Label>
-              <select
-                value={payAccountId}
-                onChange={e => setPayAccountId(e.target.value)}
-                className="w-full h-8 px-2 rounded-md border border-slate-200 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
-              >
-                <option value="">Select account...</option>
-                {accounts.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} - {formatCurrency(a.currentBalance)}
-                  </option>
-                ))}
-              </select>
+              <Label className="text-xs">{t("ledger.supplier.Payment Account")} <span className="text-rose-500">*</span></Label>
+              <Select value={payAccountId} onValueChange={setPayAccountId}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t("ledger.supplier.Select account")} /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} - {formatCurrency(a.currentBalance)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Notes (optional)</Label>
-              <Input placeholder="e.g. Cheque #1234, partial payment..." value={payNotes} onChange={e => setPayNotes(e.target.value)} className="h-8 text-xs" />
+              <Label className="text-xs">{t("ledger.supplier.Notes optional")}</Label>
+              <Input placeholder={t("ledger.supplier.Notes placeholder")} value={payNotes} onChange={e => setPayNotes(e.target.value)} className="h-8 text-xs" />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPayDialogOpen(false)}>{t("ledger.supplier.Cancel")}</Button>
             <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={handlePaySupplier} disabled={paying}>
-              {paying ? "Recording..." : "Record Payment"}
+              {paying ? t("ledger.supplier.Recording") : t("ledger.supplier.Record Payment")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -774,31 +838,45 @@ function SupplierLedgerPageInner() {
               iconBg={drawerEntry.type === "purchase" ? "bg-rose-100" : drawerEntry.type === "payment" ? "bg-emerald-100" : drawerEntry.type === "rebate" ? "bg-emerald-100" : "bg-slate-200"}
               iconColor={drawerEntry.type === "purchase" ? "text-rose-600" : drawerEntry.type === "payment" ? "text-emerald-600" : drawerEntry.type === "rebate" ? "text-emerald-600" : "text-slate-500"}
               headerBg={drawerEntry.type === "purchase" ? "bg-rose-50" : drawerEntry.type === "payment" ? "bg-emerald-50" : drawerEntry.type === "rebate" ? "bg-emerald-50" : "bg-slate-50"}
-              title={drawerEntry.type === "purchase" ? "Purchase Transaction" : drawerEntry.type === "payment" ? "Payment Made" : drawerEntry.type === "rebate" ? (drawerEntry.rebateEntry?.type === "rebate" ? "Rebate Credit" : "Rate Difference Credit") : "Opening Balance"}
+              title={drawerEntry.type === "purchase" ? t("ledger.supplier.Purchase Transaction") : drawerEntry.type === "payment" ? t("ledger.supplier.Payment Made") : drawerEntry.type === "rebate" ? (drawerEntry.rebateEntry?.type === "rebate" ? t("ledger.supplier.Rebate Credit") : t("ledger.supplier.Rate Difference Credit")) : t("ledger.supplier.Opening Balance")}
               subtitle={drawerEntry.reference}
             />
 
             <DetailDrawerBody>
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2">
+                {drawerEntry.type === "purchase" && drawerEntry.grossDebit > 0 && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{t("ledger.supplier.Purchase Value")}</span>
+                      <span className="text-sm font-semibold text-slate-600">{formatCurrency(drawerEntry.grossCredit)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{t("ledger.supplier.Paid at Purchase")}</span>
+                      <span className="text-sm font-semibold text-emerald-600">- {formatCurrency(drawerEntry.grossDebit)}</span>
+                    </div>
+                  </>
+                )}
                 {drawerEntry.debit > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                      {drawerEntry.type === "rebate" ? "Rebate Credit (reduces payable)" : "Debit (Dr)"}
+                      {drawerEntry.type === "rebate" ? t("ledger.supplier.Rebate Credit reduces") : t("ledger.supplier.Debit Dr")}
                     </span>
                     <span className="text-base font-bold text-emerald-600">{formatCurrency(drawerEntry.debit)}</span>
                   </div>
                 )}
                 {drawerEntry.credit > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Credit (Cr)</span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                      {drawerEntry.type === "purchase" && drawerEntry.grossDebit > 0 ? t("ledger.supplier.Net Due Cr") : t("ledger.supplier.Credit Cr")}
+                    </span>
                     <span className="text-base font-bold text-rose-600">{formatCurrency(drawerEntry.credit)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Running Balance</span>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{t("ledger.supplier.Running Balance")}</span>
                   <span className={`text-sm font-bold ${drawerEntry.balance > 0 ? "text-rose-600" : drawerEntry.balance < 0 ? "text-emerald-600" : "text-slate-400"}`}>
                     {formatCurrency(Math.abs(drawerEntry.balance))}
-                    <span className="text-xs ml-1">{drawerEntry.balance > 0 ? "Cr" : drawerEntry.balance < 0 ? "Dr" : ""}</span>
+                    <span className="text-xs ml-1">{drawerEntry.balance > 0 ? t("ledger.supplier.Cr") : drawerEntry.balance < 0 ? t("ledger.supplier.Dr") : ""}</span>
                   </span>
                 </div>
               </div>
@@ -807,14 +885,14 @@ function SupplierLedgerPageInner() {
                 <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
                   <Calendar className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Date</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Date")}</p>
                     <p className="text-xs font-medium text-slate-700 mt-0.5">{formatDate(drawerEntry.date)}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
                   <Hash className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Reference</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Reference")}</p>
                     <p className="text-xs font-mono text-slate-500 mt-0.5">{drawerEntry.reference}</p>
                   </div>
                 </div>
@@ -822,38 +900,65 @@ function SupplierLedgerPageInner() {
                   <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
                     <Eye className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Supplier</p>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Supplier")}</p>
                       <p className="text-xs font-medium text-slate-700 mt-0.5">{drawerEntry.supplierName}</p>
                     </div>
                   </div>
                 )}
-                <div className="flex items-start gap-3 px-3 py-2.5 bg-white">
+                <div className={`flex items-start gap-3 px-3 py-2.5 bg-white ${drawerEntry.payStatus ? "border-b border-slate-100" : ""}`}>
                   <AlignLeft className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Description</p>
-                    <p className="text-xs text-slate-700 mt-0.5 leading-relaxed">{drawerEntry.description}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Description col")}</p>
+                    {drawerEntry.items && drawerEntry.items.length > 0 ? (
+                      <div className="mt-1.5 rounded-lg border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+                        {drawerEntry.items.map((it, i) => (
+                          <div key={i} className="flex items-center justify-between gap-3 px-2.5 py-1.5 bg-slate-50/60">
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-slate-700 truncate">{it.name}</p>
+                              <p className="text-[10px] text-slate-400 tabular-nums">{it.qty} × {formatCurrency(it.unitCost)}</p>
+                            </div>
+                            <span className="text-xs font-semibold text-slate-600 tabular-nums shrink-0">{formatCurrency(it.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-700 mt-0.5 leading-relaxed">{drawerEntry.description}</p>
+                    )}
                   </div>
                 </div>
+                {drawerEntry.payStatus && (
+                  <div className="flex items-start gap-3 px-3 py-2.5 bg-white">
+                    <Wallet className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Payment Status")}</p>
+                      <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        drawerEntry.payStatus === "Fully Paid" ? "bg-emerald-100 text-emerald-700"
+                        : drawerEntry.payStatus === "Partial" ? "bg-amber-100 text-amber-700"
+                        : "bg-rose-100 text-rose-700"
+                      }`}>{drawerEntry.payStatus === "Fully Paid" ? t("ledger.supplier.Fully Paid") : drawerEntry.payStatus === "Partial" ? t("ledger.supplier.Partial") : t("status.Unpaid")}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Rebate detail breakdown */}
               {drawerEntry.type === "rebate" && drawerEntry.rebateEntry && (
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-1.5">
-                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Rebate Details</p>
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-2">{t("ledger.supplier.Rebate Details")}</p>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Model</span>
+                    <span className="text-slate-500">{t("ledger.supplier.Model")}</span>
                     <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.model}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Units</span>
+                    <span className="text-slate-500">{t("ledger.supplier.Units")}</span>
                     <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.units}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Rate / Unit</span>
+                    <span className="text-slate-500">{t("ledger.supplier.Rate per Unit")}</span>
                     <span className="font-semibold text-slate-700">{formatCurrency(drawerEntry.rebateEntry.ratePerUnit)}</span>
                   </div>
                   <div className="flex justify-between text-xs border-t border-emerald-200 pt-1.5 mt-1.5">
-                    <span className="font-bold text-emerald-700">Total Credit</span>
+                    <span className="font-bold text-emerald-700">{t("ledger.supplier.Total Credit")}</span>
                     <span className="font-bold text-emerald-700">{formatCurrency(drawerEntry.rebateEntry.total)}</span>
                   </div>
                   {drawerEntry.rebateEntry.notes && (
@@ -863,16 +968,16 @@ function SupplierLedgerPageInner() {
               )}
 
               <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Entry Type</span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{t("ledger.supplier.Entry Type")}</span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${drawerEntry.type === "purchase" ? "bg-rose-100 text-rose-700" : drawerEntry.type === "payment" ? "bg-emerald-100 text-emerald-700" : drawerEntry.type === "rebate" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-                  {drawerEntry.type === "purchase" ? "Purchase (Cr)" : drawerEntry.type === "payment" ? "Payment (Dr)" : drawerEntry.type === "rebate" ? "Rebate (Dr)" : "Opening Balance"}
+                  {drawerEntry.type === "purchase" ? t("ledger.supplier.Purchase Cr") : drawerEntry.type === "payment" ? t("ledger.supplier.Payment Dr") : drawerEntry.type === "rebate" ? t("ledger.supplier.Rebate Dr") : t("ledger.supplier.Opening Balance")}
                 </span>
               </div>
             </DetailDrawerBody>
 
             <DetailDrawerFooter>
               <button onClick={() => setDrawerEntry(null)} className="w-full h-8 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-                Close
+                {t("btn.Close")}
               </button>
             </DetailDrawerFooter>
           </>
