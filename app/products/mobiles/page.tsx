@@ -1,14 +1,14 @@
 ﻿﻿"use client"
 
 import { PermissionGate } from "@/components/shared/permission-gate"
-import { useState, useMemo, useRef, useEffect } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import {
   Plus, Search, Grid3X3, List, Smartphone, Copy, Eye, Pencil, Trash2, Filter,
   TrendingUp, Package, DollarSign, AlertTriangle, ShoppingBag,
   Tag, Hash, Palette, HardDrive, Cpu, Truck, FileText, ArrowDownLeft, ArrowUpRight, Layers,
-  ImageIcon, X as XIcon, Upload,
+  ImageIcon, X as XIcon, Upload, ChevronDown,
 } from "lucide-react"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
@@ -26,6 +26,7 @@ import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { Mobile, Supplier } from "@/data/types"
 import { DataTable } from "@/components/shared/data-table"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { EmptyState } from "@/components/shared/empty-state"
@@ -73,6 +74,70 @@ type MobileFormOutput = z.output<typeof mobileSchema>
 // For mobiles, only In Stock / Out of Stock - no Low Stock concept
 function getMobileStockStatus(stock: number): "In Stock" | "Out of Stock" {
   return stock > 0 ? "In Stock" : "Out of Stock"
+}
+
+// â"€â"€â"€ Color name -> swatch â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// Phone color names are the data itself, so the chip shows the literal color rather
+// than an arbitrary categorical hue. Falls back to neutral slate for anything unlisted
+// (custom/imported color names) so it never breaks.
+const COLOR_SWATCH: Record<string, string> = {
+  black: "#1c1c1e", white: "#f5f5f7", silver: "#c7c9cc", gray: "#8e8e93", grey: "#8e8e93",
+  gold: "#d4af6a", "rose gold": "#e0bfb8", blue: "#3b6fd4", "sky blue": "#8ec6ea",
+  "midnight blue": "#1b2a4a", navy: "#1f3a63", green: "#3f9c5d", "mint green": "#9fd8b8",
+  red: "#d1443f", purple: "#8e5bb5", "deep purple": "#5c3d80", pink: "#e59fb0",
+  orange: "#e08a3c", yellow: "#e6c94d", bronze: "#8c6a4b", titanium: "#8a8a8d",
+  graphite: "#4a4a4d", "space gray": "#4a4a4d", "space grey": "#4a4a4d", coral: "#ee8a7a",
+  cream: "#efe6d0", beige: "#d9c9a8",
+}
+function colorSwatch(name: string): string {
+  return COLOR_SWATCH[name.trim().toLowerCase()] ?? "#a1a1aa"
+}
+
+// â"€â"€â"€ Grouping (By Model / Model+Color) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// New-stock variants (brand+model+color+storage+condition) already come as separate
+// `mobiles` rows from the purchase flow. These groups just collapse that flat list back
+// down for display - "unit" mode renders it ungrouped, exactly as before.
+
+interface MobileGroup {
+  key: string
+  brand: string
+  model: string
+  deviceType: Mobile["deviceType"]
+  /** Only set in "modelColor" mode - the single color this group represents */
+  color?: string
+  totalStock: number
+  totalValue: number
+  /** Distinct colors across the group's variants, with per-color unit counts */
+  colorBreakdown: { color: string; stock: number }[]
+  /** Representative variant used for image/price display on the collapsed card - highest stock wins */
+  representative: Mobile
+  variants: Mobile[]
+}
+
+function groupMobiles(list: Mobile[], groupBy: "unit" | "model" | "modelColor"): MobileGroup[] {
+  const map = new Map<string, MobileGroup>()
+  for (const m of list) {
+    const key = groupBy === "modelColor"
+      ? `${m.brand}|${m.model}|${m.color}`.toLowerCase()
+      : `${m.brand}|${m.model}`.toLowerCase()
+    let group = map.get(key)
+    if (!group) {
+      group = {
+        key, brand: m.brand, model: m.model, deviceType: m.deviceType,
+        color: groupBy === "modelColor" ? m.color : undefined,
+        totalStock: 0, totalValue: 0, colorBreakdown: [], representative: m, variants: [],
+      }
+      map.set(key, group)
+    }
+    group.totalStock += m.stock
+    group.totalValue += m.stock * m.sellingPrice
+    group.variants.push(m)
+    if (m.stock > group.representative.stock) group.representative = m
+    const colorEntry = group.colorBreakdown.find(c => c.color === m.color)
+    if (colorEntry) colorEntry.stock += m.stock
+    else group.colorBreakdown.push({ color: m.color, stock: m.stock })
+  }
+  return Array.from(map.values()).sort((a, b) => b.totalStock - a.totalStock)
 }
 
 const stockDotColor: Record<string, string> = {
@@ -242,6 +307,115 @@ function MobileCard({
           </Button>
         </div>
       </div>
+    </Card>
+  )
+}
+
+// â"€â"€â"€ Mobile Group Card (collapsed model/model+color summary) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+function MobileGroupCard({
+  group, expanded, onToggle, onView, onEdit, onDelete,
+}: {
+  group: MobileGroup
+  expanded: boolean
+  onToggle: () => void
+  onView: (m: Mobile) => void
+  onEdit: (m: Mobile) => void
+  onDelete: (m: Mobile) => void
+}) {
+  const rep = group.representative
+  const prices = group.variants.map(v => v.sellingPrice).filter(p => p > 0)
+  const minPrice = prices.length ? Math.min(...prices) : 0
+  const maxPrice = prices.length ? Math.max(...prices) : 0
+  const stockStatus = getMobileStockStatus(group.totalStock)
+
+  return (
+    <Card className={cn(
+      "overflow-hidden border bg-white rounded-xl transition-all duration-200",
+      expanded ? "border-indigo-300 shadow-md" : "border-slate-200/80 hover:border-indigo-200 hover:shadow-md"
+    )}>
+      <button type="button" onClick={onToggle} className="w-full text-left p-3.5">
+        {/* Identity row */}
+        <div className="flex items-start gap-3">
+          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+            group.deviceType === "iphone" ? "bg-slate-900" : "bg-emerald-600")}>
+            <Smartphone className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+              <span>{group.brand}</span>
+              <span className="text-slate-300">-</span>
+              <span>{group.deviceType === "iphone" ? "iPhone" : "Android"}</span>
+            </div>
+            <h3 className="font-bold text-slate-900 text-[14px] leading-snug truncate">
+              {group.model}{group.color ? ` - ${group.color}` : ""}
+            </h3>
+          </div>
+          <ChevronDown className={cn("w-4 h-4 text-slate-400 shrink-0 mt-1 transition-transform", expanded && "rotate-180")} />
+        </div>
+
+        {/* Price + stock */}
+        <div className="flex items-center justify-between mt-3">
+          <div>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Selling price</p>
+            <p className="text-sm font-bold text-slate-900">
+              {minPrice > 0
+                ? (minPrice === maxPrice ? formatCurrency(minPrice) : `From ${formatCurrency(minPrice)}`)
+                : "Not set"}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total stock</p>
+            <div className="flex items-center gap-1.5 justify-end">
+              <span className={cn("w-1.5 h-1.5 rounded-full", stockDotStyle[stockStatus])} />
+              <span className="text-sm font-bold text-slate-900">{group.totalStock} <span className="text-[11px] font-medium text-slate-400">units</span></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Color swatches - only meaningful when not already split by color */}
+        {!group.color && group.colorBreakdown.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {group.colorBreakdown.map(c => (
+              <span key={c.color} className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 pl-1.5 pr-2 py-1 text-[11px] font-medium text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: colorSwatch(c.color) }} />
+                {c.color}
+                <span className="font-bold text-slate-800">{c.stock}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-slate-100 text-[11px] font-semibold text-indigo-600">
+          <Layers className="w-3 h-3" />
+          {group.variants.length} variant{group.variants.length !== 1 ? "s" : ""}
+          <span className="text-slate-400 font-normal ml-auto">{expanded ? "Hide" : "Show"} details</span>
+        </div>
+      </button>
+
+      {/* Expanded variant list */}
+      {expanded && (
+        <div className="border-t border-slate-100 divide-y divide-slate-100 bg-slate-50/60">
+          {group.variants.map(v => (
+            <div key={v.id} className="flex items-center gap-2.5 px-3.5 py-2.5">
+              <span className="w-2.5 h-2.5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: colorSwatch(v.color) }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-800 truncate">{v.color} - {v.storage} / {v.ram}</p>
+                <p className="text-[10px] text-slate-400">{v.stock} units - {formatCurrency(v.sellingPrice)}</p>
+              </div>
+              <button onClick={() => onView(v)} className="p-1.5 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors" title="View">
+                <Eye className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => onEdit(v)} className="p-1.5 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors" title="Edit">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => onDelete(v)} className="p-1.5 rounded-md hover:bg-white text-slate-400 hover:text-rose-600 transition-colors" title="Delete">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }
@@ -1735,6 +1909,11 @@ function MobilesPageInner() {
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [stockFilter, setStockFilter] = useState("all")
   const [deviceTypeFilter, setDeviceTypeFilter] = useState("all")
+  // How new-stock rows are grouped for display - "unit" is one card per variant row
+  // (today's behavior), "model" collapses all colors/storage of a model into one
+  // summary, "modelColor" keeps color as its own group within a model.
+  const [groupBy, setGroupBy] = useState<"unit" | "model" | "modelColor">("model")
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingMobile, setEditingMobile] = useState<Mobile | null>(null)
@@ -2072,6 +2251,16 @@ function MobilesPageInner() {
     })
   }, [mobileList, search, brandFilter, categoryFilter, deviceTypeFilter, stockFilter])
 
+  const groups = useMemo(() => groupMobiles(filtered, groupBy), [filtered, groupBy])
+
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
   // â"€â"€â"€ Handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
   async function handleEdit(mobile: Mobile) {
@@ -2408,6 +2597,18 @@ function MobilesPageInner() {
               className="pl-9 h-9 text-sm placeholder:truncate"
             />
           </div>
+          {/* Group by */}
+          <Select value={groupBy} onValueChange={v => setGroupBy(v as typeof groupBy)}>
+            <SelectTrigger className="h-9 text-xs w-auto shrink-0 gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="model">Group: By Model</SelectItem>
+              <SelectItem value="modelColor">Group: Model + Color</SelectItem>
+              <SelectItem value="unit">Group: By Unit</SelectItem>
+            </SelectContent>
+          </Select>
           {/* View toggle */}
           <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 flex-shrink-0">
             <button
@@ -2497,12 +2698,26 @@ function MobilesPageInner() {
               title="No mobile phones found"
               description="Create a purchase order to add phones to the catalog automatically"
             />
-          ) : (
+          ) : groupBy === "unit" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {filtered.map(mobile => (
                 <MobileCard
                   key={mobile.id}
                   mobile={mobile}
+                  onView={handleView}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-start">
+              {groups.map(group => (
+                <MobileGroupCard
+                  key={group.key}
+                  group={group}
+                  expanded={expandedGroups.has(group.key)}
+                  onToggle={() => toggleGroup(group.key)}
                   onView={handleView}
                   onEdit={handleEdit}
                   onDelete={handleDeleteClick}
@@ -2526,7 +2741,49 @@ function MobilesPageInner() {
             <>
               {/* â"€â"€ Mobile: professional list cards (hidden on md+) â"€â"€â"€â"€ */}
               <div className="md:hidden space-y-2.5">
-                {filtered.map(mobile => {
+                {groupBy !== "unit" && groups.map(group => {
+                  const expanded = expandedGroups.has(group.key)
+                  return (
+                    <div key={group.key} className={cn(
+                      "bg-white rounded-xl border shadow-sm overflow-hidden",
+                      expanded ? "border-indigo-300" : "border-slate-200"
+                    )}>
+                      <button type="button" onClick={() => toggleGroup(group.key)} className="w-full flex items-center gap-3 p-3 text-left">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                          <Smartphone className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 shrink-0">{group.brand}</span>
+                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full shrink-0">{group.variants.length} variant{group.variants.length !== 1 ? "s" : ""}</span>
+                          </div>
+                          <p className="font-bold text-slate-900 text-[14px] leading-tight truncate">
+                            {group.model}{group.color ? ` - ${group.color}` : ""}
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{group.totalStock} units total</p>
+                        </div>
+                        <ChevronDown className={cn("w-4 h-4 text-slate-400 shrink-0 transition-transform", expanded && "rotate-180")} />
+                      </button>
+                      {expanded && (
+                        <div className="border-t border-slate-100 divide-y divide-slate-100 bg-slate-50/60">
+                          {group.variants.map(v => (
+                            <div key={v.id} className="flex items-center gap-2.5 px-3 py-2">
+                              <span className="w-2.5 h-2.5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: colorSwatch(v.color) }} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 truncate">{v.color} - {v.storage} / {v.ram}</p>
+                                <p className="text-[10px] text-slate-400">{v.stock} units - {formatCurrency(v.sellingPrice)}</p>
+                              </div>
+                              <button onClick={() => handleView(v)} className="p-1.5 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors"><Eye className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleEdit(v)} className="p-1.5 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleDeleteClick(v)} className="p-1.5 rounded-md hover:bg-white text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {groupBy === "unit" && filtered.map(mobile => {
                   const margin = calculateMargin(mobile.purchasePrice, mobile.sellingPrice)
                   const stockStatus = getMobileStockStatus(mobile.stock)
                   const accentColor =
@@ -2634,11 +2891,91 @@ function MobilesPageInner() {
 
               {/* â"€â"€ Desktop: full DataTable (hidden on mobile) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
               <div className="hidden md:block">
-                <DataTable
-                  columns={columns}
-                  data={filtered}
-                  searchPlaceholder="Search mobile phones..."
-                />
+                {groupBy === "unit" ? (
+                  <DataTable
+                    columns={columns}
+                    data={filtered}
+                    searchPlaceholder="Search mobile phones..."
+                  />
+                ) : (
+                  <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-8" />
+                          <TableHead>Brand</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Model</TableHead>
+                          <TableHead>Variants</TableHead>
+                          <TableHead>Total Stock</TableHead>
+                          <TableHead>Selling Price</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {groups.map(group => {
+                          const expanded = expandedGroups.has(group.key)
+                          const prices = group.variants.map(v => v.sellingPrice).filter(p => p > 0)
+                          const minPrice = prices.length ? Math.min(...prices) : 0
+                          const maxPrice = prices.length ? Math.max(...prices) : 0
+                          return (
+                            <React.Fragment key={group.key}>
+                              <TableRow className="cursor-pointer" onClick={() => toggleGroup(group.key)}>
+                                <TableCell>
+                                  <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", expanded && "rotate-180")} />
+                                </TableCell>
+                                <TableCell>
+                                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                    {group.brand}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold",
+                                    group.deviceType === "iphone" ? "bg-slate-900 text-white" : "bg-green-100 text-green-700")}>
+                                    {group.deviceType === "iphone" ? "iPhone" : "Android"}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="font-medium text-slate-900">
+                                  {group.model}{group.color ? ` - ${group.color}` : ""}
+                                </TableCell>
+                                <TableCell className="text-slate-500">{group.variants.length}</TableCell>
+                                <TableCell>
+                                  <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", stockBadgeStyle[getMobileStockStatus(group.totalStock)])}>
+                                    <span className={cn("w-1.5 h-1.5 rounded-full", stockDotStyle[getMobileStockStatus(group.totalStock)])} />
+                                    {group.totalStock} units
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-slate-500">
+                                  {minPrice > 0 ? (minPrice === maxPrice ? formatCurrency(minPrice) : `From ${formatCurrency(minPrice)}`) : "Not set"}
+                                </TableCell>
+                              </TableRow>
+                              {expanded && group.variants.map(v => (
+                                <TableRow key={v.id} className="bg-slate-50/60">
+                                  <TableCell />
+                                  <TableCell colSpan={2} className="text-slate-400 text-xs">
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: colorSwatch(v.color) }} />
+                                      {v.color}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-slate-600 text-xs">{v.storage} / {v.ram}</TableCell>
+                                  <TableCell className="text-slate-500 text-xs">{v.stock} units</TableCell>
+                                  <TableCell className="text-slate-900 text-xs font-semibold">{formatCurrency(v.sellingPrice)}</TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      <button onClick={() => handleView(v)} className="p-1 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors"><Eye className="w-3.5 h-3.5" /></button>
+                                      <button onClick={() => handleEdit(v)} className="p-1 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                                      <button onClick={() => handleDeleteClick(v)} className="p-1 rounded-md hover:bg-white text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </React.Fragment>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </div>
             </>
           )}

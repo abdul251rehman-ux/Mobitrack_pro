@@ -1,5 +1,5 @@
 import { supabase } from '../supabase'
-import { getTenantId } from './helpers'
+import { getTenantId, hashPassword } from './helpers'
 import { toTenant, toTenantSettings, toProfile } from './types'
 import type {
   DbTenant,
@@ -207,7 +207,7 @@ export async function createProfile(data: {
         name: data.name,
         email: data.email.toLowerCase().trim(),
         role: data.role,
-        password: data.password,
+        password: await hashPassword(data.password),
         status: data.status,
       })
       .select('*')
@@ -235,7 +235,7 @@ export async function updateProfileFull(id: string, data: {
       role: data.role,
       status: data.status,
     }
-    if (data.password) payload.password = data.password
+    if (data.password) payload.password = await hashPassword(data.password)
 
     const { error } = await supabase
       .from('profiles')

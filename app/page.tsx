@@ -6,6 +6,7 @@ import {
   ArrowRight, AlertTriangle, Plus, BarChart2, Smartphone,
   ShoppingBag, CheckCircle2, Users, Truck, Tag, ArrowUpRight,
   ArrowDownRight, Calendar, ChevronDown, Clock, CalendarDays, X,
+  LayoutDashboard,
 } from "lucide-react"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -20,6 +21,7 @@ import { getCustomers } from "@/lib/api/customers"
 import { getSuppliers } from "@/lib/api/suppliers"
 import type { Sale, Purchase, Mobile, Accessory, Customer, Supplier } from "@/data/types"
 import { PageWrapper } from "@/components/layout/page-wrapper"
+import { PageHeader } from "@/components/shared/page-header"
 import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -70,7 +72,11 @@ type Period = "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "y
 
 /* â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
+  // Revenue/profit figures are sensitive - only shown to roles that can already
+  // see them elsewhere (Reports/Finance). Everyone else still gets the full
+  // dashboard, just without the money widgets.
+  const canSeeFinancials = hasPermission("reports.view") || hasPermission("payments.view")
   const { t } = useLanguage()
   const TODAY = todayPKT()
   const [period, setPeriod] = useState<Period>("month")
@@ -162,15 +168,29 @@ export default function DashboardPage() {
   const mobileMap = useMemo(() => new Map(mobiles.map(m => [m.id, m.purchasePrice])), [mobiles])
   const accMap    = useMemo(() => new Map(accessories.map(a => [a.id, a.purchasePrice])), [accessories])
 
-  const periodProfit = useMemo(() => filteredSales.reduce((total, sale) => {
-    const itemProfit = sale.items.reduce((sub, item) => {
-      const cost = item.productType === "Mobile"
-        ? (mobileMap.get(item.productId) ?? 0)
-        : (accMap.get(item.productId) ?? 0)
-      return sub + (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
-    }, 0)
-    return total + itemProfit - (sale.discount ?? 0)
-  }, 0), [filteredSales, mobileMap, accMap])
+  // Items whose cost can't be found in the current catalog (deleted/replaced
+  // product row, etc.) are excluded from both profit AND the revenue used for
+  // the margin %, instead of silently costing 0 - a missing cost is not the
+  // same as a free item, and the old behavior inflated margin toward 100%.
+  const { periodProfit, periodProfitRevenue, periodProfitHasGaps } = useMemo(() => {
+    let profit = 0
+    let revenueCounted = 0
+    let hasGaps = false
+    for (const sale of filteredSales) {
+      let saleRevenueCounted = 0
+      let itemProfit = 0
+      for (const item of sale.items) {
+        const costMap = item.productType === "Mobile" ? mobileMap : accMap
+        const cost = costMap.get(item.productId)
+        if (cost === undefined) { hasGaps = true; continue }
+        itemProfit += (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
+        saleRevenueCounted += item.unitPrice * item.quantity
+      }
+      profit += itemProfit - (sale.discount ?? 0)
+      revenueCounted += saleRevenueCounted
+    }
+    return { periodProfit: profit, periodProfitRevenue: revenueCounted, periodProfitHasGaps: hasGaps }
+  }, [filteredSales, mobileMap, accMap])
 
   const salesSparkData = useMemo(() => {
     const base = (arr: typeof sales) => arr.filter(s => s.status !== "Refunded")
@@ -343,34 +363,12 @@ export default function DashboardPage() {
   return (
     <PageWrapper>
 
-      {/* â"€â"€ Welcome Banner â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="relative overflow-hidden rounded-xl bg-linear-to-r from-indigo-600 via-indigo-700 to-indigo-700 px-5 py-3.5 mb-4 shadow-md shadow-indigo-200/50">
-        <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/5" />
-        <div className="absolute right-16 -bottom-10 w-24 h-24 rounded-full bg-white/5" />
-        <div className="absolute right-6 top-2 w-12 h-12 rounded-full bg-white/8" />
-        <div className="relative flex items-center justify-between">
-          <div>
-            <p className="text-indigo-200 text-xs font-medium">{t("dash.Welcome back")}</p>
-            <h1 className="text-white text-lg sm:text-xl font-bold tracking-tight leading-tight">{user?.name || "User"}</h1>
-            <p className="text-indigo-200 text-xs mt-0.5">{formatDate(TODAY)} - {shopName}</p>
-          </div>
-          <div className="hidden md:flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-indigo-200 text-[11px]">{t("dash.Today Sales")}</p>
-              <p className="text-white text-lg font-bold leading-tight">
-                {formatCurrency(sales.filter(s => s.date === TODAY).reduce((s, x) => s + x.total, 0))}
-              </p>
-            </div>
-            <div className="w-px h-8 bg-white/20" />
-            <div className="text-right">
-              <p className="text-indigo-200 text-[11px]">{t("dash.Transactions")}</p>
-              <p className="text-white text-lg font-bold leading-tight">
-                {sales.filter(s => s.date === TODAY).length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* â"€â"€ Page Header â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+      <PageHeader
+        title="Dashboard"
+        icon={<LayoutDashboard />}
+        iconBg="bg-indigo-600"
+      />
 
       {/* â"€â"€ Quick Actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
@@ -393,7 +391,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* â"€â"€ Financial Overview â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+      {/* â"€â"€ Financial Overview - revenue/profit is sensitive, hidden from roles without reports/finance access â"€â"€ */}
+      {canSeeFinancials && (
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -528,7 +527,7 @@ export default function DashboardPage() {
             },
             {
               label: t("dash.Gross Profit"), value: formatCurrency(Math.max(0, Math.round(periodProfit))),
-              sub: `${periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% ${t("dash.margin")}`,
+              sub: `${periodProfitRevenue > 0 ? Math.round((periodProfit / periodProfitRevenue) * 100) : 0}% ${t("dash.margin")}${periodProfitHasGaps ? " *" : ""}`,
               icon: DollarSign, grad: "from-emerald-500 to-emerald-600",
               shadow: "shadow-emerald-200/60",
             },
@@ -630,7 +629,8 @@ export default function DashboardPage() {
               </div>
               <p className="text-white text-xl font-bold tracking-tight leading-tight mb-0.5">{formatCurrency(Math.max(0, Math.round(periodProfit)))}</p>
               <p className="text-emerald-200 text-[11px]">
-                {periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0}% gross margin
+                {periodProfitRevenue > 0 ? Math.round((periodProfit / periodProfitRevenue) * 100) : 0}% gross margin
+                {periodProfitHasGaps && <span title="Some sold items are missing cost data and were excluded from this calculation"> *</span>}
               </p>
               <div className="mt-2 h-10">
                 <ResponsiveContainer width="100%" height="100%">
@@ -650,6 +650,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* â"€â"€ Stat Counters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
@@ -674,7 +675,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* â"€â"€ Revenue Chart â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+      {/* â"€â"€ Revenue Chart - same financial gate as the overview above â"€â"€ */}
+      {canSeeFinancials && (
       <Card className="mb-4 border-slate-100 shadow-sm rounded-xl">
         <CardHeader className="pb-0 pt-4 px-5">
           <div className="flex items-center justify-between">
@@ -725,6 +727,7 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+      )}
 
       {/* â"€â"€ Recent Transactions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-4">

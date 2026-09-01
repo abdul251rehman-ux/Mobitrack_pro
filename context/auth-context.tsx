@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { hashPassword, verifyPassword, isPasswordHashed } from "@/lib/api/helpers"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -147,8 +148,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = rows?.[0] ?? null
 
     if (!data) return false
-    if (data.password !== password) return false
+    if (!(await verifyPassword(password, data.password))) return false
     if (data.status?.toLowerCase() === "inactive") return false
+
+    // Lazily upgrade a plaintext row to a hash now that we've verified the
+    // password - covers accounts created before hashing was introduced
+    // without a separate bulk migration touching every row up front.
+    if (!isPasswordHashed(data.password)) {
+      const newHash = await hashPassword(password)
+      await supabase.from("profiles").update({ password: newHash }).eq("id", data.id)
+    }
 
     // Resolve permissions: DB field takes priority; fallback to role template
     let permissions: string[] | "*"
@@ -217,7 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             phone: metadata.phone,
             role: "Admin",
             status: "Active",
-            password: password,
+            password: await hashPassword(password),
             permissions: null,
           })
 

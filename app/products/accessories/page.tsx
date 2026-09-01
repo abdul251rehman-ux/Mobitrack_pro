@@ -117,118 +117,99 @@ function AccessoryCard({
 
   return (
     <Card className="relative overflow-hidden border border-slate-200/80 hover:shadow-md hover:shadow-slate-200/70 transition-all duration-200 hover:-translate-y-0.5 bg-white group rounded-xl">
+      <div className="flex">
+        <div className={cn("w-1 shrink-0 bg-gradient-to-b", cfg.headerGradient)} />
+        <div className="flex-1 p-3 space-y-2 min-w-0">
 
-      {/* Header */}
-      {accessory.image ? (
-        <div className="relative h-24 bg-white border-b border-slate-100 overflow-hidden">
-          <Image
-            src={accessory.image}
-            alt={accessory.name}
-            fill
-            className="object-contain p-2"
-            sizes="(max-width: 768px) 50vw, 25vw"
-          />
-          {hasPrices && (
-            <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md bg-white shadow-sm border border-slate-100 px-1.5 py-0.5 text-[10px] font-bold">
-              <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
-              <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className={cn("relative bg-gradient-to-br h-24 flex items-center justify-between px-4 overflow-hidden", cfg.headerGradient)}>
-          <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute -bottom-5 -left-3 w-14 h-14 rounded-full bg-white/10 pointer-events-none" />
-          <div className="relative z-10 p-2 rounded-xl bg-white/20 backdrop-blur-sm">
-            <Icon className="w-5 h-5 text-white/90" />
-          </div>
-          {hasPrices && (
-            <span className="relative z-10 inline-flex items-center gap-0.5 rounded-md bg-white/90 shadow px-1.5 py-0.5 text-[10px] font-bold">
-              <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
-              <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Body */}
-      <div className="p-3 space-y-2">
-
-        {/* Category + name */}
-        <div>
-          <span className={cn(
-            "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium mb-1",
-            cfg.badge
-          )}>
-            {accessory.category}
-          </span>
-          <h3 className="font-bold text-slate-900 text-[13px] leading-snug line-clamp-1">
-            {accessory.name}
-          </h3>
-          <p className="text-[10px] text-slate-400 font-mono truncate">
-            {accessory.brand} - {accessory.sku}
-          </p>
-        </div>
-
-        {/* Price box */}
-        {hasPrices ? (
-          <div className="bg-slate-50 rounded-lg px-2.5 py-2 space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-slate-400">Sell Price</span>
-              <span className="text-[13px] font-extrabold text-slate-900 tabular-nums leading-none">
-                {formatCurrency(accessory.sellingPrice)}
-              </span>
+          {/* Icon + category + name */}
+          <div className="flex items-start gap-2">
+            <div className={cn("shrink-0 p-1.5 rounded-lg", cfg.iconBg)}>
+              <Icon className="w-3.5 h-3.5" />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-slate-400">Buy Price</span>
-              <span className="text-[10px] text-slate-500 tabular-nums">{formatCurrency(accessory.purchasePrice)}</span>
-            </div>
-            <div className="flex items-center justify-between pt-1 border-t border-slate-200">
-              <span className="text-[10px] text-slate-400">Profit</span>
-              <span className="text-[10px] font-semibold text-emerald-600 tabular-nums">+{formatCurrency(profit)}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1.5">
+                <span className={cn(
+                  "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                  cfg.badge
+                )}>
+                  {accessory.category}
+                </span>
+                {hasPrices && (
+                  <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold">
+                    <TrendingUp className={cn("w-2.5 h-2.5", marginStyle.icon)} />
+                    <span className={marginStyle.icon}>{margin.toFixed(1)}%</span>
+                  </span>
+                )}
+              </div>
+              <h3 className="font-bold text-slate-900 text-[13px] leading-snug line-clamp-1 mt-1">
+                {accessory.name}
+              </h3>
+              <p className="text-[10px] text-slate-400 font-mono truncate">
+                {accessory.brand} - {accessory.sku}
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-center">
-            <p className="text-[10px] font-medium text-amber-700">No price set - purchase to stock</p>
-          </div>
-        )}
 
-        {/* Stock + action buttons */}
-        <div className="flex items-center justify-between gap-1.5">
-          {accessory.stock > 0 ? (
-            <span className={cn(
-              "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium",
-              stockPillStyle[getStockStatus(accessory.stock)]
-            )}>
-              <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", stockDotColor[getStockStatus(accessory.stock)])} />
-              {accessory.stock} units
-            </span>
+          {/* Price box */}
+          {hasPrices ? (
+            <div className="bg-slate-50 rounded-lg px-2.5 py-2 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400">Sell Price</span>
+                <span className="text-[13px] font-extrabold text-slate-900 tabular-nums leading-none">
+                  {formatCurrency(accessory.sellingPrice)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400">Buy Price</span>
+                <span className="text-[10px] text-slate-500 tabular-nums">{formatCurrency(accessory.purchasePrice)}</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                <span className="text-[10px] text-slate-400">Profit</span>
+                <span className="text-[10px] font-semibold text-emerald-600 tabular-nums">+{formatCurrency(profit)}</span>
+              </div>
+            </div>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-              Catalog only
-            </span>
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-center">
+              <p className="text-[10px] font-medium text-amber-700">No price set - purchase to stock</p>
+            </div>
           )}
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-6 w-6 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-              onClick={() => onEdit(accessory)}
-            >
-              <Pencil className="w-3 h-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-6 w-6 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-              onClick={() => onDelete(accessory)}
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
-          </div>
-        </div>
 
+          {/* Stock + action buttons */}
+          <div className="flex items-center justify-between gap-1.5">
+            {accessory.stock > 0 ? (
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                stockPillStyle[getStockStatus(accessory.stock)]
+              )}>
+                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", stockDotColor[getStockStatus(accessory.stock)])} />
+                {accessory.stock} units
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                Catalog only
+              </span>
+            )}
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-6 w-6 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                onClick={() => onEdit(accessory)}
+              >
+                <Pencil className="w-3 h-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-6 w-6 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                onClick={() => onDelete(accessory)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+
+        </div>
       </div>
     </Card>
   )
