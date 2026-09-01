@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 
 import { supabase } from "@/lib/supabase"
-import { getTenantId } from "@/lib/api/helpers"
+import { getTenantId, hashPassword } from "@/lib/api/helpers"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth, type UserRole, ALL_MODULES, ROLE_PERMISSION_TEMPLATES } from "@/context/auth-context"
 import { Button } from "@/components/ui/button"
@@ -300,6 +300,9 @@ function StaffPageInner() {
   }
 
   const isAdmin = hasPermission("settings.general")
+  // Distinct from isAdmin above (which really means "can access this page") -
+  // only a true Admin may grant the Admin role to anyone, themselves included.
+  const isTrueAdmin = currentUser?.role === "Admin" || currentUser?.permissions === "*"
 
   return (
     <div className="space-y-4">
@@ -533,6 +536,7 @@ function StaffPageInner() {
           onClose={() => setShowAdd(false)}
           onAdded={member => { setStaff(prev => [...prev, member]); setShowAdd(false) }}
           actor={currentUser}
+          canGrantAdmin={isTrueAdmin}
         />
       )}
 
@@ -545,6 +549,8 @@ function StaffPageInner() {
             setEditTarget(null)
           }}
           actor={currentUser}
+          canGrantAdmin={isTrueAdmin}
+          isSelf={editTarget.id === currentUser?.id}
         />
       )}
 
@@ -566,12 +572,15 @@ function StaffPageInner() {
 
 const PRESET_ROLES = ["Admin", "Manager", "Cashier", "Custom"]
 
-function AddStaffDialog({ open, onClose, onAdded, actor }: {
+function AddStaffDialog({ open, onClose, onAdded, actor, canGrantAdmin }: {
   open: boolean
   onClose: () => void
   onAdded: (member: StaffMember) => void
   actor: import("@/context/auth-context").AuthUser | null
+  /** Only a true Admin can create another Admin account. */
+  canGrantAdmin: boolean
 }) {
+  const availableRoles = canGrantAdmin ? PRESET_ROLES : PRESET_ROLES.filter(r => r !== "Admin")
   const [showPass, setShowPass] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selectedRole, setSelectedRole] = useState("Cashier")
@@ -600,6 +609,10 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
 
   async function onSubmit(data: AddForm) {
     if (saving) return
+    if (selectedRole === "Admin" && !canGrantAdmin) {
+      toast.error("Only an Admin can grant the Admin role")
+      return
+    }
     setSaving(true)
     try {
       const tenantId = await getTenantId()
@@ -618,7 +631,7 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
         email: data.email.toLowerCase().trim(),
         phone: data.phone.trim(),
         role: dbRole,
-        password: data.password,
+        password: await hashPassword(data.password),
         status: "Active",
         permissions: finalPerms,
       }).select().single()
@@ -705,7 +718,7 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
           <div className="space-y-1">
             <Label className="text-xs font-semibold text-slate-600">Role Template</Label>
             <div className="flex gap-2 flex-wrap">
-              {PRESET_ROLES.map(r => (
+              {availableRoles.map(r => (
                 <button
                   key={r}
                   type="button"
@@ -752,12 +765,17 @@ function AddStaffDialog({ open, onClose, onAdded, actor }: {
 
 // ── Edit Staff Dialog ─────────────────────────────────────────────────────────
 
-function EditStaffDialog({ member, onClose, onUpdated, actor }: {
+function EditStaffDialog({ member, onClose, onUpdated, actor, canGrantAdmin, isSelf }: {
   member: StaffMember
   onClose: () => void
   onUpdated: (member: StaffMember) => void
   actor: import("@/context/auth-context").AuthUser | null
+  /** Only a true Admin can promote someone to Admin. */
+  canGrantAdmin: boolean
+  /** Editing your own account - role/permissions are locked to prevent self-escalation. */
+  isSelf: boolean
 }) {
+  const availableRoles = canGrantAdmin ? PRESET_ROLES : PRESET_ROLES.filter(r => r !== "Admin")
   const [showPass, setShowPass] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selectedRole, setSelectedRole] = useState(member.role)
@@ -790,12 +808,23 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
 
   async function onSubmit(data: EditForm) {
     if (saving) return
+    if (isSelf && selectedRole !== member.role) {
+      toast.error("You can't change your own role")
+      return
+    }
+    if (selectedRole === "Admin" && member.role !== "Admin" && !canGrantAdmin) {
+      toast.error("Only an Admin can grant the Admin role")
+      return
+    }
     setSaving(true)
     try {
       const tenantId = await getTenantId()
-      const isAdminRole = selectedRole === "Admin"
-      const finalPerms = isAdminRole ? null : permissions
-      const dbRole = selectedRole === "Custom" ? "Cashier" : selectedRole
+      // Self-edits keep their existing role/permissions no matter what the form
+      // holds, so a stale/tampered selectedRole can never smuggle a role change through.
+      const effectiveRole = isSelf ? member.role : selectedRole
+      const isAdminRole = effectiveRole === "Admin"
+      const finalPerms = isAdminRole ? null : (isSelf ? member.permissions ?? permissions : permissions)
+      const dbRole = effectiveRole === "Custom" ? "Cashier" : effectiveRole
 
       const update: any = {
         name: data.name.trim(),
@@ -804,7 +833,7 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
         status: data.status,
         permissions: finalPerms,
       }
-      if (data.password && data.password.length >= 6) update.password = data.password
+      if (data.password && data.password.length >= 6) update.password = await hashPassword(data.password)
 
       const { error } = await supabase.from("profiles").update(update).eq("id", member.id).eq("tenant_id", tenantId)
       if (error) throw error
@@ -818,15 +847,15 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
         module: "Settings",
         entityId: member.id,
         entityName: data.name.trim(),
-        description: `Updated staff member ${data.name.trim()} — role: ${member.role}→${selectedRole}`,
+        description: `Updated staff member ${data.name.trim()} — role: ${member.role}→${effectiveRole}`,
         oldValue: JSON.stringify({ name: member.name, role: member.role, status: member.status }),
-        newValue: JSON.stringify({ name: data.name.trim(), role: selectedRole, status: data.status, permissions: finalPerms }),
+        newValue: JSON.stringify({ name: data.name.trim(), role: effectiveRole, status: data.status, permissions: finalPerms }),
       })
       onUpdated({
         ...member,
         name: data.name.trim(),
         phone: data.phone.trim(),
-        role: selectedRole,
+        role: effectiveRole,
         status: data.status,
         permissions: Array.isArray(finalPerms) ? finalPerms : null,
       })
@@ -883,17 +912,19 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
             </div>
           </div>
 
-          {/* Role template picker */}
+          {/* Role template picker - locked entirely when editing your own account */}
           <div className="space-y-1">
             <Label className="text-xs font-semibold text-slate-600">Role Template</Label>
             <div className="flex gap-2 flex-wrap">
-              {PRESET_ROLES.map(r => (
+              {availableRoles.map(r => (
                 <button
                   key={r}
                   type="button"
+                  disabled={isSelf}
                   onClick={() => handleRoleChange(r)}
                   className={cn(
                     "px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all",
+                    isSelf ? "opacity-50 cursor-not-allowed" : "",
                     selectedRole === r
                       ? "bg-indigo-600 border-indigo-600 text-white"
                       : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
@@ -903,7 +934,10 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
                 </button>
               ))}
             </div>
-            {selectedRole === "Admin" && (
+            {isSelf && (
+              <p className="text-[11px] text-slate-400 mt-1">You can't change your own role or permissions</p>
+            )}
+            {!isSelf && selectedRole === "Admin" && (
               <p className="text-[11px] text-violet-600 font-medium mt-1">Admin has full access to everything</p>
             )}
           </div>
@@ -911,7 +945,7 @@ function EditStaffDialog({ member, onClose, onUpdated, actor }: {
           {selectedRole !== "Admin" && (
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-slate-600">Permissions</Label>
-              <PermissionMatrix permissions={permissions} onChange={setPermissions} />
+              <PermissionMatrix permissions={permissions} onChange={setPermissions} disabled={isSelf} />
             </div>
           )}
 

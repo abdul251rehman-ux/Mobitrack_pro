@@ -133,6 +133,8 @@ export interface Expense {
   isRecurring: boolean
   recurringDay?: number     // 1–31 (monthly) or day within month (yearly)
   recurringMonth?: number   // 1–12 (yearly only)
+  /** Finance account this expense was deducted from, when status is Paid */
+  accountId?: string
 }
 
 // ─── Shops ────────────────────────────────────────────────────────────────────

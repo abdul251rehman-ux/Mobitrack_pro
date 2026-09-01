@@ -1,6 +1,31 @@
 import { supabase } from "@/lib/supabase"
+import bcrypt from "bcryptjs"
 
 const STORAGE_KEY = "mobitrack_session"
+
+// Bcrypt hashes are 60 chars and always start with one of these version prefixes -
+// used to tell an already-hashed password apart from a plaintext one left over
+// from before this was introduced (see the one-time migration in supabase/).
+const BCRYPT_PREFIX = /^\$2[aby]\$/
+
+export function isPasswordHashed(value: string): boolean {
+  return BCRYPT_PREFIX.test(value)
+}
+
+export async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, 10)
+}
+
+/**
+ * Verifies a login attempt against a stored password value that may still be
+ * plaintext (pre-migration or if the migration hasn't run yet on this row).
+ * Falls back to a plain string comparison only when the stored value isn't a
+ * bcrypt hash, so already-hashed rows are never compared as plaintext.
+ */
+export async function verifyPassword(plain: string, stored: string): Promise<boolean> {
+  if (isPasswordHashed(stored)) return bcrypt.compare(plain, stored)
+  return plain === stored
+}
 
 /**
  * Returns the current user's tenant_id from localStorage session.

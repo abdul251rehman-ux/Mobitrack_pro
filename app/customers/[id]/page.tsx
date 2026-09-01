@@ -16,9 +16,11 @@ import { toast } from "sonner"
 import { getCustomerById } from "@/lib/api/customers"
 import { getSales } from "@/lib/api/sales"
 import { getPayments } from "@/lib/api/payments"
+import { getFinanceAccounts } from "@/lib/api/finance"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { Customer, Sale, Payment } from "@/data/types"
+import type { FinanceAccount } from "@/lib/api/types"
 import { DataTable } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
@@ -108,11 +110,13 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer]             = useState<Customer | null | undefined>(undefined)
   const [customerSales, setCustomerSales]   = useState<Sale[]>([])
   const [customerPayments, setCustomerPayments] = useState<Payment[]>([])
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
   const [loading, setLoading]               = useState(true)
 
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payAmount, setPayAmount]         = useState("")
   const [payMethod, setPayMethod]         = useState("Cash")
+  const [payAccountId, setPayAccountId]   = useState("")
   const [payInvoice, setPayInvoice]       = useState("")
   const [payNotes, setPayNotes]           = useState("")
   const [paySubmitting, setPaySubmitting] = useState(false)
@@ -120,14 +124,16 @@ export default function CustomerDetailPage() {
   async function fetchData() {
     try {
       setLoading(true)
-      const [cust, allSales, allPayments] = await Promise.all([
+      const [cust, allSales, allPayments, accounts] = await Promise.all([
         getCustomerById(id),
         getSales(),
         getPayments(),
+        getFinanceAccounts(),
       ])
       setCustomer(cust)
       setCustomerSales(allSales.filter((s) => s.customerId === id))
       setCustomerPayments(allPayments.filter((p) => p.entityType === "Customer" && p.entityId === id && p.type === "Received"))
+      setFinanceAccounts(accounts)
     } catch {
       setCustomer(null)
     } finally {
@@ -136,6 +142,14 @@ export default function CustomerDetailPage() {
   }
 
   useEffect(() => { fetchData() }, [id])
+
+  // Default the payment dialog's account to the shop's cash account whenever
+  // it opens, same convention as the ledger page's collect-payment dialog.
+  useEffect(() => {
+    if (!payDialogOpen) return
+    const defaultAcc = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]
+    setPayAccountId(defaultAcc?.id ?? "")
+  }, [payDialogOpen, financeAccounts])
 
   // ── Monthly spending ─────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
@@ -172,14 +186,16 @@ export default function CustomerDetailPage() {
     if (paySubmitting) return
     const amount = parseFloat(payAmount)
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
+    if (!payAccountId) { toast.error("Select a finance account"); return }
     if (!customer) return
     setPaySubmitting(true)
     try {
       const tenantId = await getTenantId()
+      const today     = todayPKT()
       const sale      = payInvoice ? customerSales.find(s => s.invoiceNumber === payInvoice) : null
       const refNumber = payInvoice || `PAYMENT-${Date.now()}`
       const { error } = await supabase.from("payments").insert({
-        tenant_id: tenantId, date: todayPKT(), type: "Received",
+        tenant_id: tenantId, date: today, type: "Received",
         entity_type: "Customer", entity_id: customer.id, entity_name: customer.name,
         reference_type: "Sale", reference_number: refNumber, amount, method: payMethod,
         status: "Completed", notes: payNotes || `Payment received from ${customer.name}`,
@@ -192,6 +208,26 @@ export default function CustomerDetailPage() {
           status: newReceived >= sale.total ? "Completed" : "Pending",
         }).eq("id", sale.id)
       }
+
+      // Finance transaction - keeps the cash/bank balance in sync with the
+      // payment, same as the customer ledger page's collect-payment flow.
+      await supabase.from("finance_transactions").insert({
+        tenant_id: tenantId, date: today, type: "sale_receipt",
+        account_id: payAccountId, amount,
+        reference_type: "Sale",
+        description: `Payment received from ${customer.name}`,
+      })
+      const { data: accRow } = await supabase.from("finance_accounts")
+        .select("current_balance").eq("id", payAccountId).single()
+      if (accRow) {
+        await supabase.from("finance_accounts")
+          .update({ current_balance: (accRow as any).current_balance + amount })
+          .eq("id", payAccountId)
+        setFinanceAccounts(prev => prev.map(a =>
+          a.id === payAccountId ? { ...a, currentBalance: a.currentBalance + amount } : a
+        ))
+      }
+
       toast.success(`Payment of ${formatCurrency(amount)} received!`)
       setPayDialogOpen(false)
       setPayAmount(""); setPayMethod("Cash"); setPayInvoice(""); setPayNotes("")
@@ -641,6 +677,19 @@ export default function CustomerDetailPage() {
               </Select>
             </div>
             <div className="space-y-1">
+              <Label className="text-xs font-medium text-slate-600">Deposit Account <span className="text-red-500">*</span></Label>
+              <Select value={payAccountId} onValueChange={setPayAccountId}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select account..." /></SelectTrigger>
+                <SelectContent>
+                  {financeAccounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} — {formatCurrency(a.currentBalance)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs font-medium text-slate-600">Notes (optional)</Label>
               <Input value={payNotes} onChange={e => setPayNotes(e.target.value)}
                 placeholder="e.g., Remaining balance for phone" className="h-8 text-xs" />
@@ -650,7 +699,7 @@ export default function CustomerDetailPage() {
           <DialogFooter>
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPayDialogOpen(false)} disabled={paySubmitting}>Cancel</Button>
             <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
-              onClick={handleReceivePayment} disabled={paySubmitting}>
+              onClick={handleReceivePayment} disabled={paySubmitting || !payAccountId}>
               {paySubmitting ? "Saving..." : "Record Payment"}
             </Button>
           </DialogFooter>

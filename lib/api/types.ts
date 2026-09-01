@@ -285,6 +285,7 @@ export interface DbExpense {
   is_recurring: boolean
   recurring_day: number | null
   recurring_month: number | null
+  account_id: string | null
   created_at: string
   updated_at: string
 }
@@ -995,6 +996,7 @@ export function toExpense(db: DbExpense): Expense {
     isRecurring: db.is_recurring,
     recurringDay: db.recurring_day ?? undefined,
     recurringMonth: db.recurring_month ?? undefined,
+    accountId: db.account_id ?? undefined,
   }
 }
 
@@ -1011,6 +1013,7 @@ export function toDbExpense(e: Partial<Expense>, tenantId: string): Partial<DbEx
   if (e.isRecurring !== undefined) db.is_recurring = e.isRecurring
   if (e.recurringDay !== undefined) db.recurring_day = e.recurringDay ?? null
   if (e.recurringMonth !== undefined) db.recurring_month = e.recurringMonth ?? null
+  if (e.accountId !== undefined) db.account_id = e.accountId || null
   return db as Partial<DbExpense>
 }
 

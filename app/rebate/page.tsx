@@ -9,14 +9,14 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { supabase } from "@/lib/supabase"
-import { getTenantId } from "@/lib/api/helpers"
 import { getSuppliers } from "@/lib/api/suppliers"
 import {
   getRebateEntries, createRebateEntry, updateRebateEntry,
-  deleteRebateEntry, postRebateEntry, getUnsoldStockForModel, getLastBuyPrice,
-  getTotalPurchasedUnits, getTotalPurchasedAccessoryUnits, getAccessoryNamesForSupplier,
+  deleteRebateEntry, postRebateEntry, getUnsoldStockForModel,
+  getTotalPurchasedAccessoryUnits, getAccessoryNamesForSupplier,
+  searchModelsWithStock, getSuppliersForModel,
 } from "@/lib/api/rebate"
+import type { ModelSupplierStock } from "@/lib/api/rebate"
 import type { RebateEntry, RebateType, RebateStatus, CreateRebateInput } from "@/lib/api/rebate"
 import type { Supplier } from "@/data/types"
 import { formatCurrency, cn } from "@/lib/utils"
@@ -56,8 +56,10 @@ interface FormState {
   ratePerUnit: string
   oldBuyPrice: string
   newBuyPrice: string
+  sellingPrice: string
   updateStockPrice: boolean
   updateSellPrice: boolean
+  updateSellingPrice: boolean
   notes: string
   status: RebateStatus
 }
@@ -65,8 +67,8 @@ interface FormState {
 function emptyForm(type: RebateType = "rebate"): FormState {
   return {
     type, supplierId: "", model: "", period: TODAY,
-    units: "", ratePerUnit: "", oldBuyPrice: "", newBuyPrice: "",
-    updateStockPrice: true, updateSellPrice: false,
+    units: "", ratePerUnit: "", oldBuyPrice: "", newBuyPrice: "", sellingPrice: "",
+    updateStockPrice: true, updateSellPrice: false, updateSellingPrice: true,
     notes: "", status: "draft",
   }
 }
@@ -76,7 +78,6 @@ function emptyForm(type: RebateType = "rebate"): FormState {
 function RebatePageInner() {
   const [entries, setEntries] = useState<RebateEntry[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [models, setModels] = useState<string[]>([])
   const [accessoryNames, setAccessoryNames] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<"all" | RebateType>("all")
@@ -87,10 +88,23 @@ function RebatePageInner() {
   const [saving, setSaving] = useState(false)
   const [posting, setPosting] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [unsoldCount, setUnsoldCount] = useState<number | null>(null)
-  const [totalPurchased, setTotalPurchased] = useState<number | null>(null)
   const [fetchingUnsold, setFetchingUnsold] = useState(false)
   const [drawerEntry, setDrawerEntry] = useState<RebateEntry | null>(null)
+
+  // Item type for the form: "phone" gets the new model-first search flow,
+  // "accessory" keeps the older supplier-first -> pick item flow.
+  const [itemKind, setItemKind] = useState<"phone" | "accessory">("phone")
+
+  // Phone model search (model-first flow)
+  const [modelQuery, setModelQuery] = useState("")
+  const [modelResults, setModelResults] = useState<string[]>([])
+  const [searchingModels, setSearchingModels] = useState(false)
+  const [modelSearchOpen, setModelSearchOpen] = useState(false)
+  const [supplierOptions, setSupplierOptions] = useState<ModelSupplierStock[]>([])
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false)
+  const [availableUnits, setAvailableUnits] = useState<number | null>(null)
+  const [lastPurchasePrice, setLastPurchasePrice] = useState<number | null>(null)
+  const [lastSellingPrice, setLastSellingPrice] = useState<number | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -99,77 +113,104 @@ function RebatePageInner() {
     ]).finally(() => setLoading(false))
   }, [])
 
-  // Reload models + accessories whenever supplier changes
+  // Load accessory names for the accessory flow whenever its supplier changes
   useEffect(() => {
-    if (!form.supplierId) { setModels([]); setAccessoryNames([]); return }
-    async function loadModelsForSupplier() {
-      try {
-        const tenantId = await getTenantId()
-        const [{ data: imeiData }, accNames] = await Promise.all([
-          supabase.from("imei_records").select("model").eq("tenant_id", tenantId).eq("supplier_id", form.supplierId),
-          getAccessoryNamesForSupplier(form.supplierId),
-        ])
-        const phoneModels = Array.from(new Set((imeiData ?? []).map((r: any) => r.model).filter(Boolean))) as string[]
-        setModels(phoneModels.sort())
-        setAccessoryNames(accNames)
-        const allOptions = [...phoneModels, ...accNames]
-        setForm(f => ({ ...f, model: allOptions.includes(f.model) ? f.model : "" }))
-      } catch {}
-    }
-    loadModelsForSupplier()
-  }, [form.supplierId])
+    if (itemKind !== "accessory" || !form.supplierId) { setAccessoryNames([]); return }
+    getAccessoryNamesForSupplier(form.supplierId)
+      .then(names => {
+        setAccessoryNames(names)
+        setForm(f => ({ ...f, model: names.includes(f.model) ? f.model : "" }))
+      })
+      .catch(() => setAccessoryNames([]))
+  }, [itemKind, form.supplierId])
 
-  const isAccessoryModel = accessoryNames.includes(form.model)
-
-  // Auto-fetch hint values when model/supplier/period changes — units always editable
+  // Debounced search for phone models that currently have available stock
   useEffect(() => {
-    if (!form.model || !form.supplierId) {
-      setUnsoldCount(null)
-      setTotalPurchased(null)
+    if (itemKind !== "phone" || !modelSearchOpen) return
+    setSearchingModels(true)
+    const handle = setTimeout(() => {
+      searchModelsWithStock(modelQuery)
+        .then(setModelResults)
+        .catch(() => setModelResults([]))
+        .finally(() => setSearchingModels(false))
+    }, 250)
+    return () => clearTimeout(handle)
+  }, [itemKind, modelQuery, modelSearchOpen])
+
+  // Model picked -> resolve which supplier(s) currently have it in stock.
+  // Skipped while editing: an existing entry's supplier/units/prices are already
+  // correct and saved - they shouldn't be re-derived from (possibly since-depleted) live stock.
+  useEffect(() => {
+    if (editEntry || itemKind !== "phone" || !form.model) {
+      setSupplierOptions([])
       return
     }
-    setFetchingUnsold(true)
+    setLoadingSuppliers(true)
+    getSuppliersForModel(form.model)
+      .then(options => {
+        setSupplierOptions(options)
+        // Auto-select the only supplier, or the first if the previous selection isn't in the new list
+        if (options.length === 1) {
+          setForm(f => ({ ...f, supplierId: options[0].supplierId }))
+        } else if (!options.some(o => o.supplierId === form.supplierId)) {
+          setForm(f => ({ ...f, supplierId: "" }))
+        }
+      })
+      .catch(() => setSupplierOptions([]))
+      .finally(() => setLoadingSuppliers(false))
+  }, [itemKind, form.model])
 
-    if (form.type === "rebate") {
-      // Auto-fill total purchased units as a hint; shopkeeper adjusts to agreed amount
-      const fetchUnits = isAccessoryModel
-        ? getTotalPurchasedAccessoryUnits(form.model, form.supplierId)
-        : getTotalPurchasedUnits(form.model, form.supplierId)
-      fetchUnits
-        .then(total => {
-          setTotalPurchased(total)
-          setForm(f => ({ ...f, units: String(total) }))
-        })
-        .catch(() => setTotalPurchased(null))
-        .finally(() => setFetchingUnsold(false))
-    } else {
-      // Rate diff: unsold units in stock + last buy price (accessories use stock count)
-      if (isAccessoryModel) {
-        getTotalPurchasedAccessoryUnits(form.model, form.supplierId)
-          .then(count => {
-            setUnsoldCount(count)
-            setForm(f => ({ ...f, units: String(count) }))
-          })
-          .catch(() => setUnsoldCount(null))
-          .finally(() => setFetchingUnsold(false))
-      } else {
-        Promise.all([
-          getUnsoldStockForModel(form.model, form.supplierId),
-          getLastBuyPrice(form.model, form.supplierId),
-        ])
-          .then(([count, lastPrice]) => {
-            setUnsoldCount(count)
-            setForm(f => ({
-              ...f,
-              units: String(count),
-              ...(lastPrice !== null && !f.oldBuyPrice ? { oldBuyPrice: String(lastPrice) } : {}),
-            }))
-          })
-          .catch(() => setUnsoldCount(null))
-          .finally(() => setFetchingUnsold(false))
-      }
+  const isAccessoryModel = itemKind === "accessory"
+
+  // Once model + supplier are both resolved, fill available (in-stock) units and show
+  // purchase/sell price context - the rebate/rate-diff applies to what's still sellable,
+  // not everything ever bought. Units stay editable; this is only a starting default.
+  // Skipped while editing - see the effect above for why.
+  useEffect(() => {
+    if (editEntry || !form.model || !form.supplierId) {
+      setAvailableUnits(null)
+      setLastPurchasePrice(null)
+      setLastSellingPrice(null)
+      return
     }
-  }, [form.type, form.model, form.supplierId, form.period, isAccessoryModel])
+
+    if (isAccessoryModel) {
+      setFetchingUnsold(true)
+      getTotalPurchasedAccessoryUnits(form.model, form.supplierId)
+        .then(count => {
+          setAvailableUnits(count)
+          setForm(f => ({ ...f, units: String(count) }))
+        })
+        .catch(() => setAvailableUnits(null))
+        .finally(() => setFetchingUnsold(false))
+      return
+    }
+
+    // Phone: prefer the price/count already resolved by getSuppliersForModel for this supplier
+    const match = supplierOptions.find(o => o.supplierId === form.supplierId)
+    if (match) {
+      setAvailableUnits(match.availableUnits)
+      setLastPurchasePrice(match.lastPurchasePrice)
+      setLastSellingPrice(match.lastSellingPrice)
+      setForm(f => ({
+        ...f,
+        units: String(match.availableUnits),
+        ...(match.lastPurchasePrice !== null && !f.oldBuyPrice ? { oldBuyPrice: String(match.lastPurchasePrice) } : {}),
+        ...(match.lastSellingPrice !== null && !f.sellingPrice ? { sellingPrice: String(match.lastSellingPrice) } : {}),
+      }))
+      return
+    }
+
+    // Fallback (e.g. editing an entry whose supplier isn't in the current in-stock list)
+    setFetchingUnsold(true)
+    getUnsoldStockForModel(form.model, form.supplierId)
+      .then(count => {
+        setAvailableUnits(count)
+        setForm(f => ({ ...f, units: String(count) }))
+      })
+      .catch(() => setAvailableUnits(null))
+      .finally(() => setFetchingUnsold(false))
+  }, [form.model, form.supplierId, form.type, isAccessoryModel, supplierOptions])
 
   const priceDiff = form.type === "rate_diff"
     ? Math.max(0, (parseFloat(form.oldBuyPrice) || 0) - (parseFloat(form.newBuyPrice) || 0))
@@ -189,21 +230,38 @@ function RebatePageInner() {
   function openAdd(type: RebateType) {
     setEditEntry(null)
     setForm(emptyForm(type))
-    setUnsoldCount(null)
-    setTotalPurchased(null)
+    setItemKind("phone")
+    setModelQuery("")
+    setModelResults([])
+    setSupplierOptions([])
+    setAvailableUnits(null)
+    setLastPurchasePrice(null)
+    setLastSellingPrice(null)
     setShowForm(true)
   }
 
-  function openEdit(e: RebateEntry) {
+  async function openEdit(e: RebateEntry) {
     setEditEntry(e)
     setForm({
       type: e.type, supplierId: e.supplierId, model: e.model,
       period: e.period, units: String(e.units), ratePerUnit: String(e.ratePerUnit),
       oldBuyPrice: String(e.oldBuyPrice), newBuyPrice: String(e.newBuyPrice),
+      sellingPrice: e.sellingPrice ? String(e.sellingPrice) : "",
       updateStockPrice: e.updateStockPrice, updateSellPrice: e.updateSellPrice,
+      updateSellingPrice: e.updateSellingPrice,
       notes: e.notes, status: e.status,
     })
+    setModelQuery(e.model)
     setShowForm(true)
+    // The entry doesn't record which flow (phone vs accessory) it was created under,
+    // so resolve it by checking whether the model matches an accessory this supplier sells.
+    // The item-kind toggle is hidden while editing, so this has to be right the first time.
+    try {
+      const names = await getAccessoryNamesForSupplier(e.supplierId)
+      setItemKind(names.includes(e.model) ? "accessory" : "phone")
+    } catch {
+      setItemKind("phone")
+    }
   }
 
   function closeForm() { setShowForm(false); setEditEntry(null) }
@@ -236,10 +294,12 @@ function RebatePageInner() {
         ratePerUnit: form.type === "rebate" ? parseFloat(form.ratePerUnit) : priceDiff,
         oldBuyPrice: parseFloat(form.oldBuyPrice) || 0,
         newBuyPrice: parseFloat(form.newBuyPrice) || 0,
+        sellingPrice: parseFloat(form.sellingPrice) || 0,
         total,
         status,
         updateStockPrice: form.updateStockPrice,
         updateSellPrice: form.updateSellPrice,
+        updateSellingPrice: form.updateSellingPrice,
         notes: form.notes,
       }
 
@@ -695,7 +755,7 @@ function RebatePageInner() {
               {!editEntry && (
                 <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                   {(["rebate", "rate_diff"] as const).map(t => (
-                    <button key={t} onClick={() => setForm(f => ({ ...emptyForm(t), supplierId: f.supplierId }))}
+                    <button key={t} onClick={() => setForm(f => ({ ...emptyForm(t), supplierId: f.supplierId, model: f.model }))}
                       className={cn("flex-1 py-2 text-xs font-semibold transition-colors",
                         form.type === t
                           ? t === "rebate" ? "bg-indigo-600 text-white" : "bg-cyan-600 text-white"
@@ -707,48 +767,161 @@ function RebatePageInner() {
                 </div>
               )}
 
-              {/* Supplier */}
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-600">Supplier <span className="text-rose-500">*</span></Label>
-                <select
-                  value={form.supplierId}
-                  onChange={e => setForm(f => ({ ...f, supplierId: e.target.value }))}
-                  className="w-full h-9 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                >
-                  <option value="">Select supplier...</option>
-                  {suppliers.filter(s => s.status === "Active").map(s => (
-                    <option key={s.id} value={s.id}>{s.companyName}</option>
+              {/* Item kind toggle (only on new) */}
+              {!editEntry && (
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                  {(["phone", "accessory"] as const).map(k => (
+                    <button key={k} type="button"
+                      onClick={() => {
+                        setItemKind(k)
+                        setForm(f => ({ ...f, model: "", supplierId: "" }))
+                        setModelQuery(""); setModelResults([]); setSupplierOptions([])
+                      }}
+                      className={cn("flex-1 py-1.5 text-xs font-semibold transition-colors",
+                        itemKind === k ? "bg-slate-700 text-white" : "text-slate-500 hover:bg-slate-50"
+                      )}>
+                      {k === "phone" ? "Phone" : "Accessory"}
+                    </button>
                   ))}
-                </select>
-              </div>
+                </div>
+              )}
 
-              {/* Model — phones and accessories purchased from selected supplier */}
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-600">
-                  Model / Item <span className="text-rose-500">*</span>
-                  {form.supplierId && models.length === 0 && accessoryNames.length === 0 && (
-                    <span className="ml-1.5 text-[10px] text-amber-500 font-normal">No purchases found for this supplier</span>
+              {itemKind === "phone" ? (
+                <>
+                  {/* Phone search */}
+                  <div className="space-y-1 relative">
+                    <Label className="text-xs font-semibold text-slate-600">Search Phone <span className="text-rose-500">*</span></Label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                      <input
+                        value={form.model ? form.model : modelQuery}
+                        onChange={e => {
+                          setModelQuery(e.target.value)
+                          setForm(f => ({ ...f, model: "", supplierId: "" }))
+                          setModelSearchOpen(true)
+                        }}
+                        onFocus={() => setModelSearchOpen(true)}
+                        onBlur={() => setTimeout(() => setModelSearchOpen(false), 150)}
+                        placeholder="Type a model name — only shows phones in stock"
+                        className="w-full h-9 rounded-lg border border-slate-300 pl-8 pr-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      />
+                    </div>
+                    {modelSearchOpen && (
+                      <div className="absolute z-20 mt-0.5 w-full bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                        <div className="max-h-44 overflow-y-auto">
+                          {searchingModels ? (
+                            <div className="px-3 py-2 text-xs text-slate-400 text-center">Searching...</div>
+                          ) : modelResults.length === 0 ? (
+                            <div className="px-3 py-2 text-xs text-slate-400 text-center">No phones in stock match this search</div>
+                          ) : modelResults.map(m => (
+                            <button key={m} type="button"
+                              onMouseDown={e => { e.preventDefault(); setForm(f => ({ ...f, model: m, supplierId: "" })); setModelQuery(m); setModelSearchOpen(false) }}
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 text-slate-700">
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Supplier — resolved from the chosen model's available stock */}
+                  {form.model && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600">
+                        Supplier <span className="text-rose-500">*</span>
+                        {loadingSuppliers && <span className="ml-1.5 text-[10px] text-indigo-500 font-normal">loading...</span>}
+                      </Label>
+                      {!loadingSuppliers && supplierOptions.length === 0 ? (
+                        <p className="text-[11px] text-amber-600">No available stock for this model</p>
+                      ) : (
+                        <div className="grid gap-1.5">
+                          {supplierOptions.map(o => (
+                            <button key={o.supplierId} type="button"
+                              onClick={() => setForm(f => ({ ...f, supplierId: o.supplierId }))}
+                              className={cn(
+                                "flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                                form.supplierId === o.supplierId ? "border-indigo-400 bg-indigo-50" : "border-slate-200 hover:border-slate-300"
+                              )}>
+                              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 truncate">
+                                <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                {o.supplierName}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500 shrink-0">{o.availableUnits} in stock</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
-                </Label>
-                <select
-                  value={form.model}
-                  onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
-                  disabled={!form.supplierId || (models.length === 0 && accessoryNames.length === 0)}
-                  className="w-full h-9 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  <option value="">{form.supplierId ? "Select model or item..." : "Select supplier first"}</option>
-                  {models.length > 0 && (
-                    <optgroup label="Phones">
-                      {models.map(m => <option key={m} value={m}>{m}</option>)}
-                    </optgroup>
+
+                  {/* Purchase / sale price - editable, pre-filled from the resolved model + supplier's available units */}
+                  {form.supplierId && (
+                    <div className="space-y-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Purchase Price (Rs)</Label>
+                          <MoneyInput min={0}
+                            value={form.oldBuyPrice} onChange={v => setForm(f => ({ ...f, oldBuyPrice: v }))}
+                            placeholder={lastPurchasePrice !== null ? String(lastPurchasePrice) : "0"}
+                            className="w-full h-8 rounded-md border border-slate-300 px-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Sale Price (Rs)</Label>
+                          <MoneyInput min={0}
+                            value={form.sellingPrice} onChange={v => setForm(f => ({ ...f, sellingPrice: v }))}
+                            placeholder={lastSellingPrice !== null ? String(lastSellingPrice) : "0"}
+                            className="w-full h-8 rounded-md border border-slate-300 px-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                        </div>
+                      </div>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.updateSellingPrice}
+                          onChange={e => setForm(f => ({ ...f, updateSellingPrice: e.target.checked }))}
+                          className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400" />
+                        <span className="text-[11px] text-slate-500">
+                          {editEntry
+                            ? "Apply this sale price to whatever units are still available when posted — sold units are left unchanged"
+                            : <>Apply this sale price to the <strong>{availableUnits ?? 0} available</strong> units when posted — sold units are left unchanged</>}
+                        </span>
+                      </label>
+                    </div>
                   )}
-                  {accessoryNames.length > 0 && (
-                    <optgroup label="Accessories">
-                      {accessoryNames.map(n => <option key={`acc-${n}`} value={n}>{n}</option>)}
-                    </optgroup>
-                  )}
-                </select>
-              </div>
+                </>
+              ) : (
+                <>
+                  {/* Accessory: supplier-first, existing flow */}
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-600">Supplier <span className="text-rose-500">*</span></Label>
+                    <select
+                      value={form.supplierId}
+                      onChange={e => setForm(f => ({ ...f, supplierId: e.target.value, model: "" }))}
+                      className="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                      <option value="">Select supplier...</option>
+                      {suppliers.filter(s => s.status === "Active").map(s => (
+                        <option key={s.id} value={s.id}>{s.companyName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-600">
+                      Item <span className="text-rose-500">*</span>
+                      {form.supplierId && accessoryNames.length === 0 && (
+                        <span className="ml-1.5 text-[10px] text-amber-500 font-normal">No purchases found for this supplier</span>
+                      )}
+                    </Label>
+                    <select
+                      value={form.model}
+                      onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
+                      disabled={!form.supplierId || accessoryNames.length === 0}
+                      className="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="">{form.supplierId ? "Select item..." : "Select supplier first"}</option>
+                      {accessoryNames.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
               {/* Period */}
               <div className="space-y-1">
@@ -769,17 +942,20 @@ function RebatePageInner() {
                 )}
               </div>
 
-              {/* Rate Diff specific: old + new price */}
+              {/* Rate Diff specific: old + new price. Old Buy Price is only shown here for
+                  accessories - phones already have an editable Purchase Price above. */}
               {form.type === "rate_diff" && (
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-slate-600">Old Buy Price (Rs) <span className="text-rose-500">*</span></Label>
-                    <MoneyInput min={0}
-                      value={form.oldBuyPrice} onChange={v => setForm(f => ({ ...f, oldBuyPrice: v }))}
-                      placeholder="40000"
-                      className="w-full h-9 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                  </div>
-                  <div className="space-y-1">
+                  {isAccessoryModel && (
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold text-slate-600">Old Buy Price (Rs) <span className="text-rose-500">*</span></Label>
+                      <MoneyInput min={0}
+                        value={form.oldBuyPrice} onChange={v => setForm(f => ({ ...f, oldBuyPrice: v }))}
+                        placeholder="40000"
+                        className="w-full h-9 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                    </div>
+                  )}
+                  <div className={cn("space-y-1", !isAccessoryModel && "col-span-2")}>
                     <Label className="text-xs font-semibold text-slate-600">New Buy Price (Rs) <span className="text-rose-500">*</span></Label>
                     <MoneyInput min={0}
                       value={form.newBuyPrice} onChange={v => setForm(f => ({ ...f, newBuyPrice: v }))}
@@ -805,13 +981,8 @@ function RebatePageInner() {
                     {fetchingUnsold && (
                       <span className="ml-1 text-[10px] text-indigo-500">loading...</span>
                     )}
-                    {form.type === "rebate" && totalPurchased !== null && !fetchingUnsold && (
-                      <span className="ml-1 text-[10px] text-slate-400">
-                        ({totalPurchased} {isAccessoryModel ? "in stock" : "purchased, excl. returns"})
-                      </span>
-                    )}
-                    {form.type === "rate_diff" && unsoldCount !== null && !fetchingUnsold && (
-                      <span className="ml-1 text-[10px] text-slate-400">({unsoldCount} in stock)</span>
+                    {availableUnits !== null && !fetchingUnsold && (
+                      <span className="ml-1 text-[10px] text-slate-400">({availableUnits} available)</span>
                     )}
                   </Label>
                   <input type="number" min={1} onWheel={e => e.currentTarget.blur()}

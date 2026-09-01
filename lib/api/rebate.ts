@@ -16,10 +16,12 @@ export interface RebateEntry {
   ratePerUnit: number   // rebate amount per unit OR price difference per unit
   oldBuyPrice: number   // rate_diff only
   newBuyPrice: number   // rate_diff only
+  sellingPrice: number  // editable sale price shown/adjusted in the form
   total: number
   status: RebateStatus
-  updateStockPrice: boolean   // rate_diff: update imei_records buy price
-  updateSellPrice: boolean    // rate_diff: update mobiles sell price
+  updateStockPrice: boolean     // rate_diff: update imei_records buy price
+  updateSellPrice: boolean      // rate_diff: update mobiles sell price
+  updateSellingPrice: boolean   // apply sellingPrice to available imei_records units on post
   notes: string
   postedAt: string | null
   createdAt: string
@@ -35,10 +37,12 @@ export interface CreateRebateInput {
   ratePerUnit: number
   oldBuyPrice?: number
   newBuyPrice?: number
+  sellingPrice?: number
   total: number
   status: RebateStatus
   updateStockPrice?: boolean
   updateSellPrice?: boolean
+  updateSellingPrice?: boolean
   notes?: string
 }
 
@@ -55,10 +59,12 @@ function toRebateEntry(row: any): RebateEntry {
     ratePerUnit: row.rate_per_unit ?? 0,
     oldBuyPrice: row.old_buy_price ?? 0,
     newBuyPrice: row.new_buy_price ?? 0,
+    sellingPrice: row.selling_price ?? 0,
     total: row.total ?? 0,
     status: row.status ?? 'draft',
     updateStockPrice: row.update_stock_price ?? false,
     updateSellPrice: row.update_sell_price ?? false,
+    updateSellingPrice: row.update_selling_price ?? false,
     notes: row.notes ?? '',
     postedAt: row.posted_at ?? null,
     createdAt: row.created_at,
@@ -91,10 +97,12 @@ export async function createRebateEntry(input: CreateRebateInput): Promise<Rebat
       rate_per_unit: input.ratePerUnit,
       old_buy_price: input.oldBuyPrice ?? 0,
       new_buy_price: input.newBuyPrice ?? 0,
+      selling_price: input.sellingPrice ?? 0,
       total: input.total,
       status: input.status,
       update_stock_price: input.updateStockPrice ?? false,
       update_sell_price: input.updateSellPrice ?? false,
+      update_selling_price: input.updateSellingPrice ?? false,
       notes: input.notes ?? '',
       posted_at: input.status === 'posted' ? new Date().toISOString() : null,
     })
@@ -116,9 +124,11 @@ export async function updateRebateEntry(id: string, input: Partial<CreateRebateI
   if (input.ratePerUnit !== undefined) patch.rate_per_unit = input.ratePerUnit
   if (input.oldBuyPrice !== undefined) patch.old_buy_price = input.oldBuyPrice
   if (input.newBuyPrice !== undefined) patch.new_buy_price = input.newBuyPrice
+  if (input.sellingPrice !== undefined) patch.selling_price = input.sellingPrice
   if (input.total !== undefined) patch.total = input.total
   if (input.updateStockPrice !== undefined) patch.update_stock_price = input.updateStockPrice
   if (input.updateSellPrice !== undefined) patch.update_sell_price = input.updateSellPrice
+  if (input.updateSellingPrice !== undefined) patch.update_selling_price = input.updateSellingPrice
   if (input.notes !== undefined) patch.notes = input.notes
   if (input.status !== undefined) {
     patch.status = input.status
@@ -175,6 +185,17 @@ export async function postRebateEntry(entry: RebateEntry): Promise<void> {
       .eq('tenant_id', tenantId)
       .eq('model', entry.model)
       .eq('supplier_id', entry.supplierId)
+  }
+
+  // 3b. Either rebate type: optionally apply the (possibly edited) sale price to
+  // still-available units of this model+supplier - sold units are left untouched.
+  if (entry.updateSellingPrice && entry.sellingPrice > 0) {
+    await supabase.from('imei_records')
+      .update({ selling_price: entry.sellingPrice })
+      .eq('tenant_id', tenantId)
+      .eq('model', entry.model)
+      .eq('supplier_id', entry.supplierId)
+      .eq('device_status', 'in_stock')
   }
 
   // 4. Mark as posted
@@ -266,4 +287,58 @@ export async function getUnsoldStockForModel(model: string, supplierId: string):
     .eq('supplier_id', supplierId)
     .eq('device_status', 'in_stock')
   return count ?? 0
+}
+
+// Search phone models that currently have available (in-stock) units, across all suppliers.
+// Powers the rebate form's model-first search - the shopkeeper picks a phone, not a supplier.
+export async function searchModelsWithStock(query: string): Promise<string[]> {
+  const tenantId = await getTenantId()
+  let q = supabase.from('imei_records')
+    .select('model')
+    .eq('tenant_id', tenantId)
+    .eq('device_status', 'in_stock')
+    .not('model', 'is', null)
+  if (query.trim()) q = q.ilike('model', `%${query.trim()}%`)
+  const { data } = await q.limit(500)
+  const unique = Array.from(new Set((data ?? []).map((r: any) => r.model).filter(Boolean))) as string[]
+  return unique.sort().slice(0, 30)
+}
+
+export interface ModelSupplierStock {
+  supplierId: string
+  supplierName: string
+  availableUnits: number
+  lastPurchasePrice: number | null
+  lastSellingPrice: number | null
+}
+
+// For a chosen model, list every supplier that currently has available (in-stock) units of it,
+// with the available count and most recent buy/sell price from that supplier.
+export async function getSuppliersForModel(model: string): Promise<ModelSupplierStock[]> {
+  const tenantId = await getTenantId()
+  const { data } = await supabase.from('imei_records')
+    .select('supplier_id, supplier_name, purchase_price, selling_price, created_at')
+    .eq('tenant_id', tenantId)
+    .eq('model', model)
+    .eq('device_status', 'in_stock')
+    .not('supplier_id', 'is', null)
+    .order('created_at', { ascending: false })
+
+  const bySupplier = new Map<string, ModelSupplierStock>()
+  for (const row of (data ?? []) as any[]) {
+    const existing = bySupplier.get(row.supplier_id)
+    if (existing) {
+      existing.availableUnits += 1
+    } else {
+      bySupplier.set(row.supplier_id, {
+        supplierId: row.supplier_id,
+        supplierName: row.supplier_name ?? '',
+        availableUnits: 1,
+        // Rows are newest-first, so the first row seen per supplier carries the most recent prices
+        lastPurchasePrice: row.purchase_price ?? null,
+        lastSellingPrice: row.selling_price ?? null,
+      })
+    }
+  }
+  return Array.from(bySupplier.values()).sort((a, b) => b.availableUnits - a.availableUnits)
 }
