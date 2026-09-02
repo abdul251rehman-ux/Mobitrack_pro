@@ -71,8 +71,8 @@ interface SplitEntry { accountId: string; amount: string }
 function mkUid() { return `ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
 function makeUnit(color = ""): MobileUnit { return { imei: "", batteryHealth: "", color } }
 
-const IPHONE_CATEGORIES = ["PTA Approved", "Non-PTA", "JV"]
-const ANDROID_CATEGORIES = ["PTA Approved", "Non-PTA"]
+const IPHONE_CATEGORIES = ["PTA Approved", "Non-PTA", "JV", "MDM"]
+const ANDROID_CATEGORIES = ["PTA Approved", "Non-PTA", "CPID Approved"]
 
 function getCategories(
   deviceType: "android" | "iphone",

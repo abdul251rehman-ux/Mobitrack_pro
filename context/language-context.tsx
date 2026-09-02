@@ -445,7 +445,7 @@ const translations = {
   "ledger.supplier.Rebate Credit":    { en: "Rebate Credit",               ur: "ریبیٹ کریڈٹ" },
   "ledger.supplier.Rate Difference Credit": { en: "Rate Difference Credit", ur: "ریٹ فرق کریڈٹ" },
   "ledger.supplier.Purchase Value":   { en: "Purchase Value",              ur: "خریداری کی رقم" },
-  "ledger.supplier.Paid at Purchase": { en: "Paid at Purchase",            ur: "خریداری پر ادا شدہ" },
+  "ledger.supplier.Paid at Purchase": { en: "Paid So Far",                 ur: "اب تک ادا شدہ" },
   "ledger.supplier.Rebate Credit reduces": { en: "Rebate Credit (reduces payable)", ur: "ریبیٹ کریڈٹ (واجب الادا کم کرتا ہے)" },
   "ledger.supplier.Debit Dr":         { en: "Debit (Dr)",                  ur: "ڈیبٹ" },
   "ledger.supplier.Net Due Cr":       { en: "Net Due (Cr)",                ur: "خالص واجب الادا" },

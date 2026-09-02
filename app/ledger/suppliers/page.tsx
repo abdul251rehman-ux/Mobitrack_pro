@@ -82,7 +82,6 @@ function SupplierLedgerPageInner() {
   // â"€â"€ Pay Supplier dialog state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payAmount, setPayAmount] = useState("")
-  const [payMethod, setPayMethod] = useState("Cash")
   const [payAccountId, setPayAccountId] = useState("")
   const [payDate, setPayDate] = useState(todayPKT())
   const [payNotes, setPayNotes] = useState("")
@@ -91,7 +90,6 @@ function SupplierLedgerPageInner() {
   function openPayDialog() {
     if (!selectedSupplierId) { toast.error("Select a supplier first"); return }
     setPayAmount(closingBalance > 0 ? String(closingBalance) : "")
-    setPayMethod(accounts[0]?.type === "bank" ? "Bank Transfer" : "Cash")
     setPayAccountId(accounts[0]?.id ?? "")
     setPayDate(todayPKT())
     setPayNotes("")
@@ -109,6 +107,11 @@ function SupplierLedgerPageInner() {
       const tenantId = await getTenantId()
       const amount = parseFloat(payAmount)
       const selectedAccount = accounts.find(a => a.id === payAccountId)
+      // Method is derived from the chosen account rather than asked separately -
+      // the two were previously independent selects with no relation to each other.
+      const payMethod = selectedAccount?.type === "bank" ? "Bank Transfer"
+        : selectedAccount?.type === "mobile_wallet" ? "Mobile Wallet"
+        : "Cash"
       const refNum = "PAY-SUP-" + Date.now().toString().slice(-8)
 
       // 1. Insert payment record
@@ -202,15 +205,14 @@ function SupplierLedgerPageInner() {
       ? supplierPayments.filter((sp) => sp.entityId === selectedSupplierId)
       : supplierPayments
 
-    // A payment made on the same day as (and referencing) its purchase is the purchase's
-    // down-payment, not a separate event - fold it into the purchase row instead of a second line.
-    // Payments made later against the same PO are genuinely separate events and keep their own row.
+    // Every payment against a PO (same-day or later) is folded into that purchase's row rather than
+    // shown as its own line - the row then shows just what's paid so far (Dr) and what's still short (Cr),
+    // not the full gross purchase value. Only payments with no matching PO keep their own row.
     const downPaymentIds = new Set<string>()
     filteredPurchases.forEach((p) => {
-      const match = filteredPayments.find(sp =>
-        sp.referenceNumber === p.poNumber && sp.date === p.date && !downPaymentIds.has(sp.id)
-      )
-      if (match) downPaymentIds.add(match.id)
+      filteredPayments.forEach((sp) => {
+        if (sp.referenceNumber === p.poNumber && !downPaymentIds.has(sp.id)) downPaymentIds.add(sp.id)
+      })
     })
 
     // filteredPurchases/Payments/Rebates are each already newest-first from the API (created_at desc).
@@ -222,16 +224,15 @@ function SupplierLedgerPageInner() {
       const preview = names.length <= 2
         ? names.join(", ")
         : `${names[0]}, ${names[1]} +${names.length - 2} more`
-      const downPayment = filteredPayments.find(sp => downPaymentIds.has(sp.id) && sp.referenceNumber === p.poNumber)
       const payStatus = p.paymentStatus === "Paid" ? "Fully Paid"
         : p.paymentStatus === "Partial" ? "Partial"
         : "Unpaid"
       raw.push({
         id: p.id, date: p.date, reference: p.poNumber,
         description: preview || `${p.items.length} item(s)`,
-        // Net effect on the balance: full purchase value minus any down-payment made at the same time
-        debit: 0, credit: p.total - (downPayment?.amount ?? 0),
-        grossCredit: p.total, grossDebit: downPayment?.amount ?? 0,
+        // Net effect on the balance: what's still owed, after every payment made against this PO
+        debit: 0, credit: p.balanceDue,
+        grossCredit: p.total, grossDebit: p.amountPaid,
         type: "purchase", supplierName: supName, payStatus, recency: -idx,
         items: p.items.map(i => ({ name: i.productName.trim(), qty: i.quantity, unitCost: i.unitCost, total: i.total })),
       })
@@ -778,24 +779,9 @@ function SupplierLedgerPageInner() {
                 autoFocus
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">{t("ledger.supplier.Date")}</Label>
-                <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{t("ledger.supplier.Method")}</Label>
-                <Select value={payMethod} onValueChange={setPayMethod}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="Cheque">Cheque</SelectItem>
-                    <SelectItem value="JazzCash">JazzCash</SelectItem>
-                    <SelectItem value="EasyPaisa">EasyPaisa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t("ledger.supplier.Date")}</Label>
+              <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="h-8 text-xs" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t("ledger.supplier.Payment Account")} <span className="text-rose-500">*</span></Label>

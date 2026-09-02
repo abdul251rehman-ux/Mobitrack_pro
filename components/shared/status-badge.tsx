@@ -42,6 +42,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   // PTA / registration (used-phones)
   Approved:       { label: "Approved",      className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
   "Non-PTA":      { label: "Non-PTA",       className: "bg-rose-50 text-rose-700 border border-rose-200"          },
+  MDM:            { label: "MDM",           className: "bg-amber-50 text-amber-700 border border-amber-200"      },
+  "CPID Approved":{ label: "CPID Approved", className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {

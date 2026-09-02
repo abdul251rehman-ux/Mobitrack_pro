@@ -3,7 +3,7 @@ export const MOBILE_BRANDS = [
 ];
 
 // PTA compliance categories used at purchase/sale time; not a price segment classifier
-export const PTA_CATEGORIES = ["PTA Approved", "JV", "Non-PTA"] as const;
+export const PTA_CATEGORIES = ["PTA Approved", "JV", "Non-PTA", "MDM"] as const;
 
 export const ACCESSORY_CATEGORIES = [
   "Headphones/Earbuds",

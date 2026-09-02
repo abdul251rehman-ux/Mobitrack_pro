@@ -69,11 +69,15 @@ export function StatCard({
         )}
       </div>
 
-      {/* Value — shrinks for long numbers so it never gets clipped */}
+      {/* Value — shrinks progressively for long numbers so it never gets clipped,
+          even as totals grow into the hundreds of millions over time */}
       <p className={cn(
         "font-bold leading-none tracking-tight mb-1 truncate",
         valueClassName ?? "text-slate-900",
-        value.length > 14 ? "text-xs sm:text-sm" : value.length > 10 ? "text-sm sm:text-base" : "text-base sm:text-xl"
+        value.length > 20 ? "text-[10px] sm:text-xs"
+          : value.length > 14 ? "text-xs sm:text-sm"
+          : value.length > 10 ? "text-sm sm:text-base"
+          : "text-base sm:text-xl"
       )}>
         {value}
       </p>

@@ -1,6 +1,8 @@
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import type { Sale } from "@/data/types"
+import { supabase } from "@/lib/supabase"
+import { getTenantId } from "@/lib/api/helpers"
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -56,6 +58,66 @@ async function urlToBase64(url: string): Promise<string> {
   } catch { return "" }
 }
 
+type ItemDetail = { color: string; category: string; batteryHealth: number | null; storage: string; ram: string; isUsed: boolean }
+
+function ptaLabel(s: string) {
+  if (s === "approved") return "PTA Approved"
+  if (s === "non_pta") return "Non-PTA"
+  if (s === "jv") return "JV"
+  if (s === "mdm") return "MDM"
+  if (s === "cpid_approved") return "CPID Approved"
+  if (s === "pending") return "PTA Pending"
+  return "PTA Blocked"
+}
+
+/**
+ * sale_items only persists productId/name/qty/price/imei - color, category,
+ * battery% and storage/RAM live on imei_records (new phones) / used_phones
+ * (used phones) and have to be looked up by IMEI at print time instead.
+ * Used-phone rows show "Used" in place of their PTA category - that column
+ * is about compliance status on new stock, not relevant once resold as used.
+ */
+async function fetchItemDetailsByImei(imeis: string[]): Promise<Map<string, ItemDetail>> {
+  const map = new Map<string, ItemDetail>()
+  if (imeis.length === 0) return map
+  try {
+    const tenantId = await getTenantId()
+    const [{ data: imeiRows }, { data: usedRows }] = await Promise.all([
+      supabase.from("imei_records")
+        .select("imei_number, color, category, battery_health, storage_capacity")
+        .eq("tenant_id", tenantId).in("imei_number", imeis),
+      supabase.from("used_phones")
+        .select("imei_number, color, pta_status, battery_health, storage, ram")
+        .eq("tenant_id", tenantId).in("imei_number", imeis),
+    ])
+    for (const r of (imeiRows ?? []) as any[]) {
+      if (!r.imei_number) continue
+      map.set(r.imei_number, {
+        color: r.color ?? "", category: r.category ?? "", batteryHealth: r.battery_health ?? null,
+        storage: r.storage_capacity ?? "", ram: "", isUsed: false,
+      })
+    }
+    for (const r of (usedRows ?? []) as any[]) {
+      if (!r.imei_number || map.has(r.imei_number)) continue
+      map.set(r.imei_number, {
+        color: r.color ?? "", category: r.pta_status ? ptaLabel(r.pta_status) : "", batteryHealth: r.battery_health ?? null,
+        storage: r.storage ?? "", ram: r.ram ?? "", isUsed: true,
+      })
+    }
+  } catch { /* invoice still renders without color/category/battery on lookup failure */ }
+  return map
+}
+
+function isIphoneName(productName: string): boolean {
+  return productName.trim().toLowerCase().startsWith("apple") || productName.toLowerCase().includes("iphone")
+}
+
+// sale_items bakes the condition grade into the name at sale time, e.g. "iPhone 14 Pro (Used - B+)" -
+// redundant on the invoice since the Category column already shows "Used", so it's stripped for print.
+function stripUsedGrade(productName: string): string {
+  return productName.replace(/\s*\(Used\s*-\s*[^)]*\)\s*$/i, "").trim()
+}
+
 export async function generateInvoicePDF(
   sale: Sale,
   opts: Partial<InvoiceOptions> = {},
@@ -67,6 +129,10 @@ export async function generateInvoicePDF(
   const shopEmail   = opts.shopEmail   || ""
   const rawLogo     = opts.shopLogo    || ""
   const shopLogo    = rawLogo && !rawLogo.startsWith("data:") ? await urlToBase64(rawLogo) : rawLogo
+
+  const itemDetails = await fetchItemDetailsByImei(
+    Array.from(new Set(sale.items.map(i => (i as any).imei).filter(Boolean)))
+  )
 
   const doc = new jsPDF("p", "mm", "a4")
   const W = 210, M = 13, IW = W - M * 2   // 184mm usable
@@ -240,30 +306,47 @@ export async function generateInvoicePDF(
     startY: y,
     margin: { left: M, right: M },
     tableWidth: IW,
-    head: [["#", "Description", "IMEI / Code", "Qty", "Unit Price", "Amount"]],
-    body: sale.items.map((item, i) => [
-      String(i+1),
-      item.productName,
-      (item as any).imei || "-",
-      String(item.quantity),
-      fPKR(item.unitPrice),
-      fPKR(item.lineTotal),
-    ]),
+    head: [["#", "Description", "IMEI / Code", "Color", "Batt.", "Category", "Qty", "Unit Price", "Amount"]],
+    body: sale.items.map((item, i) => {
+      const imei = (item as any).imei || ""
+      const detail = imei ? itemDetails.get(imei) : undefined
+      const isIphone = isIphoneName(item.productName)
+      const battery = detail?.batteryHealth != null && isIphone ? `${detail.batteryHealth}%` : "-"
+      // RAM is an Android spec - iPhones only ever show storage, even on used-phone rows that have a RAM value on file.
+      const spec = detail
+        ? [detail.storage, !isIphone && detail.ram ? `${detail.ram} RAM` : ""].filter(Boolean).join(" · ")
+        : ""
+      // Condition grade (A+/B/C...) is baked into the name at sale time - redundant next to the "Used" category tag below.
+      const name = detail?.isUsed ? stripUsedGrade(item.productName) : item.productName
+      const description = spec ? `${name}\n${spec}` : name
+      const category = detail ? (detail.isUsed ? "Used" : detail.category || "-") : "-"
+      return [
+        String(i+1),
+        description,
+        imei || "-",
+        detail?.color || "-",
+        battery,
+        category,
+        String(item.quantity),
+        fPKR(item.unitPrice),
+        fPKR(item.lineTotal),
+      ]
+    }),
     headStyles: {
       fillColor: [22, 31, 72] as [number,number,number],
       textColor: C.white,
       fontStyle: "bold",
       fontSize: 8,
       halign: "left",
-      cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
+      cellPadding: { top: 4, bottom: 4, left: 3, right: 3 },
       lineWidth: 0,
       minCellHeight: 0,
       valign: "middle",
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7.5,
       textColor: C.ink2,
-      cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
       lineColor: C.border,
       lineWidth: 0.2,
       minCellHeight: 0,
@@ -271,12 +354,15 @@ export async function generateInvoicePDF(
     },
     alternateRowStyles: { fillColor: C.bg },
     columnStyles: {
-      0: { cellWidth: 9,    halign: "center", fontStyle: "bold", textColor: C.light, valign: "middle" },
+      0: { cellWidth: 7,    halign: "center", fontStyle: "bold", textColor: C.light, valign: "middle" },
       1: { cellWidth: "auto", fontStyle: "bold", textColor: C.ink, overflow: "linebreak", valign: "middle" },
-      2: { cellWidth: 36,   halign: "center", fontSize: 7.5, textColor: C.muted, valign: "middle" },
-      3: { cellWidth: 14,   halign: "center", fontStyle: "bold", valign: "middle" },
-      4: { cellWidth: 28,   halign: "right",  textColor: C.muted, valign: "middle" },
-      5: { cellWidth: 28,   halign: "right",  fontStyle: "bold", textColor: C.ink, valign: "middle" },
+      2: { cellWidth: 25,   halign: "center", fontSize: 6.5, textColor: C.muted, valign: "middle" },
+      3: { cellWidth: 17,   halign: "center", fontSize: 6.5, textColor: C.muted, overflow: "linebreak", valign: "middle" },
+      4: { cellWidth: 14,   halign: "center", fontStyle: "bold", textColor: C.ink, valign: "middle" },
+      5: { cellWidth: 21,   halign: "center", fontSize: 6.5, textColor: C.muted, overflow: "linebreak", valign: "middle" },
+      6: { cellWidth: 12,   halign: "center", fontStyle: "bold", valign: "middle" },
+      7: { cellWidth: 24,   halign: "right",  textColor: C.muted, valign: "middle" },
+      8: { cellWidth: 24,   halign: "right",  fontStyle: "bold", textColor: C.ink, valign: "middle" },
     },
     showHead: "everyPage",
   })

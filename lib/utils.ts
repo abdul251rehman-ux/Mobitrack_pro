@@ -10,18 +10,22 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(date: string | Date): string {
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return "-"
   return new Intl.DateTimeFormat("en-PK", {
     timeZone: PKT, day: "2-digit", month: "short", year: "numeric",
-  }).format(new Date(date))
+  }).format(d)
 }
 
 // Pakistan Standard Time (UTC+5) — used for all display timestamps
 const PKT = "Asia/Karachi"
 
 export function formatDatePKT(date: string | Date): string {
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return "-"
   return new Intl.DateTimeFormat("en-PK", {
     timeZone: PKT, day: "2-digit", month: "short", year: "numeric",
-  }).format(new Date(date))
+  }).format(d)
 }
 
 export function formatDateTimePKT(date: string | Date): string {

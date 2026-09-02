@@ -6,7 +6,7 @@ import {
   CheckCircle2, ChevronLeft, ChevronRight, X, BatteryMedium, Smartphone, Tag,
   TrendingUp, Package, Battery, Star, MoreVertical, Camera, Upload,
   ArrowUpRight, ArrowDownRight, Minus, Info, User, Calendar, DollarSign,
-  ShoppingBag, Wrench, Shield, ChevronDown, ChevronUp, Lock, Unlock, Trash2, Copy,
+  ShoppingBag, Shield, ChevronDown, ChevronUp, Lock, Unlock, Trash2, Copy,
   Pencil, Check, Banknote, Landmark, Wallet,
 } from "lucide-react"
 import {
@@ -24,6 +24,8 @@ import { getUsedPhones, createUsedPhone, updateUsedPhone } from "@/lib/api/inven
 import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
 import { StatCard } from "@/components/shared/stat-card"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { SplitPaymentPicker, splitTotal, splitInsufficientMap, type SplitEntry } from "@/components/shared/split-payment-picker"
 import { MoneyInput } from "@/components/ui/money-input"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
@@ -60,11 +62,13 @@ const STATUS_META: Record<PhoneStatus, { bg: string; text: string; label: string
 }
 
 const PTA_META: Record<UsedPTAStatus, { bg: string; text: string; label: string }> = {
-  approved: { bg: "bg-emerald-100", text: "text-emerald-700", label: "PTA Approved" },
-  non_pta:  { bg: "bg-rose-100",     text: "text-rose-700",     label: "Non-PTA"      },
-  jv:       { bg: "bg-violet-100",  text: "text-violet-700",  label: "JV"           },
-  pending:  { bg: "bg-amber-100",   text: "text-amber-700",   label: "PTA Pending"  },
-  blocked:  { bg: "bg-slate-100",   text: "text-slate-600",   label: "PTA Blocked"  },
+  approved:      { bg: "bg-emerald-100", text: "text-emerald-700", label: "PTA Approved"  },
+  non_pta:       { bg: "bg-rose-100",     text: "text-rose-700",     label: "Non-PTA"       },
+  jv:            { bg: "bg-violet-100",  text: "text-violet-700",  label: "JV"            },
+  mdm:           { bg: "bg-amber-100",   text: "text-amber-700",   label: "MDM"           },
+  cpid_approved: { bg: "bg-emerald-100", text: "text-emerald-700", label: "CPID Approved" },
+  pending:       { bg: "bg-amber-100",   text: "text-amber-700",   label: "PTA Pending"   },
+  blocked:       { bg: "bg-slate-100",   text: "text-slate-600",   label: "PTA Blocked"   },
 }
 
 const SCREEN_LABEL: Record<ScreenCondition, string> = {
@@ -781,28 +785,28 @@ function CatalogCombo({
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const [managing, setManaging] = useState(false)
-  const [addingNew, setAddingNew] = useState(false)   // "Add New" footer expanded
-  const [newName, setNewName] = useState("")
   const [saving, setSaving] = useState(false)
   const [editingVal, setEditingVal] = useState<string | null>(null)
   const [editInput, setEditInput] = useState("")
   const [deletingVal, setDeletingVal] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const newInputRef = useRef<HTMLInputElement>(null)
 
   const q = query.trim().toLowerCase()
   const unique = Array.from(new Set(options.map(o => o.trim()).filter(Boolean)))
   const filtered = q ? unique.filter(o => o.toLowerCase().includes(q)) : unique
+  const exactMatch = unique.some(o => o.toLowerCase() === q)
+  const canCreate = !!onAdd && q.length > 0 && !exactMatch
 
   function close() {
-    setOpen(false); setManaging(false); setAddingNew(false)
-    setQuery(""); setNewName(""); setEditingVal(null); setDeletingVal(null)
+    setOpen(false); setManaging(false)
+    setQuery(""); setEditingVal(null); setDeletingVal(null)
   }
 
   async function handleSaveNew() {
-    if (!onAdd || !newName.trim() || saving) return
+    if (!onAdd || !query.trim() || saving) return
+    const name = query.trim()
     setSaving(true)
-    try { await onAdd(newName.trim()); onChange(newName.trim()); close() }
+    try { await onAdd(name); onChange(name); close() }
     catch { toast.error("Failed to add") }
     finally { setSaving(false) }
   }
@@ -851,12 +855,14 @@ function CatalogCombo({
             </>
           ) : (
             <input ref={inputRef} value={open ? query : ""}
-              onChange={e => { setQuery(e.target.value); setOpen(true); setManaging(false); setAddingNew(false) }}
+              onChange={e => { setQuery(e.target.value); setOpen(true); setManaging(false) }}
               onFocus={() => setOpen(true)}
               onKeyDown={e => {
                 if (e.key === "Enter") {
                   e.preventDefault()
-                  if (filtered[0] && !managing && !addingNew) { onChange(filtered[0]); close() }
+                  if (managing) { /* no-op - managing has its own controls */ }
+                  else if (filtered[0]) { onChange(filtered[0]); close() }
+                  else if (canCreate) { handleSaveNew() }
                 }
                 if (e.key === "Escape") close()
               }}
@@ -897,43 +903,19 @@ function CatalogCombo({
                   ))}
                 </div>
 
-                {/* â"€â"€ Always-visible "Add New" footer â"€â"€ */}
-                {onAdd && (
-                  <div className="border-t border-slate-100">
-                    {!addingNew ? (
-                      <button type="button"
-                        onClick={() => { setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 40) }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors">
-                        <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-                          <Plus className="w-3 h-3 text-indigo-600" />
-                        </div>
-                        Add New {label ?? ""}
-                      </button>
-                    ) : (
-                      <div className="p-2.5 space-y-2 bg-indigo-50">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-indigo-700">New {label ?? "item"}</span>
-                          <button type="button" onClick={() => { setAddingNew(false); setNewName("") }}
-                            className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                        <input
-                          ref={newInputRef}
-                          value={newName}
-                          onChange={e => setNewName(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") { e.preventDefault(); handleSaveNew() }
-                            if (e.key === "Escape") { setAddingNew(false); setNewName("") }
-                          }}
-                          placeholder={`e.g. ${label === "Brand" ? "OnePlus" : label === "Color" ? "Midnight Blue" : label === "Storage" ? "256GB" : label === "RAM" ? "6GB" : "Name..."}`}
-                          className="w-full h-8 text-sm border border-indigo-300 rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                        />
-                        <button type="button" onClick={handleSaveNew} disabled={!newName.trim() || saving}
-                          className="w-full h-8 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors">
-                          {saving ? "Adding..." : `Add ${newName.trim() ? `"${newName.trim()}"` : label ?? "item"}`}
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                {/* â"€â"€ Inline "Add" row - the query already typed above becomes the new value,
+                    no separate box to retype it in. Only shown once it doesn't match an
+                    existing option, same pattern as the purchase form's combobox. â"€â"€ */}
+                {canCreate && (
+                  <button type="button"
+                    onClick={handleSaveNew}
+                    disabled={saving}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 border-t border-indigo-100 bg-indigo-50/60 transition-colors disabled:opacity-60">
+                    <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                      <Plus className="w-3 h-3 text-indigo-600" />
+                    </div>
+                    {saving ? "Adding..." : `Add "${query.trim()}"${label ? ` as new ${label}` : ""}`}
+                  </button>
                 )}
               </>
             ) : (
@@ -1030,8 +1012,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const { language } = useLanguage()
   const [supplierId, setSupplierId] = useState("")
   const [supplierErr, setSupplierErr] = useState(false)
-  const [amountPaid, setAmountPaid] = useState("")
-  const [accountId, setAccountId] = useState("")
+  const [splits, setSplits] = useState<SplitEntry[]>([])
   const [accountErr, setAccountErr] = useState(false)
   const [purchaseDate, setPurchaseDate] = useState(todayPKT())
   const [rows, setRows] = useState<BulkRow[]>([makeBulkRow()])
@@ -1043,13 +1024,19 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [saving, setSaving] = useState(false)
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [confirmReactivate, setConfirmReactivate] = useState<{
+    soldPhones: any[]
+    tenantId: string
+    supplierName: string
+  } | null>(null)
 
   // Default the payment account to the shop's cash account once accounts load,
   // so the common case (paying cash) doesn't require an extra manual selection.
   useEffect(() => {
-    if (accountId || accounts.length === 0) return
+    if (splits.length > 0 || accounts.length === 0) return
     const cashAccount = accounts.find(a => a.isDefaultCash) ?? accounts.find(a => a.type === "cash")
-    if (cashAccount) setAccountId(cashAccount.id)
+    if (cashAccount) setSplits([{ accountId: cashAccount.id, amount: "" }])
   }, [accounts])
 
   // Re-fetch suppliers directly inside the dialog — parent prop may arrive empty
@@ -1154,7 +1141,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
   const handleClose = () => {
     if (dirty && rows.some(r => r.brand || r.model || r.imei_number || r.purchase_price)) {
-      if (!window.confirm("Discard all unsaved phones?")) return
+      setConfirmDiscard(true)
+      return
     }
     onClose()
   }
@@ -1167,8 +1155,11 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     if (sourceType === "walk_in" && !walkinName.trim()) { toast.error("Enter walk-in seller name"); ok = false }
     if (sourceType === "customer_trade_in" && !selectedCustomerId) { toast.error("Select a customer"); ok = false }
     if (!purchaseDate) { toast.error("Select a purchase date"); ok = false }
-    if (Number(amountPaid) > 0 && !accountId) {
-      toast.error("Select a payment account to record this payment")
+
+    const paidTotal = splitTotal(splits)
+    const insufficient = splitInsufficientMap(splits, accounts)
+    if (Object.keys(insufficient).length > 0) {
+      toast.error("One or more accounts don't have enough balance for the amount entered")
       setAccountErr(true)
       ok = false
     }
@@ -1176,7 +1167,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     // against, so they must be paid in full at the time of purchase.
     if (sourceType !== "purchased") {
       const grandTotalForValidation = rows.reduce((s, r) => s + (Number(r.purchase_price) || 0), 0)
-      if (Number(amountPaid) < grandTotalForValidation) {
+      if (paidTotal < grandTotalForValidation) {
         toast.error(`${sourceType === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full`)
         setAccountErr(true)
         ok = false
@@ -1215,12 +1206,6 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     const tenantId = await getTenantId()
     const selectedSupplier = localSuppliers.find(s => s.id === supplierId)
     const supplierName = selectedSupplier?.companyName ?? ""
-    const resolvedSourceName =
-      sourceType === "purchased" ? supplierName :
-      sourceType === "walk_in" ? walkinName.trim() :
-      sourceType === "customer_trade_in" ? selectedCustomerName : ""
-    const resolvedSupplierId = sourceType === "purchased" ? supplierId : undefined
-    const resolvedCustomerId = sourceType === "customer_trade_in" ? selectedCustomerId : undefined
 
     // Pre-flight: check for IMEI duplicates already in DB
     const imeiList = rows.map(r => r.imei_number)
@@ -1240,41 +1225,59 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         return
       }
       if (soldPhones.length > 0) {
-        const msg = soldPhones.map((e: any) => `${e.imei_number} (${e.brand} ${e.model}, sold ${e.sold_date ?? "previously"})`).join("\n")
-        const ok = window.confirm(
-          `${soldPhones.length} phone(s) were previously in your system as sold:\n\n${msg}\n\nReactivate and update with new purchase details?`
-        )
-        if (!ok) { setSaving(false); setSaveProgress(null); return }
-        for (const sold of soldPhones) {
-          const row = rows.find(r => r.imei_number === (sold as any).imei_number)
-          if (!row) continue
-          await supabase.from("used_phones").update({
-            status: "in_stock",
-            purchase_price: Number(row.purchase_price),
-            selling_price: Number(row.selling_price),
-            condition_grade: row.condition_grade,
-            screen_condition: row.screen_condition,
-            body_condition: row.body_condition,
-            battery_health: row.battery_health ? Number(row.battery_health) : null,
-            condition_notes: row.condition_notes.trim() || null,
-            pta_status: row.pta_status,
-            purchased_date: purchaseDate,
-            source_type: "purchased",
-            source_customer_name: supplierName,
-            sold_date: null,
-            warranty_days: Number(row.warranty_days) || 7,
-          }).eq("id", (sold as any).id).eq("tenant_id", tenantId)
-        }
-        const soldImeis = new Set(soldPhones.map((e: any) => e.imei_number))
-        rows.splice(0, rows.length, ...rows.filter(r => !soldImeis.has(r.imei_number)))
-        if (rows.length === 0) {
-          toast.success(`${soldPhones.length} phone(s) reactivated successfully`)
-          setSaving(false)
-          setSaveProgress(null)
-          const { data: refreshed } = await supabase.from("used_phones").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(soldPhones.length)
-          if (refreshed) onSaved(refreshed as UsedPhone[])
-          return
-        }
+        setSaving(false)
+        setSaveProgress(null)
+        setConfirmReactivate({ soldPhones, tenantId, supplierName })
+        return
+      }
+    }
+
+    await proceedSave(tenantId, supplierName, [])
+  }
+
+  // Runs the reactivate-sold-phones step (if any) then inserts the batch.
+  // Split out of handleSave so the "reactivate previously sold phones?"
+  // confirmation can pause the flow via a dialog instead of window.confirm.
+  const proceedSave = async (tenantId: string, supplierName: string, soldPhones: any[]) => {
+    setSaving(true)
+    setSaveProgress({ done: 0, total: rows.length })
+    const resolvedSourceName =
+      sourceType === "purchased" ? supplierName :
+      sourceType === "walk_in" ? walkinName.trim() :
+      sourceType === "customer_trade_in" ? selectedCustomerName : ""
+    const resolvedSupplierId = sourceType === "purchased" ? supplierId : undefined
+    const resolvedCustomerId = sourceType === "customer_trade_in" ? selectedCustomerId : undefined
+
+    if (soldPhones.length > 0) {
+      for (const sold of soldPhones) {
+        const row = rows.find(r => r.imei_number === (sold as any).imei_number)
+        if (!row) continue
+        await supabase.from("used_phones").update({
+          status: "in_stock",
+          purchase_price: Number(row.purchase_price),
+          selling_price: Number(row.selling_price),
+          condition_grade: row.condition_grade,
+          screen_condition: row.screen_condition,
+          body_condition: row.body_condition,
+          battery_health: row.battery_health ? Number(row.battery_health) : null,
+          condition_notes: row.condition_notes.trim() || null,
+          pta_status: row.pta_status,
+          purchased_date: purchaseDate,
+          source_type: "purchased",
+          source_customer_name: supplierName,
+          sold_date: null,
+          warranty_days: Number(row.warranty_days) || 7,
+        }).eq("id", (sold as any).id).eq("tenant_id", tenantId)
+      }
+      const soldImeis = new Set(soldPhones.map((e: any) => e.imei_number))
+      rows.splice(0, rows.length, ...rows.filter(r => !soldImeis.has(r.imei_number)))
+      if (rows.length === 0) {
+        toast.success(`${soldPhones.length} phone(s) reactivated successfully`)
+        setSaving(false)
+        setSaveProgress(null)
+        const { data: refreshed } = await supabase.from("used_phones").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(soldPhones.length)
+        if (refreshed) onSaved(refreshed as UsedPhone[])
+        return
       }
     }
 
@@ -1316,8 +1319,10 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
       // Record purchase in purchases table + finance
       const grandTotal = rows.reduce((s, r) => s + Number(r.purchase_price), 0)
-      const paid = parseFloat(amountPaid) || 0
+      const activeSplits = splits.filter(e => (parseFloat(e.amount) || 0) > 0)
+      const paid = splitTotal(activeSplits)
       const balanceDue = Math.max(0, grandTotal - paid)
+      const firstAccount = activeSplits[0] ? accounts.find(a => a.id === activeSplits[0].accountId) : undefined
       const payStatus = paid <= 0 ? "Unpaid" : paid >= grandTotal ? "Paid" : "Partial"
       const dateTag = purchaseDate.replace(/-/g, "")
       const { data: poRows } = await supabase.from("purchases").select("po_number")
@@ -1356,8 +1361,10 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         balance_due: balanceDue,
         payment_status: payStatus,
         delivery_status: "Received",
-        payment_method: accountId ? (accounts.find(a => a.id === accountId)?.type === "cash" ? "Cash" : "Bank Transfer") : "Cash",
-        account_id: accountId || null,
+        payment_method: firstAccount
+          ? (firstAccount.type === "cash" ? "Cash" : firstAccount.type === "bank" ? "Bank Transfer" : firstAccount.bankName || "Mobile Wallet")
+          : activeSplits.length > 1 ? "Split Payment" : "Cash",
+        account_id: activeSplits[0]?.accountId || null,
         notes: null,
       }).select("id").single()
       if (purchaseErr) throw new Error(`Failed to record purchase: ${purchaseErr.message}`)
@@ -1381,19 +1388,23 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         if (itemsErr) throw new Error(`Failed to record purchase items: ${itemsErr.message}`)
       }
 
-      // Finance: debit account if payment made
-      if (paid > 0 && accountId && purchaseRecord) {
-        await supabase.from("finance_transactions").insert({
-          tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
-          account_id: accountId, amount: paid,
-          reference_type: "Purchase", reference_number: poNumber,
-          description: `Used phones purchase ${poNumber} - ${purchaseSourceLabel}`,
-        })
-        const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", accountId).single()
-        if (accRow) {
-          await supabase.from("finance_accounts").update({
-            current_balance: (accRow as any).current_balance - paid,
-          }).eq("id", accountId)
+      // Finance: debit each selected account for its share of the payment
+      if (purchaseRecord) {
+        for (const se of activeSplits) {
+          const amt = parseFloat(se.amount) || 0
+          if (amt <= 0) continue
+          await supabase.from("finance_transactions").insert({
+            tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
+            account_id: se.accountId, amount: amt,
+            reference_type: "Purchase", reference_number: poNumber,
+            description: `Used phones purchase ${poNumber} - ${purchaseSourceLabel}`,
+          })
+          const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", se.accountId).single()
+          if (accRow) {
+            await supabase.from("finance_accounts").update({
+              current_balance: (accRow as any).current_balance - amt,
+            }).eq("id", se.accountId)
+          }
         }
       }
       // Update supplier outstanding balance if partial/unpaid - only
@@ -1450,15 +1461,30 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
 
   const grandTotal  = rows.reduce((s, r) => s + (Number(r.purchase_price) || 0), 0)
   const totalProfit = rows.reduce((s, r) => s + ((Number(r.selling_price) || 0) - (Number(r.purchase_price) || 0)), 0)
+
+  // Who this batch is being bought from - shown in the Order Summary so it's
+  // clear at a glance without scrolling back up to the Purchase Details card.
+  const sourceLabel =
+    sourceType === "purchased" ? (localSuppliers.find(s => s.id === supplierId)?.companyName ?? "")
+    : sourceType === "walk_in" ? walkinName.trim()
+    : sourceType === "customer_trade_in" ? selectedCustomerName
+    : ""
   const allExpanded = rows.every(r => r.expanded)
   const completedCount = rows.filter(r => r.brand && r.model && r.imei_number.length === 15 && Number(r.purchase_price) > 0 && Number(r.selling_price) > 0).length
 
   // Walk-in / trade-in purchases must be paid in full - keep Amount Paid
   // locked to the running total so the UI can't drift into a partial payment.
   const requiresFullPayment = sourceType !== "purchased"
+  // Walk-in / trade-in purchases must be paid in full. When exactly one
+  // account is selected, auto-fill its amount to the grand total so the
+  // common case (single account) needs no manual typing; with multiple
+  // accounts selected the user splits the total across them manually.
   useEffect(() => {
-    if (requiresFullPayment) setAmountPaid(grandTotal > 0 ? String(grandTotal) : "")
-  }, [requiresFullPayment, grandTotal])
+    if (!requiresFullPayment || splits.length !== 1) return
+    const only = splits[0]
+    const filled = grandTotal > 0 ? String(grandTotal) : ""
+    if (only.amount !== filled) setSplits([{ ...only, amount: filled }])
+  }, [requiresFullPayment, grandTotal, splits])
 
   const toggleExpandAll = () =>
     setRows(prev => prev.map(r => ({ ...r, expanded: !allExpanded })))
@@ -1700,7 +1726,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         </div>
 
                         {/* Model - full width on mobile, most important field */}
-                        <div className="sm:col-span-4">
+                        <div className="sm:col-span-3">
                           <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                             Model <span className="text-rose-500">*</span>
                           </label>
@@ -1718,8 +1744,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           />
                         </div>
 
-                        {/* Color / Storage / RAM - paired 2-up on mobile, short fields */}
-                        <div className="grid grid-cols-2 sm:grid-cols-6 sm:col-span-6 gap-3">
+                        {/* Color / Storage / RAM - paired 2-up on mobile, equal thirds on desktop */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 sm:col-span-7 gap-3">
                           <div>
                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Color</label>
                             <CatalogCombo
@@ -1749,7 +1775,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </div>
 
                           {/* RAM (android) or Battery % (apple) */}
-                          <div className="col-span-2 sm:col-span-2">
+                          <div className="col-span-2 sm:col-span-1">
                             {isApple ? (
                               <>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Battery %</label>
@@ -1809,48 +1835,32 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           </div>
                         </div>
 
-                        {/* Battery % (android only) + Grade - paired on mobile */}
-                        <div className={cn("grid gap-3", isApple ? "sm:col-span-4" : "grid-cols-3 sm:col-span-3 sm:grid-cols-3")}>
-                          {!isApple && (
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Bat %</label>
-                              <div className="relative">
-                                <input type="number" onWheel={e => e.currentTarget.blur()} value={row.battery_health}
-                                  onChange={e => updateRow(row.id, "battery_health", e.target.value)}
-                                  placeholder="85" min="1" max="100"
-                                  className="w-full h-9 border border-slate-300 rounded-lg px-2.5 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors" />
-                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">%</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Grade pills - 2 rows of 3 so each pill stays comfortably tappable */}
-                          <div className={isApple ? "" : "col-span-2"}>
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <button type="button" onClick={() => toggleLock("condition_grade")}
-                                title={locks.condition_grade ? "Locked" : "Click to lock grade"}
-                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
-                                  locks.condition_grade ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                                {locks.condition_grade ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                              </button>
-                              <label className="text-xs font-semibold text-slate-600">Grade</label>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1.5">
-                              {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
-                                const m = GRADE_META[g]
-                                return (
-                                  <button key={g} type="button" onClick={() => updateRow(row.id, "condition_grade", g)}
-                                    className={cn(
-                                      "h-9 rounded-lg text-xs font-bold border-2 transition-all",
-                                      row.condition_grade === g
-                                        ? cn(m.bg, m.text, m.border, "shadow-sm")
-                                        : "border-slate-200 text-slate-400 hover:border-slate-300 bg-white"
-                                    )}>
-                                    {g}
-                                  </button>
-                                )
-                              })}
-                            </div>
+                        {/* Grade - 2 rows of 3 so each pill stays comfortably tappable */}
+                        <div className="sm:col-span-3">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("condition_grade")}
+                              title={locks.condition_grade ? "Locked" : "Click to lock grade"}
+                              className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                locks.condition_grade ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                              {locks.condition_grade ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Grade</label>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
+                              const m = GRADE_META[g]
+                              return (
+                                <button key={g} type="button" onClick={() => updateRow(row.id, "condition_grade", g)}
+                                  className={cn(
+                                    "h-9 rounded-lg text-xs font-bold border-2 transition-all",
+                                    row.condition_grade === g
+                                      ? cn(m.bg, m.text, m.border, "shadow-sm")
+                                      : "border-slate-200 text-slate-400 hover:border-slate-300 bg-white"
+                                  )}>
+                                  {g}
+                                </button>
+                              )
+                            })}
                           </div>
                         </div>
 
@@ -2003,6 +2013,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                               <option value="approved">PTA Approved</option>
                               <option value="non_pta">Non-PTA</option>
                               {row.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
+                              {row.brand.toLowerCase() === "apple" && <option value="mdm">MDM</option>}
+                              {row.brand.toLowerCase() !== "apple" && <option value="cpid_approved">CPID Approved</option>}
                             </select>
                           </div>
                         </div>
@@ -2036,7 +2048,13 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
             <div className="px-4 sm:px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="text-sm font-bold text-slate-800">Order Summary</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Total cost - payment - ledger entry</p>
+                <p className="text-xs text-slate-400 mt-0.5 truncate">
+                  {sourceLabel ? (
+                    <>Buying from <span className="font-semibold text-slate-600">{sourceLabel}</span></>
+                  ) : (
+                    "Total cost - payment - ledger entry"
+                  )}
+                </p>
               </div>
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md shrink-0">Step 3</span>
             </div>
@@ -2072,35 +2090,13 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                   {/* Payment inputs */}
                   <div>
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Payment</p>
-                    <div className="space-y-2.5">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Amount Paid (Rs)</label>
-                        <MoneyInput min={0} placeholder="0" value={amountPaid}
-                          onChange={v => { if (!requiresFullPayment) setAmountPaid(v) }}
-                          disabled={requiresFullPayment}
-                          className={cn(
-                            "w-full h-9 border border-slate-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white placeholder:text-slate-400 transition-colors",
-                            requiresFullPayment && "bg-slate-50 text-slate-500 cursor-not-allowed"
-                          )} />
-                        {requiresFullPayment && (
-                          <p className="text-[11px] text-slate-400 mt-1">
-                            {sourceType === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full - no partial/unpaid balance is tracked for these.
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Payment Account</label>
-                        <select value={accountId} onChange={e => { setAccountId(e.target.value); setAccountErr(false) }}
-                          className={cn(
-                            "w-full h-9 border rounded-lg px-3 text-sm focus:outline-none focus:ring-2 bg-white transition-colors",
-                            accountErr ? "border-rose-400 focus:ring-rose-400" : "border-slate-300 focus:ring-indigo-500"
-                          )}>
-                          <option value="">No account</option>
-                          {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                        {accountErr && <p className="text-xs text-rose-500 mt-1">Select a payment account to record this payment</p>}
-                      </div>
-                    </div>
+                    {requiresFullPayment && (
+                      <p className="text-[11px] text-slate-400 mb-2">
+                        {sourceType === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full - no partial/unpaid balance is tracked for these. Select one account, or split the total across several.
+                      </p>
+                    )}
+                    <SplitPaymentPicker accounts={accounts} splits={splits} onChange={setSplits} targetAmount={grandTotal} />
+                    {accountErr && <p className="text-xs text-rose-500 mt-1.5">Select a payment account and enter a valid amount to record this payment</p>}
                   </div>
 
                   {/* Totals */}
@@ -2109,19 +2105,19 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       <span>{rows.length} phone{rows.length !== 1 ? "s" : ""} subtotal</span>
                       <span className="font-semibold text-slate-800">{formatCurrency(grandTotal)}</span>
                     </div>
-                    {parseFloat(amountPaid) > 0 && (
+                    {splitTotal(splits) > 0 && (
                       <div className="flex justify-between text-slate-500">
                         <span>Amount paid</span>
-                        <span className="text-emerald-600 font-semibold">- {formatCurrency(parseFloat(amountPaid))}</span>
+                        <span className="text-emerald-600 font-semibold">- {formatCurrency(splitTotal(splits))}</span>
                       </div>
                     )}
                     <div className={cn(
                       "flex justify-between font-bold pt-2 border-t border-slate-200 text-base",
-                      Math.max(0, grandTotal - parseFloat(amountPaid || "0")) === 0 && grandTotal > 0
+                      Math.max(0, grandTotal - splitTotal(splits)) === 0 && grandTotal > 0
                         ? "text-emerald-600" : "text-slate-800"
                     )}>
                       <span>Balance Due</span>
-                      <span>{formatCurrency(Math.max(0, grandTotal - parseFloat(amountPaid || "0")))}</span>
+                      <span>{formatCurrency(Math.max(0, grandTotal - splitTotal(splits)))}</span>
                     </div>
                   </div>
 
@@ -2139,7 +2135,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     </div>
                   )}
 
-                  {parseFloat(amountPaid) >= grandTotal && grandTotal > 0 && (
+                  {splitTotal(splits) >= grandTotal && grandTotal > 0 && (
                     <div className="flex items-center gap-1.5 text-emerald-600 text-xs font-semibold bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-200">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Fully paid
                     </div>
@@ -2161,6 +2157,36 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           <div className="h-6" />
         </div>{/* end max-w container */}
       </div>{/* end scrollable body */}
+
+      <ConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title="Discard unsaved phones?"
+        description="You have unsaved phone details on this screen. Leaving now will discard them."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        variant="destructive"
+        onConfirm={() => { setConfirmDiscard(false); onClose() }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmReactivate}
+        onOpenChange={(open) => { if (!open) setConfirmReactivate(null) }}
+        title="Reactivate previously sold phones?"
+        description={
+          confirmReactivate
+            ? `${confirmReactivate.soldPhones.length} phone(s) were previously in your system as sold: ${confirmReactivate.soldPhones.map((e: any) => `${e.imei_number} (${e.brand} ${e.model}, sold ${e.sold_date ?? "previously"})`).join(", ")}. Reactivate and update with new purchase details?`
+            : ""
+        }
+        confirmLabel="Reactivate"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          if (!confirmReactivate) return
+          const { soldPhones, tenantId, supplierName } = confirmReactivate
+          setConfirmReactivate(null)
+          proceedSave(tenantId, supplierName, soldPhones)
+        }}
+      />
     </div>
   )
 }
@@ -2184,8 +2210,6 @@ type FormData = {
   refurbishment_cost: string; selling_price: string
   warranty_days: string; pta_status: UsedPTAStatus; status: PhoneStatus
   photos: string[]
-  // Payment
-  payment_amount: string; payment_account_id: string
 }
 
 const EMPTY_FORM: FormData = {
@@ -2200,7 +2224,6 @@ const EMPTY_FORM: FormData = {
   refurbishment_cost: "0", selling_price: "",
   warranty_days: "7", pta_status: "approved", status: "in_stock",
   photos: [],
-  payment_amount: "", payment_account_id: "",
 }
 
 const STEPS = ["Basic Info", "Condition", "Pricing", "Photos", "Review"]
@@ -2219,7 +2242,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
 function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOptions, ramOptions, suppliers, customers, accounts, onAddBrand, onAddColor, onAddStorage, onAddRam }: {
   editPhone: UsedPhone | null
   onClose: () => void
-  onSave: (data: Partial<UsedPhone> & { _paymentAmount?: number; _paymentAccountId?: string }) => void
+  onSave: (data: Partial<UsedPhone> & { _paymentSplits?: SplitEntry[] }) => void
   brands: string[]
   colors: string[]
   storageOptions: string[]
@@ -2263,7 +2286,6 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       pta_status: editPhone.pta_status,
       status: editPhone.status,
       photos: editPhone.photos,
-      payment_amount: "", payment_account_id: "",
     }
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -2287,14 +2309,15 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
 
   const [submitting, setSubmitting] = useState(false)
   const [accountErr, setAccountErr] = useState(false)
+  const [splits, setSplits] = useState<SplitEntry[]>([])
   const set = (key: keyof FormData, val: any) => setForm(prev => ({ ...prev, [key]: val }))
 
   // Default the payment account to the shop's cash account once accounts load,
   // so the common case (paying cash) doesn't require an extra manual selection.
   useEffect(() => {
-    if (editPhone || form.payment_account_id || accounts.length === 0) return
+    if (editPhone || splits.length > 0 || accounts.length === 0) return
     const cashAccount = accounts.find(a => a.isDefaultCash) ?? accounts.find(a => a.type === "cash")
-    if (cashAccount) set("payment_account_id", cashAccount.id)
+    if (cashAccount) setSplits([{ accountId: cashAccount.id, amount: "" }])
   }, [accounts])
   const toggleCheck = (key: "functional_issues" | "accessories_included", id: string) => {
     setForm(prev => {
@@ -2303,12 +2326,17 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     })
   }
 
-  // Walk-in / trade-in purchases must be paid in full - keep Amount Paid
-  // locked to the purchase price so the UI can't drift into a partial payment.
+  // Walk-in / trade-in purchases must be paid in full. When exactly one
+  // account is selected, auto-fill its amount to the purchase price so the
+  // common case (single account) needs no manual typing; with multiple
+  // accounts selected the user splits the total across them manually.
   const requiresFullPayment = !editPhone && form.source_type !== "purchased"
   useEffect(() => {
-    if (requiresFullPayment) set("payment_amount", form.purchase_price || "")
-  }, [requiresFullPayment, form.purchase_price])
+    if (!requiresFullPayment || splits.length !== 1) return
+    const only = splits[0]
+    const filled = form.purchase_price || ""
+    if (only.amount !== filled) setSplits([{ ...only, amount: filled }])
+  }, [requiresFullPayment, form.purchase_price, splits])
 
   const validateStep = () => {
     setAccountErr(false)
@@ -2327,15 +2355,16 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
         return "Enter a valid selling price"
     }
     // Not step-specific: catches the case even if Submit is clicked from a later step
-    if (Number(form.payment_amount) > 0 && !form.payment_account_id) {
+    const insufficient = splitInsufficientMap(splits, accounts)
+    if (Object.keys(insufficient).length > 0) {
       setAccountErr(true)
-      return "Select a payment account to record this payment"
+      return "One or more accounts don't have enough balance for the amount entered"
     }
     // Walk-in / trade-in purchases have no supplier ledger to track a debt
     // against, so they must be paid in full at the time of purchase.
     if (!editPhone && form.source_type !== "purchased") {
       const total = (Number(form.purchase_price) || 0)
-      if (Number(form.payment_amount) < total) {
+      if (splitTotal(splits) < total) {
         return `${form.source_type === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full`
       }
     }
@@ -2364,7 +2393,6 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
     const isWalkIn           = form.source_type === "walk_in"
     const isSupplier         = form.source_type === "purchased"
 
-    const paid = Number(form.payment_amount) || 0
     setSubmitting(true)
     try {
       await onSave({
@@ -2396,8 +2424,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       pta_status: form.pta_status,
       status: form.status,
       photos: form.photos,
-        _paymentAmount: paid > 0 ? paid : undefined,
-        _paymentAccountId: paid > 0 && form.payment_account_id ? form.payment_account_id : undefined,
+        _paymentSplits: splits.filter(e => (parseFloat(e.amount) || 0) > 0),
       })
     } finally {
       setSubmitting(false)
@@ -2869,6 +2896,8 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       <option value="approved">PTA Approved</option>
                       <option value="non_pta">Non-PTA</option>
                       {form.brand.toLowerCase() === "apple" && <option value="jv">JV</option>}
+                      {form.brand.toLowerCase() === "apple" && <option value="mdm">MDM</option>}
+                      {form.brand.toLowerCase() !== "apple" && <option value="cpid_approved">CPID Approved</option>}
                     </select>
                   </Field>
                   <Field label="Status">
@@ -2888,46 +2917,21 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                 {!editPhone && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Payment</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Field label="Amount Paid (Rs)">
-                        <MoneyInput
-                          value={form.payment_amount}
-                          onChange={v => { if (!requiresFullPayment) set("payment_amount", v) }}
-                          placeholder={`0 of ${form.purchase_price || "?"}`}
-                          min={0}
-                          disabled={requiresFullPayment}
-                          className={cn(inputCls, requiresFullPayment && "bg-slate-100 text-slate-500 cursor-not-allowed")}
-                        />
-                        {requiresFullPayment && (
-                          <p className="text-[11px] text-slate-400 mt-1">
-                            {form.source_type === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full.
-                          </p>
-                        )}
-                      </Field>
-                      <Field label="Pay From Account">
-                        <select
-                          value={form.payment_account_id}
-                          onChange={e => { set("payment_account_id", e.target.value); setAccountErr(false) }}
-                          className={cn(selectCls, accountErr && "border-rose-400 focus:ring-rose-400")}
-                        >
-                          <option value="">-- Select account --</option>
-                          {accounts.map(a => (
-                            <option key={a.id} value={a.id}>
-                              {a.name} ({a.type === "cash" ? "Cash" : a.type === "bank" ? "Bank" : "Mobile Wallet"}) - Rs{a.currentBalance.toLocaleString()}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                    </div>
-                    {form.payment_amount && Number(form.payment_amount) > 0 && !form.payment_account_id && (
-                      <p className="text-xs text-amber-600 flex items-center gap-1">
-                        <Info className="w-3.5 h-3.5" /> Select an account to record the payment
+                    {requiresFullPayment && (
+                      <p className="text-[11px] text-slate-400">
+                        {form.source_type === "walk_in" ? "Walk-in" : "Customer trade-in"} purchases must be paid in full. Select one account, or split the total across several.
                       </p>
                     )}
-                    {form.payment_amount && Number(form.payment_amount) > 0 && form.payment_account_id && (
+                    <SplitPaymentPicker accounts={accounts} splits={splits} onChange={setSplits} targetAmount={Number(form.purchase_price) || undefined} />
+                    {accountErr && (
+                      <p className="text-xs text-rose-500 flex items-center gap-1">
+                        <Info className="w-3.5 h-3.5" /> Select a payment account and enter a valid amount to record this payment
+                      </p>
+                    )}
+                    {splitTotal(splits) > 0 && (
                       <p className="text-xs text-emerald-600 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Rs{Number(form.payment_amount).toLocaleString()} will be deducted from your account on save
+                        Rs{splitTotal(splits).toLocaleString()} will be deducted from your account(s) on save
                       </p>
                     )}
                   </div>
@@ -3340,8 +3344,9 @@ function UsedPhonesPageInner() {
   const handleEdit = (p: UsedPhone) => { setEditPhone(p); setShowAddDialog(true); setShowDetails(false) }
   const handleSell = (p: UsedPhone) => { setSellPhone(p); setShowDetails(false) }
 
-  const handleSave = async (data: Partial<UsedPhone> & { _paymentAmount?: number; _paymentAccountId?: string }) => {
-    const { _paymentAmount, _paymentAccountId, ...phoneData } = data
+  const handleSave = async (data: Partial<UsedPhone> & { _paymentSplits?: SplitEntry[] }) => {
+    const { _paymentSplits, ...phoneData } = data
+    const activeSplits = (_paymentSplits ?? []).filter(e => (parseFloat(e.amount) || 0) > 0)
     try {
       if (editPhone) {
         const updated = await updateUsedPhone(editPhone.id, phoneData)
@@ -3388,9 +3393,10 @@ function UsedPhonesPageInner() {
           const purchaseDate = phoneData.purchased_date ?? todayPKT()
           const sourceType = phoneData.source_type ?? "walk_in"
           const purchasePrice = phoneData.purchase_price ?? 0
-          const paid = _paymentAmount && _paymentAmount > 0 ? _paymentAmount : 0
+          const paid = splitTotal(activeSplits)
           const balanceDue = Math.max(0, purchasePrice - paid)
           const payStatus = paid <= 0 ? "Unpaid" : paid >= purchasePrice ? "Paid" : "Partial"
+          const firstAccount = activeSplits[0] ? financeAccounts.find(a => a.id === activeSplits[0].accountId) : undefined
           const supplierId = (phoneData as any).supplier_id as string | undefined
           const sourceLabel =
             sourceType === "purchased" ? ((phoneData as any).supplier_name || "") :
@@ -3422,8 +3428,10 @@ function UsedPhonesPageInner() {
             balance_due: balanceDue,
             payment_status: payStatus,
             delivery_status: "Received",
-            payment_method: _paymentAccountId ? (financeAccounts.find(a => a.id === _paymentAccountId)?.type === "cash" ? "Cash" : "Bank Transfer") : "Cash",
-            account_id: _paymentAccountId || null,
+            payment_method: firstAccount
+              ? (firstAccount.type === "cash" ? "Cash" : firstAccount.type === "bank" ? "Bank Transfer" : firstAccount.bankName || "Mobile Wallet")
+              : activeSplits.length > 1 ? "Split Payment" : "Cash",
+            account_id: activeSplits[0]?.accountId || null,
             notes: null,
           }).select("id").single()
           if (purchaseErr) throw new Error(purchaseErr.message)
@@ -3444,19 +3452,23 @@ function UsedPhonesPageInner() {
             if (itemErr) throw new Error(itemErr.message)
           }
 
-          // Deduct from finance account if payment was made
-          if (paid > 0 && _paymentAccountId) {
-            await supabase.from("finance_transactions").insert({
-              tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
-              account_id: _paymentAccountId, amount: paid,
-              reference_type: "Purchase", reference_number: poNumber,
-              description: `Used phone purchase ${poNumber} - ${sourceLabel}`,
-            })
-            const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", _paymentAccountId).single()
-            if (accRow) {
-              await supabase.from("finance_accounts").update({
-                current_balance: (accRow as any).current_balance - paid,
-              }).eq("id", _paymentAccountId)
+          // Deduct from each selected finance account for its share of the payment
+          if (activeSplits.length > 0) {
+            for (const se of activeSplits) {
+              const amt = parseFloat(se.amount) || 0
+              if (amt <= 0) continue
+              await supabase.from("finance_transactions").insert({
+                tenant_id: tenantId, date: purchaseDate, type: "purchase_payment",
+                account_id: se.accountId, amount: amt,
+                reference_type: "Purchase", reference_number: poNumber,
+                description: `Used phone purchase ${poNumber} - ${sourceLabel}`,
+              })
+              const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", se.accountId).single()
+              if (accRow) {
+                await supabase.from("finance_accounts").update({
+                  current_balance: (accRow as any).current_balance - amt,
+                }).eq("id", se.accountId)
+              }
             }
             // Refresh finance accounts list so balances stay current
             getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
@@ -3583,20 +3595,13 @@ function UsedPhonesPageInner() {
       </div>
 
       {/* Stats — core KPIs, same grid pattern as the rest of the app (no horizontal scroll) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <StatCard
           title="Total Devices"
           value={String(stats.total)}
           icon={Smartphone}
           iconBg="bg-indigo-100"
           subtext={`${phones.filter(p => p.status === "in_stock").length} in stock`}
-        />
-        <StatCard
-          title="Under Repair"
-          value={String(phones.filter(p => p.status === "under_repair").length)}
-          icon={Wrench}
-          iconBg="bg-amber-100"
-          subtext="being refurbished"
         />
         <StatCard
           title="Invested"
@@ -3613,8 +3618,6 @@ function UsedPhonesPageInner() {
           subtext={`${phones.filter(p => p.status === "sold").length} sold`}
         />
         <StatCard
-          className="col-span-2 sm:col-span-3 lg:col-span-1"
-          centerOnMobile
           title="Profit"
           value={`${stats.profitSold >= 0 ? "+" : ""}${formatCurrency(stats.profitSold)}`}
           icon={ArrowUpRight}
@@ -3743,6 +3746,8 @@ function UsedPhonesPageInner() {
                 <option value="approved">PTA Approved</option>
                 <option value="non_pta">Non-PTA</option>
                 <option value="jv">JV (iPhone only)</option>
+                <option value="mdm">MDM (iPhone only)</option>
+                <option value="cpid_approved">CPID Approved (Android only)</option>
               </select>
             </div>
             <div>
