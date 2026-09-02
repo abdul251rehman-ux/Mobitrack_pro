@@ -103,7 +103,7 @@ export interface Sale {
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
-export type ExpenseCategory =
+export type BuiltInExpenseCategory =
   | "Rent"
   | "Electricity"
   | "Internet & Phone"
@@ -114,7 +114,10 @@ export type ExpenseCategory =
   | "Transport"
   | "Equipment & Furniture"
   | "Shop License & Taxes"
-  | "Miscellaneous"
+  | "Other"
+
+/** A built-in category, or any free-text name the user has quick-added. */
+export type ExpenseCategory = BuiltInExpenseCategory | (string & {})
 
 export type ExpenseType = "one-time" | "daily" | "monthly" | "yearly"
 

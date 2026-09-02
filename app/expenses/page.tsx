@@ -1,4 +1,4 @@
-﻿﻿"use client"
+﻿"use client"
 
 import { PermissionGate } from "@/components/shared/permission-gate"
 import { useState, useMemo, useRef, useEffect } from "react"
@@ -14,7 +14,7 @@ import { toast } from "sonner"
 
 import { getExpenses, createExpense, updateExpense, deleteExpense } from "@/lib/api/expenses"
 import { getFinanceAccounts } from "@/lib/api/finance"
-import { Expense, ExpenseCategory, ExpenseType, ExpensePayment } from "@/data/types"
+import { Expense, ExpenseCategory, BuiltInExpenseCategory, ExpenseType, ExpensePayment } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
 import { useLanguage } from "@/context/language-context"
@@ -36,14 +36,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 
-// â"€â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Constants ─────────────────────────────────────────────────────────────────
 
 const _now = new Date()
 const TODAY = todayPKT()
 const THIS_MONTH = TODAY.substring(0, 7)
 const THIS_YEAR = TODAY.substring(0, 4)
 
-const CATEGORIES: ExpenseCategory[] = [
+const CATEGORIES: BuiltInExpenseCategory[] = [
   "Rent",
   "Electricity",
   "Internet & Phone",
@@ -54,10 +54,10 @@ const CATEGORIES: ExpenseCategory[] = [
   "Transport",
   "Equipment & Furniture",
   "Shop License & Taxes",
-  "Miscellaneous",
+  "Other",
 ]
 
-const CATEGORY_META: Record<ExpenseCategory, { color: string; bg: string; border: string; dot: string }> = {
+const CATEGORY_META: Record<BuiltInExpenseCategory, { color: string; bg: string; border: string; dot: string }> = {
   "Rent":                   { color: "text-purple-700",  bg: "bg-purple-50",  border: "border-purple-200",  dot: "bg-purple-500"  },
   "Electricity":            { color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",   dot: "bg-amber-500"   },
   "Internet & Phone":       { color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    dot: "bg-blue-500"    },
@@ -68,7 +68,12 @@ const CATEGORY_META: Record<ExpenseCategory, { color: string; bg: string; border
   "Transport":              { color: "text-cyan-700",    bg: "bg-cyan-50",    border: "border-cyan-200",    dot: "bg-cyan-500"    },
   "Equipment & Furniture":  { color: "text-indigo-700",  bg: "bg-indigo-50",  border: "border-indigo-200",  dot: "bg-indigo-500"  },
   "Shop License & Taxes":   { color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    dot: "bg-rose-500"    },
-  "Miscellaneous":          { color: "text-slate-600",   bg: "bg-slate-100",  border: "border-slate-200",   dot: "bg-slate-400"   },
+  "Other":                  { color: "text-slate-600",   bg: "bg-slate-100",  border: "border-slate-200",   dot: "bg-slate-400"   },
+}
+
+/** Category badge/dot styling for a category, falling back to the "Other" look for custom names. */
+function categoryMeta(cat: ExpenseCategory) {
+  return CATEGORY_META[cat as BuiltInExpenseCategory] ?? CATEGORY_META["Other"]
 }
 
 const TYPE_META: Record<ExpenseType, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
@@ -88,7 +93,7 @@ const PAYMENT_META: Record<ExpensePayment, { icon: React.ReactNode; color: strin
 
 const PAYMENT_OPTIONS: ExpensePayment[] = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card"]
 
-// â"€â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 type TabType = "all" | "daily" | "monthly" | "yearly" | "one-time" | "recurring"
 
@@ -113,14 +118,34 @@ const defaultForm: ExpenseForm = {
   isRecurring: false, recurringDay: "1", recurringMonth: "1", notes: "",
 }
 
-// â"€â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Helpers ─────────────────────────────────────────────────────────────────────
 
 function makeId() { return `exp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
 
-// â"€â"€â"€ Category Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+const CUSTOM_CATEGORIES_KEY = "expense-custom-categories"
+
+function loadCustomCategories(): string[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_CATEGORIES_KEY)
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveCustomCategories(cats: string[]) {
+  try {
+    window.localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(cats))
+  } catch {
+    // ignore - custom categories just won't persist
+  }
+}
+
+// ─── Category Badge ─────────────────────────────────────────────────────────────
 
 function CategoryBadge({ cat }: { cat: ExpenseCategory }) {
-  const m = CATEGORY_META[cat]
+  const m = categoryMeta(cat)
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border", m.color, m.bg, m.border)}>
       <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", m.dot)} />
@@ -129,7 +154,7 @@ function CategoryBadge({ cat }: { cat: ExpenseCategory }) {
   )
 }
 
-// â"€â"€â"€ Type Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Type Badge ─────────────────────────────────────────────────────────────────
 
 function TypeBadge({ type }: { type: ExpenseType }) {
   const m = TYPE_META[type]
@@ -140,7 +165,7 @@ function TypeBadge({ type }: { type: ExpenseType }) {
   )
 }
 
-// â"€â"€â"€ Status Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Status Badge ─────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: "Paid" | "Pending" }) {
   return status === "Paid"
@@ -148,9 +173,9 @@ function StatusBadge({ status }: { status: "Paid" | "Pending" }) {
     : <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><Clock className="h-3 w-3" /> Pending</span>
 }
 
-// â"€â"€â"€ Add/Edit Drawer â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Add/Edit Drawer ─────────────────────────────────────────────────────────────
 
-function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defaultAccountId }: {
+function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defaultAccountId, customCategories, onAddCategory }: {
   open: boolean
   onClose: () => void
   editing: Expense | null
@@ -158,9 +183,13 @@ function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defau
   saving: boolean
   accounts: FinanceAccount[]
   defaultAccountId: string
+  customCategories: string[]
+  onAddCategory: (name: string) => void
 }) {
   const [form, setForm] = useState<ExpenseForm>(defaultForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showNewCategory, setShowNewCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState("")
 
   useEffect(() => {
     if (editing) {
@@ -189,6 +218,9 @@ function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defau
     if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n })
   }
 
+  const selectedAccount = accounts.find(a => a.id === form.accountId)
+  const insufficientBalance = !!selectedAccount && parseFloat(form.amount || "0") > selectedAccount.currentBalance
+
   function validate() {
     const errs: Record<string, string> = {}
     if (!form.title.trim()) errs.title = "Title is required"
@@ -203,6 +235,15 @@ function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defau
     const errs = validate()
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     onSave(form)
+  }
+
+  function handleAddCategory() {
+    const name = newCategoryName.trim()
+    if (!name) return
+    onAddCategory(name)
+    up("category", name as ExpenseCategory)
+    setNewCategoryName("")
+    setShowNewCategory(false)
   }
 
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
@@ -262,23 +303,74 @@ function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defau
               {/* Category */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-600">Category <span className="text-rose-500">*</span></Label>
-                <Select value={form.category} onValueChange={val => up("category", val as ExpenseCategory)}>
-                  <SelectTrigger className={cn("h-9 text-sm", errors.category && "border-rose-400")}>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map(c => (
-                      <SelectItem key={c} value={c}>
-                        <span className="flex items-center gap-2">
-                          <span className={cn("w-2 h-2 rounded-full", CATEGORY_META[c].dot)} />
-                          {c}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select value={form.category} onValueChange={val => up("category", val as ExpenseCategory)}>
+                    <SelectTrigger className={cn("h-9 text-sm flex-1", errors.category && "border-rose-400")}>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map(c => (
+                        <SelectItem key={c} value={c}>
+                          <span className="flex items-center gap-2">
+                            <span className={cn("w-2 h-2 rounded-full", CATEGORY_META[c].dot)} />
+                            {c}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {customCategories.length > 0 && (
+                        <>
+                          <Separator className="my-1" />
+                          {customCategories.map(c => (
+                            <SelectItem key={c} value={c}>
+                              <span className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                {c}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewCategory(true); setNewCategoryName("") }}
+                    className="shrink-0 h-9 w-9 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-colors"
+                    title="Add new category"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
                 {errors.category && <p className="text-xs text-rose-500">{errors.category}</p>}
               </div>
+
+              {/* Quick Add Category Modal */}
+              <Dialog open={showNewCategory} onOpenChange={setShowNewCategory}>
+                <DialogContent className="max-w-xs">
+                  <DialogHeader>
+                    <DialogTitle className="text-sm font-bold">Add New Category</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-1 py-1">
+                    <Label className="text-xs">Category Name <span className="text-rose-500">*</span></Label>
+                    <Input
+                      placeholder="e.g. Delivery, Software, Donations"
+                      value={newCategoryName}
+                      onChange={e => setNewCategoryName(e.target.value)}
+                      className="h-8 text-xs"
+                      autoFocus
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddCategory() } }}
+                    />
+                  </div>
+                  <DialogFooter className="flex-row justify-end gap-2 space-x-0">
+                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowNewCategory(false)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="h-8 text-xs" disabled={!newCategoryName.trim()} onClick={handleAddCategory}>
+                      Add Category
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               <div className="grid grid-cols-2 gap-3">
                 {/* Amount */}
@@ -445,6 +537,13 @@ function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defau
                     <Clock className="h-4 w-4" /> Pending
                   </button>
                 </div>
+                {form.status === "Paid" && selectedAccount && (
+                  <div className={cn("flex items-center justify-between px-3 py-1.5 rounded-lg text-[11px] font-semibold",
+                    insufficientBalance ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-500")}>
+                    <span>Available in {selectedAccount.name}</span>
+                    <span>Rs {selectedAccount.currentBalance.toLocaleString()}{insufficientBalance ? " — insufficient" : ""}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -477,7 +576,7 @@ function ExpenseDrawer({ open, onClose, editing, onSave, saving, accounts, defau
   )
 }
 
-// â"€â"€â"€ Delete Confirm Dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Delete Confirm Dialog ─────────────────────────────────────────────────────────
 
 function DeleteDialog({ open, expense, onConfirm, onCancel }: {
   open: boolean; expense: Expense | null; onConfirm: () => void; onCancel: () => void
@@ -503,7 +602,7 @@ function DeleteDialog({ open, expense, onConfirm, onCancel }: {
   )
 }
 
-// â"€â"€â"€ Main Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 
 function ExpensesPageInner() {
   const { language } = useLanguage()
@@ -526,6 +625,7 @@ function ExpensesPageInner() {
   const [editing, setEditing] = useState<Expense | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null)
   const [savingExpense, setSavingExpense] = useState(false)
+  const [customCategories, setCustomCategories] = useState<string[]>([])
 
   useEffect(() => {
     async function fetchData() {
@@ -543,9 +643,19 @@ function ExpensesPageInner() {
       }
     }
     fetchData()
+    setCustomCategories(loadCustomCategories())
   }, [])
 
-  // â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  function handleAddCategory(name: string) {
+    setCustomCategories(prev => {
+      if (prev.includes(name) || (CATEGORIES as string[]).includes(name)) return prev
+      const next = [...prev, name]
+      saveCustomCategories(next)
+      return next
+    })
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────────
 
   const stats = useMemo(() => {
     const todayList  = list.filter(e => e.date === TODAY)
@@ -561,7 +671,7 @@ function ExpensesPageInner() {
     }
   }, [list])
 
-  // â"€â"€ Category breakdown (this month) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  // ── Category breakdown (this month) ─────────────────────────────────────────
 
   const categoryBreakdown = useMemo(() => {
     const monthList = list.filter(e => e.date.startsWith(THIS_MONTH) && e.status === "Paid")
@@ -573,7 +683,7 @@ function ExpensesPageInner() {
       .sort((a, b) => b.amount - a.amount)
   }, [list])
 
-  // â"€â"€ Filtered + sorted list â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  // ── Filtered + sorted list ─────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
     let result = list.filter(e => {
@@ -602,7 +712,7 @@ function ExpensesPageInner() {
     return result
   }, [list, tab, search, catFilter, statusFilter, payFilter, dateFrom, dateTo, sortField, sortDir])
 
-  // â"€â"€ Handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
   function handleOpenAdd() { setEditing(null); setDrawerOpen(true) }
   function handleOpenEdit(e: Expense) { setEditing(e); setDrawerOpen(true) }
@@ -635,7 +745,7 @@ function ExpensesPageInner() {
         const created = await createExpense(expenseData as Omit<Expense, 'id'>)
         setList(prev => [created, ...prev])
 
-        // â"€â"€ Finance: debit from selected account when Paid â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // ── Finance: debit from selected account when Paid ─────────────────────
         if (form.status === "Paid" && form.accountId) {
           const tenantId = await getTenantId()
           await supabase.from("finance_transactions").insert({
@@ -709,7 +819,7 @@ function ExpensesPageInner() {
   return (
     <div className="space-y-4">
 
-        {/* â"€â"€ Page Header â"€â"€ */}
+        {/* ── Page Header ── */}
         <PageHeader
           title="Expenses"
           description={language === "ur" ? "دکان کے تمام اخراجات کا حساب رکھیں — روزانہ، مہینہ اور سال" : "Track and manage all shop expenses - daily, monthly & yearly"}
@@ -723,7 +833,7 @@ function ExpensesPageInner() {
           }
         />
 
-        {/* â"€â"€ Stats Row â"€â"€ */}
+        {/* ── Stats Row ── */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
           <StatCard
             title="Today's Expenses" value={formatCurrency(stats.today.amount)}
@@ -747,10 +857,10 @@ function ExpensesPageInner() {
           />
         </div>
 
-        {/* â"€â"€ Two-column layout: Table (left) + Breakdown (right) â"€â"€ */}
+        {/* ── Two-column layout: Table (left) + Breakdown (right) ── */}
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-4 items-start">
 
-          {/* â"€â"€ Left: Table area â"€â"€ */}
+          {/* ── Left: Table area ── */}
           <div className="space-y-3">
 
             {/* Tabs - wraps into rows on narrow screens instead of scrolling off-screen */}
@@ -804,6 +914,7 @@ function ExpensesPageInner() {
                       <SelectContent>
                         <SelectItem value="all">All Categories</SelectItem>
                         {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        {customCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -944,7 +1055,7 @@ function ExpensesPageInner() {
             </Card>
           </div>
 
-          {/* â"€â"€ Right: Category Breakdown â"€â"€ */}
+          {/* ── Right: Category Breakdown ── */}
           <div className="space-y-3">
             {/* Monthly breakdown */}
             <Card className="border-slate-200 shadow-sm">
@@ -963,7 +1074,7 @@ function ExpensesPageInner() {
                 ) : (
                   <>
                     {categoryBreakdown.map(({ cat, amount, pct }) => {
-                      const m = CATEGORY_META[cat]
+                      const m = categoryMeta(cat)
                       return (
                         <div key={cat} className="space-y-1.5">
                           <div className="flex items-center justify-between">
@@ -1075,7 +1186,7 @@ function ExpensesPageInner() {
         </div>
 
       {/* Drawer + Delete dialog */}
-      <ExpenseDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editing} onSave={handleSave} saving={savingExpense} accounts={financeAccounts} defaultAccountId={defaultAccountId} />
+      <ExpenseDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} editing={editing} onSave={handleSave} saving={savingExpense} accounts={financeAccounts} defaultAccountId={defaultAccountId} customCategories={customCategories} onAddCategory={handleAddCategory} />
       <DeleteDialog open={!!deleteTarget} expense={deleteTarget} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   )
@@ -1089,4 +1200,3 @@ export default function ExpensesPage() {
     </PermissionGate>
   )
 }
-

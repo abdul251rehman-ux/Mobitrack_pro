@@ -79,6 +79,16 @@ function uid() {
   return `ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+function ptaLabel(s: string) {
+  if (s === "approved") return "PTA Approved"
+  if (s === "non_pta") return "Non-PTA"
+  if (s === "jv") return "JV"
+  if (s === "mdm") return "MDM"
+  if (s === "cpid_approved") return "CPID Approved"
+  if (s === "pending") return "PTA Pending"
+  return "PTA Blocked"
+}
+
 function AccountIcon({ type }: { type: string }) {
   if (type === "bank") return <Landmark className="w-4 h-4" />
   if (type === "wallet") return <Wallet className="w-4 h-4" />
@@ -445,7 +455,7 @@ export default function NewSalePage() {
             type: "Mobile" as const,
             price: r.selling_price ?? 0, costPrice: r.purchase_price ?? 0, stock: 1,
             imei: r.imei_number ?? "", color: r.color ?? "", storage: r.storage_capacity ?? "",
-            category: r.category ?? (r.pta_status === "approved" ? "PTA Approved" : r.pta_status === "jv" ? "JV" : "Non-PTA"),
+            category: r.category ?? (r.pta_status ? ptaLabel(r.pta_status) : "Non-PTA"),
             batteryHealth: r.battery_health ?? null,
           })))
       }
@@ -527,7 +537,7 @@ export default function NewSalePage() {
     if (typeFilter === "All" || typeFilter === "Mobile") imeiResults.forEach(r => r.category && cats.add(r.category))
     if (typeFilter === "All" || typeFilter === "Accessory") accessories.forEach(a => a.category && cats.add(a.category))
     if (typeFilter === "All" || typeFilter === "UsedPhone") usedPhones.filter(u => u.status === "in_stock").forEach(u => {
-      if (u.pta_status) cats.add(u.pta_status === "approved" ? "PTA Approved" : u.pta_status === "pending" ? "PTA Pending" : "PTA Blocked")
+      if (u.pta_status) cats.add(ptaLabel(u.pta_status))
     })
     return [...cats].sort()
   }, [typeFilter, imeiResults, accessories, usedPhones])
@@ -562,7 +572,6 @@ export default function NewSalePage() {
       .filter(a => a.stock > 0 && matchesPrice(a.sellingPrice) && (!categoryFilter || a.category === categoryFilter)
         && (!q || `${a.name} ${a.brand} ${a.category} ${a.sku} ${(a.compatibleModels || []).join(" ")} ${a.description || ""}`.toLowerCase().includes(q)))
       .map(a => ({ id: a.id, productId: a.id, name: `${a.name} - ${a.brand}`, type: "Accessory" as const, price: a.sellingPrice, costPrice: a.purchasePrice, stock: a.stock, category: a.category })) : []
-    const ptaLabel = (s: string) => s === "approved" ? "PTA Approved" : s === "pending" ? "PTA Pending" : "PTA Blocked"
     const uResults: ProductResult[] = (typeFilter === "All" || typeFilter === "UsedPhone") ? usedPhones
       .filter(u => u.status === "in_stock" && matchesPrice(u.selling_price) && (!categoryFilter || ptaLabel(u.pta_status) === categoryFilter)
         && (!storageFilter || (u.storage || "").toLowerCase() === storageFilter.toLowerCase())

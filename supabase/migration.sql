@@ -397,12 +397,7 @@ CREATE TABLE expenses (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id       UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   title           TEXT        NOT NULL,
-  category        TEXT        CHECK (category IN (
-                    'Rent','Electricity','Internet & Phone','Staff Salaries',
-                    'Marketing & Advertising','Packaging & Supplies','Repair & Maintenance',
-                    'Transport','Equipment & Furniture','Shop License & Taxes','Miscellaneous',
-                    'Utilities','Salaries','Marketing','Maintenance',
-                    'Transportation','Office Supplies','Insurance','Taxes','Other')),
+  category        TEXT,       -- free text: built-in categories or a user-defined custom one
   amount          NUMERIC     NOT NULL,
   date            DATE        DEFAULT CURRENT_DATE,
   type            TEXT        CHECK (type IN ('one-time','daily','monthly','yearly')),

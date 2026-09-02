@@ -13,8 +13,10 @@ const CATEGORIES = [
   { name: "PTA Approved", type: "iPhone",  description: "Officially PTA approved iPhones" },
   { name: "Non-PTA",      type: "iPhone",  description: "Non-PTA / imported iPhones" },
   { name: "JV",           type: "iPhone",  description: "Joint Venture iPhones" },
+  { name: "MDM",          type: "iPhone",  description: "MDM (Mobile Device Management) locked iPhones" },
   { name: "PTA Approved", type: "Android", description: "Officially PTA approved Android phones" },
   { name: "Non-PTA",      type: "Android", description: "Non-PTA / imported Android phones" },
+  { name: "CPID Approved",type: "Android", description: "CPID approved Android phones" },
 ]
 
 type FilterType = "All" | "iPhone" | "Android"
@@ -200,8 +202,8 @@ function CategoriesPageInner() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
           { title: "Total Categories",   value: stats.total,      sub: `${stats.totalUnits} total units`,  Icon: Layers,     bg: "bg-indigo-500"  },
-          { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA - Non-PTA - JV",               Icon: Smartphone, bg: "bg-cyan-500"    },
-          { title: "Android Categories", value: stats.android,    sub: "PTA - Non-PTA",                    Icon: Smartphone, bg: "bg-emerald-500" },
+          { title: "iPhone Categories",  value: stats.iphone,     sub: "PTA - Non-PTA - JV - MDM",         Icon: Smartphone, bg: "bg-cyan-500"    },
+          { title: "Android Categories", value: stats.android,    sub: "PTA - Non-PTA - CPID",             Icon: Smartphone, bg: "bg-emerald-500" },
           { title: "Total Units",        value: stats.totalUnits, sub: "Across all categories",             Icon: Package,    bg: "bg-slate-500"   },
         ].map(card => (
           <div key={card.title} className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
