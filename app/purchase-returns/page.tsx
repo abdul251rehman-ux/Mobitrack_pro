@@ -12,6 +12,8 @@ import { useSearchParams } from "next/navigation"
 import { getPurchases } from "@/lib/api/purchases"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getFinanceAccounts } from "@/lib/api/finance"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import type { Purchase, Supplier } from "@/data/types"
@@ -166,6 +168,7 @@ function refundMethodFromType(type: string): string {
 
 function PurchaseReturnsPageInner() {
   const searchParams = useSearchParams()
+  const { user } = useAuth()
 
   const [returnsList,     setReturnsList]     = useState<PurchaseReturn[]>([])
   const [purchases,       setPurchases]       = useState<Purchase[]>([])
@@ -697,11 +700,27 @@ function PurchaseReturnsPageInner() {
 
   async function handleUpdateStatus(id: string, status: PRStatus) {
     try {
+      const ret = returnsList.find(r => r.id === id)
       const { error } = await supabase.from("purchase_returns").update({ status }).eq("id", id)
       if (error) throw new Error(error.message)
       setReturnsList(prev => prev.map(r => r.id === id ? { ...r, status } : r))
       if (viewReturn?.id === id) setViewReturn(prev => prev ? { ...prev, status } : prev)
       toast.success(`Status updated to ${status}`)
+      if (ret) {
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: status === "Rejected" ? "REJECT" : status === "Completed" ? "APPROVE" : "UPDATE",
+          module: "Purchases",
+          entityId: ret.id,
+          entityName: ret.returnNumber,
+          description: `Purchase return ${ret.returnNumber} (PO ${ret.poNumber}) - ${ret.status} → ${status}`,
+          oldValue: JSON.stringify({ status: ret.status }),
+          newValue: JSON.stringify({ status }),
+        }).catch(() => {})
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update status")
     }
@@ -734,9 +753,9 @@ function PurchaseReturnsPageInner() {
         title="Purchase Returns"
         description="Return items to suppliers - refunds, replacements, credit notes & ledger credits"
         icon={<RotateCcw />}
-        iconBg="bg-rose-600"
+        iconBg="bg-indigo-600"
         action={
-          <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2 shadow-sm h-9"
+          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm h-9"
             onClick={() => { resetForm(); setShowCreate(true) }}>
             <Plus className="w-4 h-4" /> New Return
           </Button>
@@ -745,10 +764,10 @@ function PurchaseReturnsPageInner() {
 
       {/* â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-4">
-        <StatCard title="Total Returns"  value={String(stats.total)}              subtext="All time"        icon={RotateCcw}    iconBg="bg-rose-100"    />
+        <StatCard title="Total Returns"  value={String(stats.total)}              subtext="All time"        icon={RotateCcw}    iconBg="bg-indigo-100"  />
         <StatCard title="Pending"        value={String(stats.pending)}            subtext="Awaiting action" icon={Clock}        iconBg="bg-amber-100"   />
         <StatCard title="Completed"      value={String(stats.completed)}          subtext="Resolved"        icon={CheckCircle2} iconBg="bg-emerald-100" />
-        <StatCard title="Cash Recovered" value={formatCurrency(stats.totalValue)} subtext="Via refunds"     icon={Package}      iconBg="bg-indigo-100"    />
+        <StatCard title="Cash Recovered" value={formatCurrency(stats.totalValue)} subtext="Via refunds"     icon={Package}      iconBg="bg-emerald-100" />
       </div>
 
       {/* â"€â"€ Filters â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
@@ -820,7 +839,7 @@ function PurchaseReturnsPageInner() {
               )} />
               <div className="flex-1 p-3 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <span className="font-mono text-rose-600 text-sm font-bold">{ret.returnNumber}</span>
+                  <span className="font-mono text-indigo-600 text-sm font-bold">{ret.returnNumber}</span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", RESOLUTION_COLORS[ret.resolution])}>{ret.resolution}</span>
                     <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", STATUS_COLORS[ret.status])}>{ret.status}</span>
@@ -942,12 +961,12 @@ function PurchaseReturnsPageInner() {
                   {lineItems.map((line, idx) => (
                     <div key={idx} className={cn(
                       "rounded-xl border p-3 transition-colors",
-                      line.selected ? "border-rose-300 bg-rose-50/40" : "border-slate-200 bg-slate-50/40"
+                      line.selected ? "border-indigo-300 bg-indigo-50/40" : "border-slate-200 bg-slate-50/40"
                     )}>
                       <div className="flex items-start gap-3">
                         <button
                           className={cn("mt-0.5 w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors",
-                            line.selected ? "border-rose-500 bg-rose-500" : "border-slate-300 bg-white"
+                            line.selected ? "border-indigo-500 bg-indigo-500" : "border-slate-300 bg-white"
                           )}
                           onClick={() => updateLine(idx, "selected", !line.selected)}>
                           {line.selected && <span className="text-white text-[10px] font-bold">âœ"</span>}
@@ -1155,7 +1174,7 @@ function PurchaseReturnsPageInner() {
 
           <DialogFooter className="gap-2 pt-2">
             <Button variant="outline" onClick={() => { setShowCreate(false); resetForm() }}>Cancel</Button>
-            <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleSave}
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSave}
               disabled={saving || selectedLines.length === 0}>
               {saving ? "Saving..." : `Confirm Return${newTotal > 0 ? ` - ${formatCurrency(newTotal)}` : ""}`}
             </Button>
@@ -1173,7 +1192,7 @@ function PurchaseReturnsPageInner() {
               <DialogHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <DialogTitle className="text-base font-bold font-mono text-rose-600">{viewReturn.returnNumber}</DialogTitle>
+                    <DialogTitle className="text-base font-bold font-mono text-indigo-600">{viewReturn.returnNumber}</DialogTitle>
                     <DialogDescription className="text-xs text-slate-500 mt-0.5">
                       {viewReturn.poNumber} - {viewReturn.supplierName} - {formatDatePKT(viewReturn.date)}
                     </DialogDescription>

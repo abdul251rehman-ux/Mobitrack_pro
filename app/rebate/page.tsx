@@ -680,23 +680,25 @@ function RebatePageInner() {
               </div>
 
               {/* Status + dates */}
-              <div className="rounded-xl border border-slate-100 overflow-hidden divide-y divide-slate-100">
-                <div className="flex items-center justify-between px-3 py-2.5">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Status</span>
-                  {drawerEntry.status === "posted"
-                    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700"><CheckCircle2 className="w-2.5 h-2.5" /> Posted</span>
-                    : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700"><Clock className="w-2.5 h-2.5" /> Draft</span>}
-                </div>
-                <div className="flex items-center justify-between px-3 py-2.5">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Created</span>
-                  <span className="text-xs text-slate-600">{format(new Date(drawerEntry.createdAt), "dd MMM yyyy")}</span>
-                </div>
-                {drawerEntry.postedAt && (
-                  <div className="flex items-center justify-between px-3 py-2.5">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Posted</span>
-                    <span className="text-xs text-slate-600">{format(new Date(drawerEntry.postedAt), "dd MMM yyyy")}</span>
+              <div className="rounded-xl border border-slate-100 p-3">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Status</span>
+                    {drawerEntry.status === "posted"
+                      ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 w-fit"><CheckCircle2 className="w-2.5 h-2.5" /> Posted</span>
+                      : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 w-fit"><Clock className="w-2.5 h-2.5" /> Draft</span>}
                   </div>
-                )}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Created</span>
+                    <span className="text-xs text-slate-600">{format(new Date(drawerEntry.createdAt), "dd MMM yyyy")}</span>
+                  </div>
+                  {drawerEntry.postedAt && (
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Posted</span>
+                      <span className="text-xs text-slate-600">{format(new Date(drawerEntry.postedAt), "dd MMM yyyy")}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Actions */}

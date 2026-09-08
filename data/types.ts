@@ -394,6 +394,8 @@ export type AuditAction =
   | "PRICE_CHANGE"
   | "EXPORT"
   | "SETTINGS_CHANGE"
+  | "APPROVE"
+  | "REJECT"
 
 export type AuditModule =
   | "Sales"

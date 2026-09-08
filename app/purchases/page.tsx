@@ -325,7 +325,7 @@ function PurchaseViewDialog({
             )}
             {purchase.tax > 0 && (
               <div className="flex justify-between text-sm text-slate-600">
-                <span>Tax</span>
+                <span>Tax / Other</span>
                 <span>{formatCurrency(purchase.tax)}</span>
               </div>
             )}

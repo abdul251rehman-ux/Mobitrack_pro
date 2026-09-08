@@ -542,9 +542,9 @@ function CustomerLedgerPageInner() {
     })
   }, [allEntries, dateFrom, dateTo])
 
-  const txEntries      = filtered.filter(e => e.type !== "opening")
-  const totalDebit     = txEntries.reduce((s, e) => s + e.debit,  0)
-  const totalCredit    = txEntries.reduce((s, e) => s + e.credit, 0)
+  // Includes the Opening Balance row so Total Debit/Credit match what the rows visibly sum to.
+  const totalDebit     = filtered.reduce((s, e) => s + e.debit,  0)
+  const totalCredit    = filtered.reduce((s, e) => s + e.credit, 0)
   const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
 
   // Display newest first (balance already computed oldest→newest above)

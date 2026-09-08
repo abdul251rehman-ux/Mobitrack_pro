@@ -15,9 +15,9 @@ export interface UsedPhone {
   color: string
   storage: string
   ram: string
-  condition_grade: ConditionGrade
-  screen_condition: ScreenCondition
-  body_condition: BodyCondition
+  condition_grade?: ConditionGrade
+  screen_condition?: ScreenCondition
+  body_condition?: BodyCondition
   battery_health?: number
   functional_issues: string[]
   accessories_included: string[]

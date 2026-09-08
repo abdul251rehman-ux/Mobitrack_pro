@@ -286,12 +286,16 @@ function SupplierLedgerPageInner() {
     let balance = openingBalance
 
     if (openingBalance !== 0) {
+      const openingDebit  = openingBalance < 0 ? Math.abs(openingBalance) : 0
+      const openingCredit = openingBalance > 0 ? openingBalance : 0
       result.push({
         id: "opening", date: raw[0]?.date ?? "", reference: "-",
         description: "Opening Balance",
-        debit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
-        credit: openingBalance > 0 ? openingBalance : 0,
-        grossCredit: 0, grossDebit: 0,
+        debit: openingDebit,
+        credit: openingCredit,
+        // Mirrors debit/credit (no netting complexity like a purchase row) so it's
+        // included in the Total Debit/Credit stat cards, matching the visible rows.
+        grossCredit: openingCredit, grossDebit: openingDebit,
         balance: openingBalance, type: "opening", recency: 0,
       })
     }
@@ -319,10 +323,13 @@ function SupplierLedgerPageInner() {
   }, [allEntries, dateFrom, dateTo, search])
 
   const txEntries = filtered.filter((e) => e.type !== "opening")
+  // Includes the Opening Balance row (grossDebit/grossCredit mirror its debit/credit,
+  // set above) so Total Debit/Credit match what the rows visibly sum to.
   const totalDebit = txEntries.filter(e => e.type === "payment").reduce((s, e) => s + e.grossDebit, 0)
     + txEntries.filter(e => e.type === "purchase").reduce((s, e) => s + e.grossDebit, 0)
+    + filtered.filter(e => e.type === "opening").reduce((s, e) => s + e.grossDebit, 0)
   const totalRebateCredit = txEntries.filter(e => e.type === "rebate").reduce((s, e) => s + e.debit, 0)
-  const totalCredit = txEntries.reduce((s, e) => s + e.grossCredit, 0)
+  const totalCredit = filtered.reduce((s, e) => s + e.grossCredit, 0)
   const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
 
   const displayEntries = [...filtered].reverse()
@@ -868,30 +875,49 @@ function SupplierLedgerPageInner() {
               </div>
 
               <div className="space-y-0 rounded-xl border border-slate-100 overflow-hidden">
-                <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Date")}</p>
-                    <p className="text-xs font-medium text-slate-700 mt-0.5">{formatDate(drawerEntry.date)}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
-                  <Hash className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Reference")}</p>
-                    <p className="text-xs font-mono text-slate-500 mt-0.5">{drawerEntry.reference}</p>
-                  </div>
-                </div>
-                {drawerEntry.supplierName && (
-                  <div className="flex items-start gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
-                    <Eye className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                <div className="grid grid-cols-2 gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
+                  <div className="flex items-start gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Supplier")}</p>
-                      <p className="text-xs font-medium text-slate-700 mt-0.5">{drawerEntry.supplierName}</p>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Date")}</p>
+                      <p className="text-xs font-medium text-slate-700 mt-0.5">{formatDate(drawerEntry.date)}</p>
                     </div>
                   </div>
+                  <div className="flex items-start gap-2">
+                    <Hash className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Reference")}</p>
+                      <p className="text-xs font-mono text-slate-500 mt-0.5">{drawerEntry.reference}</p>
+                    </div>
+                  </div>
+                </div>
+                {(drawerEntry.supplierName || drawerEntry.payStatus) && (
+                  <div className="grid grid-cols-2 gap-3 px-3 py-2.5 bg-white border-b border-slate-100">
+                    {drawerEntry.supplierName && (
+                      <div className="flex items-start gap-2">
+                        <Eye className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Supplier")}</p>
+                          <p className="text-xs font-medium text-slate-700 mt-0.5">{drawerEntry.supplierName}</p>
+                        </div>
+                      </div>
+                    )}
+                    {drawerEntry.payStatus && (
+                      <div className="flex items-start gap-2">
+                        <Wallet className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Payment Status")}</p>
+                          <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            drawerEntry.payStatus === "Fully Paid" ? "bg-emerald-100 text-emerald-700"
+                            : drawerEntry.payStatus === "Partial" ? "bg-amber-100 text-amber-700"
+                            : "bg-rose-100 text-rose-700"
+                          }`}>{drawerEntry.payStatus === "Fully Paid" ? t("ledger.supplier.Fully Paid") : drawerEntry.payStatus === "Partial" ? t("ledger.supplier.Partial") : t("status.Unpaid")}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
-                <div className={`flex items-start gap-3 px-3 py-2.5 bg-white ${drawerEntry.payStatus ? "border-b border-slate-100" : ""}`}>
+                <div className="flex items-start gap-3 px-3 py-2.5 bg-white">
                   <AlignLeft className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Description col")}</p>
@@ -912,36 +938,25 @@ function SupplierLedgerPageInner() {
                     )}
                   </div>
                 </div>
-                {drawerEntry.payStatus && (
-                  <div className="flex items-start gap-3 px-3 py-2.5 bg-white">
-                    <Wallet className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">{t("ledger.supplier.Payment Status")}</p>
-                      <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        drawerEntry.payStatus === "Fully Paid" ? "bg-emerald-100 text-emerald-700"
-                        : drawerEntry.payStatus === "Partial" ? "bg-amber-100 text-amber-700"
-                        : "bg-rose-100 text-rose-700"
-                      }`}>{drawerEntry.payStatus === "Fully Paid" ? t("ledger.supplier.Fully Paid") : drawerEntry.payStatus === "Partial" ? t("ledger.supplier.Partial") : t("status.Unpaid")}</span>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Rebate detail breakdown */}
               {drawerEntry.type === "rebate" && drawerEntry.rebateEntry && (
-                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-1.5">
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                   <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-2">{t("ledger.supplier.Rebate Details")}</p>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">{t("ledger.supplier.Model")}</span>
-                    <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.model}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">{t("ledger.supplier.Units")}</span>
-                    <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.units}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">{t("ledger.supplier.Rate per Unit")}</span>
-                    <span className="font-semibold text-slate-700">{formatCurrency(drawerEntry.rebateEntry.ratePerUnit)}</span>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                    <div className="flex flex-col">
+                      <span className="text-slate-500">{t("ledger.supplier.Model")}</span>
+                      <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.model}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500">{t("ledger.supplier.Units")}</span>
+                      <span className="font-semibold text-slate-700">{drawerEntry.rebateEntry.units}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500">{t("ledger.supplier.Rate per Unit")}</span>
+                      <span className="font-semibold text-slate-700">{formatCurrency(drawerEntry.rebateEntry.ratePerUnit)}</span>
+                    </div>
                   </div>
                   <div className="flex justify-between text-xs border-t border-emerald-200 pt-1.5 mt-1.5">
                     <span className="font-bold text-emerald-700">{t("ledger.supplier.Total Credit")}</span>

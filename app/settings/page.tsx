@@ -11,6 +11,7 @@ import {
   Download, Shield, RotateCcw, Plus, Pencil, Power, Settings, Eye, EyeOff, Languages,
 } from "lucide-react"
 import { useLanguage, type Language } from "@/context/language-context"
+import { useAuth } from "@/context/auth-context"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { getTenant, updateTenant, getTenantSettings, updateTenantSettings, getProfiles, createProfile, updateProfileFull } from "@/lib/api/settings"
+import { changeOwnPassword } from "@/lib/api/helpers"
 
 // â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 type UserRole   = "Admin" | "Manager" | "Cashier"
@@ -60,11 +62,19 @@ const userSchema = z.object({
   password: z.string().min(6, "Min 6 chars").optional().or(z.literal("")),
   status:   z.boolean(),
 })
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password"),
+  newPassword:     z.string().min(6, "Min 6 chars"),
+  confirmPassword: z.string().min(1, "Confirm your new password"),
+}).refine(d => d.newPassword === d.confirmPassword, {
+  message: "Passwords don't match", path: ["confirmPassword"],
+})
 
 type ShopForm    = z.infer<typeof shopSchema>
 type TaxForm     = z.infer<typeof taxSchema>
 type InvoiceForm = z.infer<typeof invoiceSchema>
 type UserForm    = z.infer<typeof userSchema>
+type ChangePasswordForm = z.infer<typeof changePasswordSchema>
 
 // â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const avatarPalette = ["bg-indigo-600", "bg-indigo-500", "bg-indigo-700", "bg-slate-600", "bg-indigo-800", "bg-slate-700"]
@@ -104,6 +114,7 @@ function SettingsPageInner() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { language, setLanguage } = useLanguage()
+  const { user: currentUser } = useAuth()
 
   const shopForm = useForm<ShopForm>({
     resolver: zodResolver(shopSchema),
@@ -147,6 +158,30 @@ function SettingsPageInner() {
     resolver: zodResolver(userSchema),
     defaultValues: { name: "", email: "", role: "Cashier", password: "", status: true },
   })
+
+  // â"€â"€ Change my own password â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [showCurrentPw, setShowCurrentPw] = useState(false)
+  const [showNewPw, setShowNewPw] = useState(false)
+  const changePasswordForm = useForm<ChangePasswordForm>({
+    resolver: zodResolver(changePasswordSchema),
+    defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+  })
+
+  async function onChangePasswordSubmit(data: ChangePasswordForm) {
+    setChangingPassword(true)
+    try {
+      await changeOwnPassword(data.currentPassword, data.newPassword)
+      toast.success("Password changed successfully")
+      changePasswordForm.reset()
+      setShowCurrentPw(false)
+      setShowNewPw(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password")
+    } finally {
+      setChangingPassword(false)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -401,6 +436,63 @@ function SettingsPageInner() {
               )}
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/svg+xml" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoFile(f) }} />
+            </SectionCard>
+
+            {/* My Account - change own password */}
+            <SectionCard
+              title={<span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-indigo-600" />My Account</span>}
+              description={currentUser ? `Signed in as ${currentUser.name} (${currentUser.role})` : "Change your password"}
+            >
+              <form onSubmit={changePasswordForm.handleSubmit(onChangePasswordSubmit)} className="space-y-2.5">
+                <div className="space-y-1">
+                  <Label className="text-xs">Current Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showCurrentPw ? "text" : "password"}
+                      placeholder="Enter current password"
+                      {...changePasswordForm.register("currentPassword")}
+                      className="h-8 text-xs pr-8"
+                    />
+                    <button type="button" onClick={() => setShowCurrentPw(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {showCurrentPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  {changePasswordForm.formState.errors.currentPassword && <p className="text-[10px] text-rose-500">{changePasswordForm.formState.errors.currentPassword.message}</p>}
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showNewPw ? "text" : "password"}
+                      placeholder="Min 6 characters"
+                      {...changePasswordForm.register("newPassword")}
+                      className="h-8 text-xs pr-8"
+                    />
+                    <button type="button" onClick={() => setShowNewPw(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {showNewPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  {changePasswordForm.formState.errors.newPassword && <p className="text-[10px] text-rose-500">{changePasswordForm.formState.errors.newPassword.message}</p>}
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Confirm New Password</Label>
+                  <Input
+                    type={showNewPw ? "text" : "password"}
+                    placeholder="Re-enter new password"
+                    {...changePasswordForm.register("confirmPassword")}
+                    className="h-8 text-xs"
+                  />
+                  {changePasswordForm.formState.errors.confirmPassword && <p className="text-[10px] text-rose-500">{changePasswordForm.formState.errors.confirmPassword.message}</p>}
+                </div>
+
+                <Button type="submit" size="sm" disabled={changingPassword} className="h-8 text-xs mt-1 min-w-[130px]">
+                  {changingPassword ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />Changing...</> : "Change Password"}
+                </Button>
+              </form>
             </SectionCard>
 
             {/* Language Toggle */}

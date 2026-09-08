@@ -857,13 +857,8 @@ CREATE TABLE audit_logs (
   user_id     UUID        REFERENCES profiles(id),
   user_name   TEXT,
   user_role   TEXT,
-  action      TEXT        CHECK (action IN (
-                'Create','Update','Delete','Login','Logout',
-                'Export','Print','Void','Refund','Approve','Reject')),
-  module      TEXT        CHECK (module IN (
-                'Sales','Purchases','Inventory','Customers','Suppliers',
-                'Expenses','Returns','Repairs','Warranty','Settings',
-                'Users','Reports','IMEI','Shops','Consignments','Auth')),
+  action      TEXT,        -- free text: data/types.ts AuditAction is the source of truth
+  module      TEXT,        -- free text: data/types.ts AuditModule is the source of truth
   entity_id   TEXT,
   entity_name TEXT,
   description TEXT,

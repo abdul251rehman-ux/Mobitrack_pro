@@ -14,6 +14,8 @@ import {
 
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { Supplier, Purchase } from "@/data/types"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -42,8 +44,8 @@ const supplierSchema = z.object({
   contactPerson: z.string().min(2, "Contact person name required"),
   phone:         z.string().min(7, "Valid phone number required"),
   email:         z.string().email("Valid email").optional().or(z.literal("")),
-  address:       z.string().min(5, "Address required"),
-  city:          z.string().min(1, "City required"),
+  address:       z.string().optional().or(z.literal("")),
+  city:          z.string().optional().or(z.literal("")),
   openingBalance: z.string().optional(),
   notes:         z.string().optional(),
   status:        z.enum(["Active","Inactive"]),
@@ -281,12 +283,12 @@ function SupplierFormDialog({
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs" htmlFor="address">Address <span className="text-rose-500">*</span></Label>
+            <Label className="text-xs" htmlFor="address">Address <span className="text-slate-400">(optional)</span></Label>
             <Input id="address" placeholder="Shop 14, Hall Road Electronics Market" {...register("address")} className={`h-8 text-xs ${errors.address ? "border-rose-400" : ""}`} />
             {errors.address && <p className="text-xs text-rose-500">{errors.address.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">City <span className="text-rose-500">*</span></Label>
+            <Label className="text-xs">City <span className="text-slate-400">(optional)</span></Label>
             <Select value={cityValue} onValueChange={(v) => { setValue("city", v, { shouldValidate: true }); if (v !== "Other") setCustomCity("") }}>
               <SelectTrigger className={`h-8 text-xs ${errors.city ? "border-rose-400" : ""}`}><SelectValue placeholder="Select city" /></SelectTrigger>
               <SelectContent className="max-h-60">
@@ -341,6 +343,7 @@ function SupplierFormDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 function SuppliersPageInner() {
+  const { user } = useAuth()
   const [supplierList, setSupplierList] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -463,8 +466,8 @@ function SuppliersPageInner() {
           contactPerson:      data.contactPerson,
           phone:              data.phone,
           email:              data.email || "",
-          address:            data.address,
-          city:               data.city,
+          address:            data.address || "",
+          city:               data.city || "",
           totalPurchases:     0,
           outstandingBalance: 0,
           openingBalance,
@@ -489,6 +492,18 @@ function SuppliersPageInner() {
       await deleteSupplier(deleteTarget.id)
       setSupplierList((prev) => prev.filter((s) => s.id !== deleteTarget.id))
       toast.success(`${deleteTarget.companyName} deleted`)
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Suppliers",
+        entityId: deleteTarget.id,
+        entityName: deleteTarget.companyName,
+        description: `Deleted supplier "${deleteTarget.companyName}" (${deleteTarget.phone})`,
+        oldValue: JSON.stringify({ companyName: deleteTarget.companyName, phone: deleteTarget.phone, outstandingBalance: deleteTarget.outstandingBalance }),
+      })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete supplier")
     } finally {

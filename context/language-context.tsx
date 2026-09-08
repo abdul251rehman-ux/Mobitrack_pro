@@ -145,9 +145,12 @@ const translations = {
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   "dash.Today Sales":       { en: "Today's Sales",    ur: "آج کی فروخت" },
+  "dash.Net Profit":        { en: "Net Profit",       ur: "خالص منافع" },
+  "dash.After expenses":    { en: "After expenses",   ur: "اخراجات کے بعد" },
   "dash.Total Revenue":     { en: "Total Revenue",    ur: "کل آمدنی" },
   "dash.Inventory":         { en: "Inventory Items",  ur: "اسٹاک آئٹمز" },
   "dash.Customers":         { en: "Customers",        ur: "گاہک" },
+  "dash.Today":             { en: "Today",            ur: "آج" },
   "dash.Yesterday":         { en: "Yesterday",        ur: "کل" },
   "dash.This Week":         { en: "This Week",        ur: "اس ہفتے" },
   "dash.Last Week":         { en: "Last Week",        ur: "پچھلے ہفتے" },
@@ -155,6 +158,7 @@ const translations = {
   "dash.Last Month":        { en: "Last Month",       ur: "پچھلے مہینے" },
   "dash.This Year":         { en: "This Year",        ur: "اس سال" },
   "dash.Custom Range":      { en: "Custom Range",     ur: "اپنی تاریخ چنیں" },
+  "dash.Sales from today":  { en: "Sales from today", ur: "آج کی فروخت" },
   "dash.Sales from yesterday": { en: "Sales from yesterday", ur: "کل کی فروخت" },
   "dash.Mon to today":      { en: "Mon - today",      ur: "پیر سے آج تک" },
   "dash.Mon to Sun prev":   { en: "Mon - Sun, prev week", ur: "پیر سے اتوار، پچھلا ہفتہ" },

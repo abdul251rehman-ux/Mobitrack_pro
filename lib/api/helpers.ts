@@ -74,3 +74,33 @@ export async function getCurrentUserId(): Promise<string> {
     throw new Error("Not authenticated. Please sign in.")
   }
 }
+
+/**
+ * Self-service password change for the logged-in user. Requires the current
+ * password to verify it's really them (unlike an Admin resetting someone
+ * else's forgotten password via updateProfileFull, which has no old password
+ * to check) before overwriting the stored hash with the new one.
+ */
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const userId = await getCurrentUserId()
+  const tenantId = await getTenantId()
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("password")
+    .eq("id", userId)
+    .eq("tenant_id", tenantId)
+    .single()
+  if (error || !data) throw new Error("Could not verify your account")
+
+  const ok = await verifyPassword(currentPassword, (data as { password: string }).password)
+  if (!ok) throw new Error("Current password is incorrect")
+
+  const newHash = await hashPassword(newPassword)
+  const { error: updateErr } = await supabase
+    .from("profiles")
+    .update({ password: newHash })
+    .eq("id", userId)
+    .eq("tenant_id", tenantId)
+  if (updateErr) throw new Error(`Failed to update password: ${updateErr.message}`)
+}

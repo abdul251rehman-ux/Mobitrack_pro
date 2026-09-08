@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Search, Package, Smartphone, Building2, ShoppingCart, ShoppingBag,
   Headphones, Check, Banknote, Wallet, Landmark, CreditCard,
   AlertCircle, ChevronDown, ChevronRight, Battery, Copy, X as XIcon,
-  Image as ImageIcon, Fingerprint, Settings2, Pencil, ExternalLink,
+  Fingerprint, Settings2, Pencil, ExternalLink,
   Lock, Unlock, Palette, ScanLine,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -52,18 +52,15 @@ interface MobileRow {
   deviceType: "android" | "iphone"
   condition: string
   buyPrice: string
-  sellPrice: string
   qty: string
   units: MobileUnit[]
   expanded: boolean
-  imageFile: File | null
-  imagePreview: string | null
   rowError?: string
 }
 
 interface AccessoryItem {
   uid: string; catalogId: string; name: string; brand: string
-  category: string; sku: string; buyPrice: string; sellPrice: string; qty: string
+  category: string; sku: string; buyPrice: string; qty: string
 }
 
 interface SplitEntry { accountId: string; amount: string }
@@ -76,11 +73,10 @@ const ANDROID_CATEGORIES = ["PTA Approved", "Non-PTA", "CPID Approved"]
 
 function getCategories(
   deviceType: "android" | "iphone",
-  extraIphone: string[] = [],
-  extraAndroid: string[] = [],
+  extraCategories: string[] = [],
 ) {
-  if (deviceType === "iphone") return Array.from(new Set([...IPHONE_CATEGORIES, ...extraIphone]))
-  return Array.from(new Set([...ANDROID_CATEGORIES, ...extraAndroid]))
+  const base = deviceType === "iphone" ? IPHONE_CATEGORIES : ANDROID_CATEGORIES
+  return Array.from(new Set([...base, ...extraCategories]))
 }
 
 function resizeUnits(units: MobileUnit[], n: number): MobileUnit[] {
@@ -96,8 +92,8 @@ function makeMobileRow(): MobileRow {
   return {
     uid: mkUid(), brand: "", model: "", storage: "", ram: "",
     category: "PTA Approved", deviceType: "android", condition: "New",
-    buyPrice: "", sellPrice: "", qty: "1", units: [makeUnit()],
-    expanded: true, imageFile: null, imagePreview: null,
+    buyPrice: "", qty: "1", units: [makeUnit()],
+    expanded: true,
   }
 }
 
@@ -105,7 +101,7 @@ function makeMobileRow(): MobileRow {
 
 type PhoneLockState = {
   brand: boolean; storage: boolean; ram: boolean
-  category: boolean; condition: boolean; buyPrice: boolean; sellPrice: boolean
+  category: boolean; condition: boolean; buyPrice: boolean
 }
 
 function PurchaseLockBtn({
@@ -815,9 +811,9 @@ function ScannedUnitGroups({
 
 function PhoneCard({
   row, idx, brands, models, colors, storageOptions, ramOptions,
-  extraIphoneCategories, extraAndroidCategories,
+  mobileCategories,
   locks, onToggleLock,
-  onChange, onUnit, onRemove, onDuplicate, onSplitQty, onImageUpload,
+  onChange, onUnit, onRemove, onDuplicate, onSplitQty,
   onAddBrand, onEditBrand, onDeleteBrand,
   onAddModel, onEditModel, onDeleteModel,
   onAddColor, onEditColor, onDeleteColor,
@@ -829,7 +825,7 @@ function PhoneCard({
   brands: string[]
   models: { name: string; brandName: string; deviceType: "iphone" | "android" }[]
   colors: string[]; storageOptions: string[]; ramOptions: string[]
-  extraIphoneCategories: string[]; extraAndroidCategories: string[]
+  mobileCategories: string[]
   locks: PhoneLockState
   onToggleLock: (k: keyof PhoneLockState) => void
   onChange: (key: keyof MobileRow, val: any) => void
@@ -837,7 +833,6 @@ function PhoneCard({
   onRemove: () => void
   onDuplicate: () => void
   onSplitQty: () => void
-  onImageUpload: (file: File) => void
   onAddBrand: (v: string) => Promise<void>
   onEditBrand: (old: string, nw: string) => Promise<void>
   onDeleteBrand: (v: string) => Promise<void>
@@ -855,9 +850,8 @@ function PhoneCard({
   onDeleteRam: (v: string) => Promise<void>
   onCheckImei: (unitIdx: number, imei: string) => void
 }) {
-  const imgRef = useRef<HTMLInputElement | null>(null)
   const qty = parseInt(row.qty) || 1
-  const cats = getCategories(row.deviceType, extraIphoneCategories, extraAndroidCategories)
+  const cats = getCategories(row.deviceType, mobileCategories)
   const imeiDone = row.units.filter(u => u.imei.length === 15 && !u.imeiError && !u.imeiChecking).length
   const [editingSplit, setEditingSplit] = useState(false)
 
@@ -888,8 +882,14 @@ function PhoneCard({
     const newType = isApple ? "iphone" : "android"
     if (newType !== row.deviceType) {
       onChange("deviceType", newType)
-      if (isApple) onChange("ram", "")
-      const opts = getCategories(newType, extraIphoneCategories, extraAndroidCategories)
+      if (isApple) {
+        onChange("ram", "")
+        // New iPhones default to 100% battery - shopkeeper can still edit/backspace it.
+        if (row.condition === "New") {
+          onChange("units", row.units.map(u => u.batteryHealth ? u : { ...u, batteryHealth: "100" }))
+        }
+      }
+      const opts = getCategories(newType, mobileCategories)
       if (!opts.includes(row.category)) onChange("category", opts[0])
     }
   }
@@ -975,7 +975,7 @@ function PhoneCard({
               const dt = v as "android" | "iphone"
               onChange("deviceType", dt)
               if (dt === "iphone") onChange("ram", "")
-              const opts = getCategories(dt, extraIphoneCategories, extraAndroidCategories)
+              const opts = getCategories(dt, mobileCategories)
               if (!opts.includes(row.category)) onChange("category", opts[0])
             }} className="h-10 text-sm">
               <option value="android">Android</option>
@@ -1030,7 +1030,7 @@ function PhoneCard({
         </div>
 
         {/* Zone 3: Pricing & quantity (primary) */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <FieldHead label="Buy Rs" required locked={locks.buyPrice} onToggleLock={() => onToggleLock("buyPrice")} />
             <MoneyInput min={0} placeholder="0"
@@ -1043,39 +1043,12 @@ function PhoneCard({
             />
           </div>
           <div className="space-y-1">
-            <FieldHead label="Sell Rs" locked={locks.sellPrice} onToggleLock={() => onToggleLock("sellPrice")} />
-            <MoneyInput min={0} placeholder="0"
-              value={row.sellPrice}
-              onChange={v => onChange("sellPrice", v)}
-              className="w-full h-11 rounded-lg border border-slate-300 px-3 text-base font-semibold tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-          </div>
-          <div className="space-y-1">
             <FieldHead label="Qty" />
             <input
               type="number" onWheel={e => e.currentTarget.blur()} min={1} value={row.qty}
               onChange={e => onChange("qty", e.target.value)}
               className="w-full h-11 rounded-lg border border-slate-300 px-3 text-base font-bold tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
-          </div>
-          <div className="space-y-1">
-            <FieldHead label="Photo" />
-            <input ref={imgRef} type="file" accept="image/*" className="hidden"
-              onChange={e => { if (e.target.files?.[0]) onImageUpload(e.target.files[0]) }} />
-            {row.imagePreview ? (
-              <div className="relative w-11 h-11">
-                <img src={row.imagePreview} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200" />
-                <button onClick={() => onChange("imagePreview", null)}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 text-white rounded-full flex items-center justify-center">
-                  <XIcon className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => imgRef.current?.click()}
-                className="h-11 w-full rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-300 hover:border-indigo-400 hover:text-indigo-400 hover:bg-indigo-50/40 transition-colors">
-                <ImageIcon className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -1523,18 +1496,17 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
   const [colors, setColors] = useState<string[]>([])
   const [storageOptions, setStorageOptions] = useState<string[]>([])
   const [ramOptions, setRamOptions] = useState<string[]>([])
-  const [extraIphoneCategories, setExtraIphoneCategories] = useState<string[]>([])
-  const [extraAndroidCategories, setExtraAndroidCategories] = useState<string[]>([])
+  const [mobileCategories, setMobileCategories] = useState<string[]>([])
   const [newCategoryInput, setNewCategoryInput] = useState("")
   const [showAddCategory, setShowAddCategory] = useState(false)
-  const [addCategoryTarget, setAddCategoryTarget] = useState<"iphone" | "android">("android")
+  const [savingCategory, setSavingCategory] = useState(false)
 
   useEffect(() => {
     async function load() {
       try {
         setDataLoading(true)
         const tenantId = await getTenantId()
-        const [suppData, accessoriesRes, accsFinance, brandsRes, colorsRes, storageRes, ramRes, iphoneModelsRes, androidModelsRes] = await Promise.all([
+        const [suppData, accessoriesRes, accsFinance, brandsRes, colorsRes, storageRes, ramRes, iphoneModelsRes, androidModelsRes, mobileCategoriesRes] = await Promise.all([
           getSuppliers(),
           supabase.from("accessories").select("id, name, brand, category, sku, image_url").eq("tenant_id", tenantId).order("name"),
           getFinanceAccounts(),
@@ -1544,6 +1516,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
           supabase.from("ram_options").select("name").eq("tenant_id", tenantId).order("name"),
           supabase.from("iphone_models").select("id, name, brand_name").eq("tenant_id", tenantId).order("name"),
           supabase.from("android_models").select("id, name, brand_name").eq("tenant_id", tenantId).order("name"),
+          supabase.from("categories").select("name").eq("tenant_id", tenantId).eq("type", "Mobile").eq("status", "Active").order("name"),
         ])
         setSuppliers(suppData)
         if (accessoriesRes.data) {
@@ -1559,6 +1532,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
         const iphones = (iphoneModelsRes.data ?? []).map((m: any) => ({ name: m.name, brandName: m.brand_name || "Apple", deviceType: "iphone" as const, dbId: m.id, table: "iphone_models" as const }))
         const androids = (androidModelsRes.data ?? []).map((m: any) => ({ name: m.name, brandName: m.brand_name || "", deviceType: "android" as const, dbId: m.id, table: "android_models" as const }))
         setModels([...iphones, ...androids])
+        if (mobileCategoriesRes.data) setMobileCategories(mobileCategoriesRes.data.map((d: any) => d.name))
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to load data")
       } finally {
@@ -1567,6 +1541,24 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
     }
     load()
   }, [])
+
+  async function handleAddMobileCategory(name: string): Promise<boolean> {
+    const trimmed = name.trim()
+    if (!trimmed) return false
+    try {
+      const tenantId = await getTenantId()
+      const { error } = await supabase.from("categories").insert({
+        tenant_id: tenantId, name: trimmed, type: "Mobile", status: "Active",
+      })
+      if (error) { toast.error("Failed to add category: " + error.message); return false }
+      setMobileCategories(prev => Array.from(new Set([...prev, trimmed])).sort())
+      toast.success(`Category "${trimmed}" added!`)
+      return true
+    } catch {
+      toast.error("Failed to add category")
+      return false
+    }
+  }
 
   // â"€â"€ Edit mode: pre-fill from existing purchase â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [editMode, setEditMode] = useState(false)
@@ -1626,12 +1618,9 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
               deviceType: ((mob as any)?.device_type ?? "android") as "android" | "iphone",
               condition: (mob as any)?.condition ?? "New",
               buyPrice: String(item.unit_cost ?? ""),
-              sellPrice: String((mob as any)?.selling_price ?? ""),
               qty: String(units.length),
               units,
               expanded: true,
-              imageFile: null,
-              imagePreview: null,
             })
           } else if (item.product_type === "Accessory") {
             newAccessoryItems.push({
@@ -1642,7 +1631,6 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
               category: "",
               sku: "",
               buyPrice: String(item.unit_cost ?? ""),
-              sellPrice: "",
               qty: String(item.quantity ?? 1),
             })
           }
@@ -1824,7 +1812,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
   const [mobileRows, setMobileRows] = useState<MobileRow[]>([])
   const [phoneLocks, setPhoneLocks] = useState<PhoneLockState>({
     brand: false, storage: false, ram: false,
-    category: false, condition: false, buyPrice: false, sellPrice: false,
+    category: false, condition: false, buyPrice: false,
   })
   const togglePhoneLock = (k: keyof PhoneLockState) =>
     setPhoneLocks(prev => ({ ...prev, [k]: !prev[k] }))
@@ -1837,6 +1825,14 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
         const n = parseInt(val) || 1
         updated.units = resizeUnits(r.units, n)
         if (n > 1) updated.expanded = true
+        // New iPhones default to 100% battery on newly-added units - shopkeeper can still edit/backspace it.
+        if (updated.deviceType === "iphone" && updated.condition === "New") {
+          updated.units = updated.units.map(u => u.batteryHealth ? u : { ...u, batteryHealth: "100" })
+        }
+      }
+      // Switching Condition to "New" on an already-iPhone row fills any still-empty battery fields too.
+      if (key === "condition" && val === "New" && updated.deviceType === "iphone") {
+        updated.units = updated.units.map(u => u.batteryHealth ? u : { ...u, batteryHealth: "100" })
       }
       return updated
     }))
@@ -1899,7 +1895,6 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
       if (phoneLocks.category)  next.category = last.category
       if (phoneLocks.condition) next.condition = last.condition
       if (phoneLocks.buyPrice)  next.buyPrice = last.buyPrice
-      if (phoneLocks.sellPrice) next.sellPrice = last.sellPrice
     }
     return [...prev, next]
   })
@@ -1912,11 +1907,12 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
       const n = parseInt(src.qty) || 1
       if (n <= 1) return prev
       // Replace the single card with n cards, each qty=1, same specs but blank IMEI
+      const prefillBattery = src.deviceType === "iphone" && src.condition === "New"
       const cards: MobileRow[] = Array.from({ length: n }, () => ({
         ...src,
         uid: mkUid(),
         qty: "1",
-        units: [makeUnit()],
+        units: [prefillBattery ? { ...makeUnit(), batteryHealth: "100" } : makeUnit()],
         rowError: undefined,
         expanded: true,
       }))
@@ -1929,7 +1925,8 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
   const duplicateRow = (uid: string) => {
     const src = mobileRows.find(r => r.uid === uid)
     if (!src) return
-    const next: MobileRow = { ...src, uid: mkUid(), units: src.units.map(() => makeUnit()), rowError: undefined }
+    const prefillBattery = src.deviceType === "iphone" && src.condition === "New"
+    const next: MobileRow = { ...src, uid: mkUid(), units: src.units.map(() => prefillBattery ? { ...makeUnit(), batteryHealth: "100" } : makeUnit()), rowError: undefined }
     setMobileRows(prev => {
       const idx = prev.findIndex(r => r.uid === uid)
       const copy = [...prev]; copy.splice(idx + 1, 0, next); return copy
@@ -1944,6 +1941,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([])
   const [accessorySearch, setAccessorySearch] = useState("")
   const [showCatalog, setShowCatalog] = useState(false)
+  const [addingNewAccessory, setAddingNewAccessory] = useState(false)
 
   const filteredAccessories = useMemo(() => {
     const q = accessorySearch.toLowerCase().trim()
@@ -1953,13 +1951,43 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
     )
   }, [accessorySearch, accessoryCatalog])
 
+  // Search has no exact-name match in the catalog - offer to create it as a new accessory.
+  const canCreateAccessory = accessorySearch.trim().length > 0
+    && !accessoryCatalog.some(a => a.name.toLowerCase() === accessorySearch.trim().toLowerCase())
+
   const accessoryInCart = useMemo(() => new Set(accessoryItems.map(a => a.catalogId)), [accessoryItems])
 
   function toggleAccessory(a: CatalogAccessory) {
     if (accessoryInCart.has(a.id)) {
       setAccessoryItems(prev => prev.filter(x => x.catalogId !== a.id))
     } else {
-      setAccessoryItems(prev => [...prev, { uid: mkUid(), catalogId: a.id, name: a.name, brand: a.brand, category: a.category, sku: a.sku, buyPrice: "", sellPrice: "", qty: "1" }])
+      setAccessoryItems(prev => [...prev, { uid: mkUid(), catalogId: a.id, name: a.name, brand: a.brand, category: a.category, sku: a.sku, buyPrice: "", qty: "1" }])
+    }
+  }
+
+  async function handleAddNewAccessory(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || addingNewAccessory) return
+    setAddingNewAccessory(true)
+    try {
+      const tenantId = await getTenantId()
+      const { data, error } = await supabase.from("accessories").insert({
+        tenant_id: tenantId, name: trimmed, brand: "", category: "", sku: "",
+        purchase_price: 0, selling_price: 0, stock: 0,
+      }).select("id, name, brand, category, sku, image_url").single()
+      if (error) throw new Error(error.message)
+      const created: CatalogAccessory = {
+        id: (data as any).id, name: (data as any).name, brand: (data as any).brand ?? "",
+        category: (data as any).category ?? "", sku: (data as any).sku ?? "", imageUrl: (data as any).image_url ?? null,
+      }
+      setAccessoryCatalog(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+      toggleAccessory(created)
+      setAccessorySearch("")
+      toast.success(`Accessory "${trimmed}" added to catalog`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add accessory")
+    } finally {
+      setAddingNewAccessory(false)
     }
   }
 
@@ -2047,14 +2075,10 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
       const purchaseItems: any[] = []
 
       for (const row of mobileRows) {
-        const buy = parseFloat(row.buyPrice), sell = parseFloat(row.sellPrice) || 0
-        let imageUrl: string | null = null
-        if (row.imageFile) {
-          const ext = row.imageFile.name.split(".").pop() ?? "jpg"
-          const path = `mobiles/${tenantId}/${Date.now()}.${ext}`
-          const { error: upErr } = await supabase.storage.from("product-images").upload(path, row.imageFile, { upsert: true })
-          if (!upErr) { const { data: u } = supabase.storage.from("product-images").getPublicUrl(path); imageUrl = u.publicUrl }
-        }
+        const buy = parseFloat(row.buyPrice)
+        // Photo upload was removed from the purchase form - new/updated mobiles
+        // are created without an image_url (product pages already handle that).
+        const imageUrl: string | null = null
 
         // Group units by color - each color becomes a separate inventory record
         const colorGroups = new Map<string, MobileUnit[]>()
@@ -2073,14 +2097,14 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
           let catalogId: string
           if (existing) {
             catalogId = existing.id; origMobileStocks[catalogId] = existing.stock
-            const payload: any = { purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, stock: existing.stock + qty }
+            const payload: any = { purchase_price: buy, supplier_id: selectedSupplierId, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, stock: existing.stock + qty }
             if (imageUrl) payload.image_url = imageUrl
             if (firstImei) payload.imei = firstImei
             const { error } = await supabase.from("mobiles").update(payload).eq("id", catalogId)
             if (error) throw new Error(`Failed to update ${row.brand} ${row.model} (${color}): ${error.message}`)
             updatedMobileIds.push(catalogId)
           } else {
-            const { data: created, error } = await supabase.from("mobiles").insert({ tenant_id: tenantId, brand: row.brand, model: row.model.trim(), color, storage: row.storage, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, imei: firstImei, purchase_price: buy, selling_price: sell, stock: qty, supplier_id: selectedSupplierId, image_url: imageUrl, date_added: today }).select("id").single()
+            const { data: created, error } = await supabase.from("mobiles").insert({ tenant_id: tenantId, brand: row.brand, model: row.model.trim(), color, storage: row.storage, ram: row.ram, condition: row.condition, category: row.category, device_type: row.deviceType, imei: firstImei, purchase_price: buy, stock: qty, supplier_id: selectedSupplierId, image_url: imageUrl, date_added: today }).select("id").single()
             if (error) throw new Error(`Failed to create ${row.brand} ${row.model} (${color}): ${error.message}`)
             catalogId = (created as any).id; createdMobileIds.push(catalogId)
           }
@@ -2099,7 +2123,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
               if (existing) {
                 // Update price/supplier info on existing record instead of inserting
                 await supabase.from("imei_records").update({
-                  purchase_price: buy, selling_price: sell,
+                  purchase_price: buy,
                   supplier_id: selectedSupplierId, supplier_name: selectedSupplier?.companyName ?? "",
                   battery_health: unit.batteryHealth ? parseInt(unit.batteryHealth) : null,
                 }).eq("id", (existing as any).id)
@@ -2124,7 +2148,6 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
               pta_status: row.category === "PTA Approved" ? "approved" : "pending",
               device_status: "in_stock",
               purchase_price: buy,
-              selling_price: sell,
               supplier_id: selectedSupplierId,
               supplier_name: selectedSupplier?.companyName ?? "",
               purchase_date: today,
@@ -2140,11 +2163,11 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
       } // end row
 
       for (const item of accessoryItems) {
-        const buy = parseFloat(item.buyPrice), sell = parseFloat(item.sellPrice) || 0, qty = parseInt(item.qty) || 1
+        const buy = parseFloat(item.buyPrice), qty = parseInt(item.qty) || 1
         const { data: cur } = await supabase.from("accessories").select("stock").eq("id", item.catalogId).single()
         const curStock = cur?.stock ?? 0
         origAccessoryStocks[item.catalogId] = curStock
-        const { error } = await supabase.from("accessories").update({ purchase_price: buy, selling_price: sell, supplier_id: selectedSupplierId, stock: curStock + qty }).eq("id", item.catalogId)
+        const { error } = await supabase.from("accessories").update({ purchase_price: buy, supplier_id: selectedSupplierId, stock: curStock + qty }).eq("id", item.catalogId)
         if (error) throw new Error(`Failed to update ${item.name}: ${error.message}`)
         updatedAccessoryIds.push(item.catalogId)
         purchaseItems.push({ productId: item.catalogId, productName: item.name, productType: "Accessory", quantity: qty, returnedQty: 0, unitCost: buy, total: buy * qty, imeis: [] })
@@ -2492,7 +2515,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
                   </p>
                   {mobileRows.length > 0 && <span className="text-[10px] text-indigo-600 font-bold">{mobileRows.length}</span>}
 
-                  {/* Add custom category */}
+                  {/* Add custom category - saved to the shared Mobile category catalog */}
                   <div className="ml-auto">
                     {!showAddCategory ? (
                       <button onClick={() => setShowAddCategory(true)}
@@ -2501,62 +2524,33 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
                       </button>
                     ) : (
                       <div className="flex items-center gap-1 flex-wrap justify-end">
-                        {/* Device type selector */}
-                        <div className="flex rounded-md border border-indigo-200 overflow-hidden text-[10px] font-semibold">
-                          <button
-                            onClick={() => setAddCategoryTarget("iphone")}
-                            className={cn("px-2 py-0.5 transition-colors", addCategoryTarget === "iphone" ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-indigo-50")}>
-                            iPhone
-                          </button>
-                          <button
-                            onClick={() => setAddCategoryTarget("android")}
-                            className={cn("px-2 py-0.5 transition-colors", addCategoryTarget === "android" ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-indigo-50")}>
-                            Android
-                          </button>
-                        </div>
                         <input autoFocus value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)}
                           placeholder="e.g. CPO" maxLength={20}
-                          className="border border-indigo-300 rounded px-1.5 py-0.5 text-xs focus:outline-none w-20"
-                          onKeyDown={e => {
-                            if (e.key === "Enter" && newCategoryInput.trim()) {
-                              const v = newCategoryInput.trim()
-                              if (addCategoryTarget === "iphone") setExtraIphoneCategories(p => Array.from(new Set([...p, v])))
-                              else setExtraAndroidCategories(p => Array.from(new Set([...p, v])))
-                              setNewCategoryInput(""); setShowAddCategory(false)
+                          disabled={savingCategory}
+                          className="border border-indigo-300 rounded px-1.5 py-0.5 text-xs focus:outline-none w-20 disabled:opacity-60"
+                          onKeyDown={async e => {
+                            if (e.key === "Enter" && newCategoryInput.trim() && !savingCategory) {
+                              setSavingCategory(true)
+                              const ok = await handleAddMobileCategory(newCategoryInput)
+                              setSavingCategory(false)
+                              if (ok) { setNewCategoryInput(""); setShowAddCategory(false) }
                             }
                             if (e.key === "Escape") { setShowAddCategory(false); setNewCategoryInput("") }
                           }} />
-                        <button onClick={() => {
-                          const v = newCategoryInput.trim()
-                          if (v) {
-                            if (addCategoryTarget === "iphone") setExtraIphoneCategories(p => Array.from(new Set([...p, v])))
-                            else setExtraAndroidCategories(p => Array.from(new Set([...p, v])))
-                          }
-                          setNewCategoryInput(""); setShowAddCategory(false)
-                        }} className="px-1.5 py-0.5 bg-indigo-600 text-white text-[10px] rounded hover:bg-indigo-700">+</button>
+                        <button disabled={savingCategory} onClick={async () => {
+                          if (!newCategoryInput.trim() || savingCategory) return
+                          setSavingCategory(true)
+                          const ok = await handleAddMobileCategory(newCategoryInput)
+                          setSavingCategory(false)
+                          if (ok) { setNewCategoryInput(""); setShowAddCategory(false) }
+                        }} className="px-1.5 py-0.5 bg-indigo-600 text-white text-[10px] rounded hover:bg-indigo-700 disabled:opacity-60">
+                          {savingCategory ? "..." : "+"}
+                        </button>
                         <button onClick={() => { setShowAddCategory(false); setNewCategoryInput("") }} className="text-slate-400 text-xs">âœ•</button>
                       </div>
                     )}
                   </div>
                 </div>
-
-                {/* Extra category chips */}
-                {(extraIphoneCategories.length > 0 || extraAndroidCategories.length > 0) && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {extraIphoneCategories.map(c => (
-                      <span key={`ip-${c}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] rounded-full">
-                        iPhone: {c}
-                        <button onClick={() => setExtraIphoneCategories(p => p.filter(x => x !== c))} className="text-indigo-300 hover:text-rose-500">âœ•</button>
-                      </span>
-                    ))}
-                    {extraAndroidCategories.map(c => (
-                      <span key={`an-${c}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] rounded-full">
-                        Android: {c}
-                        <button onClick={() => setExtraAndroidCategories(p => p.filter(x => x !== c))} className="text-emerald-300 hover:text-rose-500">âœ•</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
 
                 {mobileRows.length === 0 ? (
                   <button onClick={addRow}
@@ -2578,8 +2572,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
                           colors={colors}
                           storageOptions={storageOptions}
                           ramOptions={ramOptions}
-                          extraIphoneCategories={extraIphoneCategories}
-                          extraAndroidCategories={extraAndroidCategories}
+                          mobileCategories={mobileCategories}
                           locks={phoneLocks}
                           onToggleLock={togglePhoneLock}
                           onChange={(key, val) => updateRow(row.uid, key, val)}
@@ -2587,10 +2580,6 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
                           onRemove={() => removeRow(row.uid)}
                           onDuplicate={() => duplicateRow(row.uid)}
                           onSplitQty={() => splitRow(row.uid)}
-                          onImageUpload={file => {
-                            const url = URL.createObjectURL(file)
-                            setMobileRows(prev => prev.map(r => r.uid === row.uid ? { ...r, imageFile: file, imagePreview: url } : r))
-                          }}
                           onAddBrand={handleAddBrand}
                           onEditBrand={handleEditBrand}
                           onDeleteBrand={handleDeleteBrand}
@@ -2657,8 +2646,18 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
                           </div>
                         )
                       })}
-                      {filteredAccessories.length === 0 && <div className="col-span-2 text-center py-4 text-slate-400 text-xs">No accessories found</div>}
+                      {filteredAccessories.length === 0 && !canCreateAccessory && <div className="col-span-2 text-center py-4 text-slate-400 text-xs">No accessories found</div>}
                     </div>
+                    {canCreateAccessory && (
+                      <button type="button" disabled={addingNewAccessory}
+                        onClick={() => handleAddNewAccessory(accessorySearch)}
+                        className="w-full mt-1.5 flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors disabled:opacity-60">
+                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <Plus className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        {addingNewAccessory ? "Adding..." : `Add "${accessorySearch.trim()}" as new accessory`}
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -2673,16 +2672,11 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
                             <XIcon className="w-3 h-3" />
                           </button>
                         </div>
-                        <div className="grid grid-cols-3 gap-1.5">
+                        <div className="grid grid-cols-2 gap-1.5">
                           <Field label="Buy Rs *">
                             <MoneyInput min={0} placeholder="0" value={item.buyPrice}
                               onChange={v => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, buyPrice: v } : a))}
                               className={cn("w-full h-7 rounded-md border px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400", !item.buyPrice ? "border-amber-300" : "border-slate-300")} />
-                          </Field>
-                          <Field label="Sell Rs">
-                            <MoneyInput min={0} placeholder="0" value={item.sellPrice}
-                              onChange={v => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, sellPrice: v } : a))}
-                              className="w-full h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                           </Field>
                           <Field label="Qty">
                             <input type="number" onWheel={e => e.currentTarget.blur()} min={1} value={item.qty}

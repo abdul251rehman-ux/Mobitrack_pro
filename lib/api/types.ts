@@ -1552,7 +1552,7 @@ function normalizePhoneStatus(raw: string | null | undefined): UsedPhone['status
 function normalizeGrade(raw: string | null | undefined): UsedPhone['condition_grade'] {
   const valid = ['A+', 'A', 'B+', 'B', 'C', 'D']
   if (raw && valid.includes(raw)) return raw as UsedPhone['condition_grade']
-  return 'B'
+  return undefined
 }
 
 export function toUsedPhone(db: DbUsedPhone): UsedPhone {
@@ -1565,8 +1565,8 @@ export function toUsedPhone(db: DbUsedPhone): UsedPhone {
     storage: db.storage,
     ram: db.ram,
     condition_grade: normalizeGrade(db.condition_grade ?? db.grade),
-    screen_condition: (db.screen_condition ?? 'perfect') as UsedPhone['screen_condition'],
-    body_condition: (db.body_condition ?? 'perfect') as UsedPhone['body_condition'],
+    screen_condition: (db.screen_condition || undefined) as UsedPhone['screen_condition'],
+    body_condition: (db.body_condition || undefined) as UsedPhone['body_condition'],
     battery_health: db.battery_health ?? undefined,
     functional_issues: db.functional_issues ?? [],
     accessories_included: db.accessories_included ?? [],
@@ -1583,7 +1583,7 @@ export function toUsedPhone(db: DbUsedPhone): UsedPhone {
     selling_price: db.selling_price,
     pta_status: (db.pta_status ?? 'pending') as UsedPhone['pta_status'],
     status: normalizePhoneStatus(db.status),
-    warranty_days: db.warranty_days ?? 7,
+    warranty_days: db.warranty_days ?? 0,
     condition_notes: db.condition_notes ?? db.defects ?? undefined,
     photos: db.photos ?? [],
     purchased_date: db.purchased_date ?? db.date_added,

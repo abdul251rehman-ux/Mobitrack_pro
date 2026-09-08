@@ -12,6 +12,7 @@ import { toast } from "sonner"
 
 import { getSaleById, updateSaleStatus } from "@/lib/api/sales"
 import { getTenant } from "@/lib/api/settings"
+import { createAuditLog } from "@/lib/api/audit"
 import { generateInvoicePDF } from "@/lib/pdf/invoice"
 import type { ShopInfo } from "@/lib/pdf/invoice"
 import type { Sale, SaleItem } from "@/data/types"
@@ -20,6 +21,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { formatCurrency, formatDatePKT } from "@/lib/utils"
+import { useAuth } from "@/context/auth-context"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,7 @@ export default function SaleDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = params?.id as string
+  const { user } = useAuth()
 
   const [sale, setSale] = useState<Sale | null>(null)
   const [loading, setLoading] = useState(true)
@@ -84,6 +87,19 @@ export default function SaleDetailPage() {
       await updateSaleStatus(sale.id, "Refunded")
       setSale(prev => prev ? { ...prev, status: "Refunded" } : prev)
       toast.success("Sale marked as Refunded")
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "REFUND",
+        module: "Sales",
+        entityId: sale.id,
+        entityName: sale.invoiceNumber,
+        description: `Refunded sale ${sale.invoiceNumber} (${formatCurrency(sale.total)})`,
+        oldValue: JSON.stringify({ status: sale.status }),
+        newValue: JSON.stringify({ status: "Refunded" }),
+      })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to refund")
     } finally {

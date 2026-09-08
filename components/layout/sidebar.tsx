@@ -211,6 +211,18 @@ function SidebarContent({
                 </div>
               </button>
             )}
+            {hasPermission("inventory.view") && (
+              <button
+                onClick={() => { router.push("/inventory/used-phones"); onNavClick?.() }}
+                title={navLabel("Used Phones")}
+                className="group relative w-full flex items-center justify-center py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600/60 active:scale-95 transition-all"
+              >
+                <RefreshCw className="w-4 h-4 text-slate-300" />
+                <div className="absolute left-full ml-2.5 px-2 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
+                  {navLabel("Used Phones")}
+                </div>
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -230,6 +242,15 @@ function SidebarContent({
               >
                 <ShoppingCart className="w-3.5 h-3.5 text-slate-300" />
                 <span className="text-slate-300 font-medium text-xs tracking-wide">{navLabel("New Purchase")}</span>
+              </button>
+            )}
+            {hasPermission("inventory.view") && (
+              <button
+                onClick={() => { router.push("/inventory/used-phones"); onNavClick?.() }}
+                className="w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600/60 active:scale-[0.98] transition-all group"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-300" />
+                <span className="text-slate-300 font-medium text-xs tracking-wide">{navLabel("Used Phones")}</span>
               </button>
             )}
           </>
