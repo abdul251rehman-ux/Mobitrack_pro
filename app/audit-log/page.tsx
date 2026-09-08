@@ -33,13 +33,14 @@ import { StatCard } from "@/components/shared/stat-card"
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const TODAY = "2026-03-24"
+const TODAY = todayPKT()
 const ITEMS_PER_PAGE = 20
 
 const ALL_ACTIONS: AuditAction[] = [
   "CREATE", "UPDATE", "DELETE", "LOGIN", "LOGOUT",
   "SALE", "REFUND", "PURCHASE", "PAYMENT",
   "STOCK_ADJUST", "PRICE_CHANGE", "EXPORT", "SETTINGS_CHANGE",
+  "APPROVE", "REJECT",
 ]
 
 const ALL_MODULES: AuditModule[] = [
@@ -47,7 +48,7 @@ const ALL_MODULES: AuditModule[] = [
   "Inventory", "Expenses", "Settings", "Auth", "Returns", "Warranty", "Payments",
 ]
 
-const CRITICAL_ACTIONS: AuditAction[] = ["DELETE", "REFUND", "SETTINGS_CHANGE"]
+const CRITICAL_ACTIONS: AuditAction[] = ["DELETE", "REFUND", "SETTINGS_CHANGE", "REJECT"]
 
 const ACTION_COLORS: Record<AuditAction, { text: string; bg: string; border: string }> = {
   CREATE:          { text: "text-green-700",   bg: "bg-green-50",   border: "border-green-200"   },
@@ -63,6 +64,8 @@ const ACTION_COLORS: Record<AuditAction, { text: string; bg: string; border: str
   EXPORT:          { text: "text-cyan-700",    bg: "bg-cyan-50",    border: "border-cyan-200"    },
   SETTINGS_CHANGE: { text: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200"    },
   LOGOUT:          { text: "text-gray-700",    bg: "bg-gray-50",    border: "border-gray-200"    },
+  APPROVE:         { text: "text-green-700",   bg: "bg-green-50",   border: "border-green-200"   },
+  REJECT:          { text: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200"    },
 }
 
 const MODULE_COLORS: Record<string, { text: string; bg: string; border: string }> = {

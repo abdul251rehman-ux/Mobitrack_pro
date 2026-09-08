@@ -5,7 +5,7 @@ import { useState, useMemo, useRef, useEffect } from "react"
 import Image from "next/image"
 import {
   Plus, Search, Grid3X3, List, Headphones, Pencil, Trash2,
-  TrendingUp, Package, DollarSign, AlertTriangle, X, Tag,
+  TrendingUp, Package, DollarSign, Wallet, AlertTriangle, X, Tag,
   Volume2, Zap, Shield, Smartphone, BatteryCharging, Keyboard, HardDrive, Watch,
   Upload,
 } from "lucide-react"
@@ -17,6 +17,8 @@ import { format } from "date-fns"
 import { ColumnDef } from "@tanstack/react-table"
 
 import { getAccessories, createAccessory, updateAccessory, deleteAccessory } from "@/lib/api/products"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { MASTER_BRAND_NAMES } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
 import { supabase } from "@/lib/supabase"
@@ -696,6 +698,7 @@ function AccessoryFormDialog({
 
 function AccessoriesPageInner() {
   const { language } = useLanguage()
+  const { user } = useAuth()
   const [accessoryList, setAccessoryList] = useState<Accessory[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [brands, setBrands] = useState<string[]>([])
@@ -818,11 +821,14 @@ function AccessoriesPageInner() {
     const total = accessoryList.length
     const totalStock = accessoryList.reduce((s, a) => s + a.stock, 0)
     const inventoryValue = accessoryList.reduce((s, a) => s + a.sellingPrice * a.stock, 0)
+    // What was actually spent to acquire the stock currently on hand - distinct
+    // from inventoryValue above (potential resale value at current selling prices).
+    const inventoryCost = accessoryList.reduce((s, a) => s + a.purchasePrice * a.stock, 0)
     const lowStock = accessoryList.filter(a => {
       const status = getStockStatus(a.stock)
       return status === "Low Stock" || status === "Out of Stock"
     }).length
-    return { total, totalStock, inventoryValue, lowStock }
+    return { total, totalStock, inventoryValue, inventoryCost, lowStock }
   }, [accessoryList])
 
   // ─── Filtered list ─────────────────────────────────────────────────────────
@@ -870,6 +876,18 @@ function AccessoriesPageInner() {
     try {
       await deleteAccessory(deleteTarget.id)
       toast.success(`${deleteTarget.name} deleted successfully`)
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Products",
+        entityId: deleteTarget.id,
+        entityName: deleteTarget.name,
+        description: `Deleted accessory "${deleteTarget.name}" (stock: ${deleteTarget.stock})`,
+        oldValue: JSON.stringify({ name: deleteTarget.name, stock: deleteTarget.stock, sellingPrice: deleteTarget.sellingPrice }),
+      })
       setDeleteTarget(null)
       setDeleteDialogOpen(false)
       await fetchData()
@@ -1078,7 +1096,7 @@ function AccessoriesPageInner() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
         <StatCard
           title="Total Products"
           value={String(stats.total)}
@@ -1096,6 +1114,14 @@ function AccessoriesPageInner() {
           subtext="across all products"
         />
         <StatCard
+          title="Inventory Cost"
+          value={formatCurrency(stats.inventoryCost)}
+          icon={Wallet}
+          iconBg="bg-cyan-100"
+          gradient="from-cyan-50 to-cyan-100"
+          subtext="spent to acquire stock"
+        />
+        <StatCard
           title="Inventory Value"
           value={formatCurrency(stats.inventoryValue)}
           icon={DollarSign}
@@ -1104,6 +1130,8 @@ function AccessoriesPageInner() {
           subtext="at selling price"
         />
         <StatCard
+          className="col-span-2 sm:col-span-3 lg:col-span-1"
+          centerOnMobile
           title="Low Stock Alerts"
           value={String(stats.lowStock)}
           icon={AlertTriangle}

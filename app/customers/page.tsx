@@ -15,6 +15,8 @@ import { toast } from "sonner"
 import Link from "next/link"
 
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "@/lib/api/customers"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { Customer } from "@/data/types"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
@@ -93,6 +95,7 @@ function CustomerAvatar({ name, id }: { name: string; id: string }) {
 
 // â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function CustomersPageInner() {
+  const { user } = useAuth()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -194,6 +197,18 @@ function CustomersPageInner() {
       await deleteCustomer(deleteTarget.id)
       setCustomers((prev) => prev.filter((c) => c.id !== deleteTarget.id))
       toast.success("Customer deleted", { description: `${deleteTarget.name} has been removed.` })
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Customers",
+        entityId: deleteTarget.id,
+        entityName: deleteTarget.name,
+        description: `Deleted customer "${deleteTarget.name}" (${deleteTarget.phone})`,
+        oldValue: JSON.stringify({ name: deleteTarget.name, phone: deleteTarget.phone, totalSpent: deleteTarget.totalSpent }),
+      })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete customer")
     } finally {

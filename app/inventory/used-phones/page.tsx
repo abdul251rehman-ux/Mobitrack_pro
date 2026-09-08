@@ -29,8 +29,8 @@ import { SplitPaymentPicker, splitTotal, splitInsufficientMap, type SplitEntry }
 import { MoneyInput } from "@/components/ui/money-input"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
-import { getSuppliers } from "@/lib/api/suppliers"
-import { getCustomers } from "@/lib/api/customers"
+import { getSuppliers, createSupplier } from "@/lib/api/suppliers"
+import { getCustomers, createCustomer } from "@/lib/api/customers"
 import { getFinanceAccounts } from "@/lib/api/finance"
 import type { Supplier, Customer } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
@@ -97,7 +97,8 @@ const PAGE_SIZE = 12
 
 // --Ã¢"â‚¬ Badge Components --------------------------------------------------------Ã¢"â‚¬
 
-function GradeBadge({ grade, size = "sm" }: { grade: ConditionGrade; size?: "sm" | "lg" }) {
+function GradeBadge({ grade, size = "sm" }: { grade?: ConditionGrade; size?: "sm" | "lg" }) {
+  if (!grade) return null
   const m = GRADE_META[grade]
   return (
     <span className={cn(
@@ -149,7 +150,9 @@ function PhoneCard({
   const [menuOpen, setMenuOpen] = useState(false)
   const profit = phone.selling_price - phone.purchase_price - phone.refurbishment_cost
   const margin = phone.selling_price > 0 ? ((profit / phone.selling_price) * 100).toFixed(0) : "0"
-  const m = GRADE_META[phone.condition_grade]
+  const m = phone.condition_grade
+    ? GRADE_META[phone.condition_grade]
+    : { bg: "bg-slate-100", text: "text-slate-400", border: "border-slate-200", ring: "ring-slate-300", label: "" }
 
   return (
     <div className={cn(
@@ -186,14 +189,16 @@ function PhoneCard({
         <div className="flex items-end justify-between">
           <div>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Selling</p>
-            <p className="text-[13px] font-bold text-slate-900">{formatCurrency(phone.selling_price)}</p>
+            <p className="text-[13px] font-bold text-slate-900">{phone.selling_price > 0 ? formatCurrency(phone.selling_price) : "Not priced yet"}</p>
           </div>
-          <div className={cn(
-            "text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0",
-            profit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-          )}>
-            {profit >= 0 ? "+" : ""}{margin}%
-          </div>
+          {phone.selling_price > 0 && (
+            <div className={cn(
+              "text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0",
+              profit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+            )}>
+              {profit >= 0 ? "+" : ""}{margin}%
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -256,13 +261,19 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
         {formatCurrency(phone.purchase_price + phone.refurbishment_cost)}
       </td>
       <td className="px-4 py-3">
-        <p className="text-sm font-semibold text-slate-900">{formatCurrency(phone.selling_price)}</p>
-        <p className={cn(
-          "text-xs font-medium",
-          profit >= 0 ? "text-emerald-600" : "text-rose-600"
-        )}>
-          {profit >= 0 ? "+" : ""}{formatCurrency(profit)} ({margin}%)
-        </p>
+        {phone.selling_price > 0 ? (
+          <>
+            <p className="text-sm font-semibold text-slate-900">{formatCurrency(phone.selling_price)}</p>
+            <p className={cn(
+              "text-xs font-medium",
+              profit >= 0 ? "text-emerald-600" : "text-rose-600"
+            )}>
+              {profit >= 0 ? "+" : ""}{formatCurrency(profit)} ({margin}%)
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-slate-400 italic">Not priced yet</p>
+        )}
       </td>
       <td className="px-4 py-3">
         <StatusBadge status={phone.status} />
@@ -329,7 +340,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
           )}
 
           {/* Profit Analysis */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+          <div className={cn("grid grid-cols-1 gap-2 sm:gap-3", phone.selling_price > 0 ? "sm:grid-cols-3" : "sm:grid-cols-1")}>
             <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between sm:block">
               <div>
                 <p className="text-xs text-slate-400 sm:mb-1">Total Cost</p>
@@ -340,48 +351,54 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
                 <p className="hidden sm:block text-[10px] text-slate-400">Purchase + Refurb</p>
               </div>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between sm:block">
-              <div>
-                <p className="text-xs text-slate-400 sm:mb-1">Sell Price</p>
-                <p className="text-[10px] text-slate-400 sm:hidden">Listed at</p>
-              </div>
-              <div className="text-right sm:text-left">
-                <p className="text-base sm:text-sm font-bold text-slate-900 whitespace-nowrap">{formatCurrency(phone.selling_price)}</p>
-                <p className="hidden sm:block text-[10px] text-slate-400">Listed at</p>
-              </div>
-            </div>
-            <div className={cn("rounded-xl p-3 flex items-center justify-between sm:block", profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
-              <div>
-                <p className="text-xs text-slate-400 sm:mb-1">Profit</p>
-                <p className="text-[10px] text-slate-400 sm:hidden">{margin}% margin</p>
-              </div>
-              <div className="text-right sm:text-left">
-                <p className={cn("text-base sm:text-sm font-bold whitespace-nowrap", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                  {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
-                </p>
-                <p className="hidden sm:block text-[10px] text-slate-400">{margin}% margin</p>
-              </div>
-            </div>
+            {phone.selling_price > 0 ? (
+              <>
+                <div className="bg-slate-50 rounded-xl p-3 flex items-center justify-between sm:block">
+                  <div>
+                    <p className="text-xs text-slate-400 sm:mb-1">Sell Price</p>
+                    <p className="text-[10px] text-slate-400 sm:hidden">Listed at</p>
+                  </div>
+                  <div className="text-right sm:text-left">
+                    <p className="text-base sm:text-sm font-bold text-slate-900 whitespace-nowrap">{formatCurrency(phone.selling_price)}</p>
+                    <p className="hidden sm:block text-[10px] text-slate-400">Listed at</p>
+                  </div>
+                </div>
+                <div className={cn("rounded-xl p-3 flex items-center justify-between sm:block", profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
+                  <div>
+                    <p className="text-xs text-slate-400 sm:mb-1">Profit</p>
+                    <p className="text-[10px] text-slate-400 sm:hidden">{margin}% margin</p>
+                  </div>
+                  <div className="text-right sm:text-left">
+                    <p className={cn("text-base sm:text-sm font-bold whitespace-nowrap", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
+                      {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
+                    </p>
+                    <p className="hidden sm:block text-[10px] text-slate-400">{margin}% margin</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-slate-400 italic px-1">Not priced yet — sale price is set when this phone is marked as sold.</p>
+            )}
           </div>
 
           {/* Condition */}
           <div>
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Condition Assessment</h3>
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {[
-                { label: "Screen", value: SCREEN_LABEL[phone.screen_condition] },
-                { label: "Body",   value: BODY_LABEL[phone.body_condition]     },
+                ...(phone.screen_condition ? [{ label: "Screen", value: SCREEN_LABEL[phone.screen_condition] }] : []),
+                ...(phone.body_condition ? [{ label: "Body", value: BODY_LABEL[phone.body_condition] }] : []),
                 ...(phone.brand.toLowerCase() === "apple" ? [{ label: "Battery Health", value: phone.battery_health ? `${phone.battery_health}%` : "Not checked" }] : []),
                 { label: "PTA Status", value: PTA_META[phone.pta_status].label },
-                { label: "Warranty",   value: `${phone.warranty_days} days`    },
+                { label: "Warranty",   value: phone.warranty_days > 0 ? `${phone.warranty_days} days` : "No Warranty" },
               ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between text-sm">
-                  <span className="text-slate-500">{label}</span>
+                <div key={label} className="flex flex-col text-sm">
+                  <span className="text-[11px] text-slate-400">{label}</span>
                   <span className="font-medium text-slate-800">{value}</span>
                 </div>
               ))}
               {phone.brand.toLowerCase() === "apple" && phone.battery_health && (
-                <div className="pt-1">
+                <div className="col-span-2 pt-1">
                   <BatteryBar value={phone.battery_health} />
                 </div>
               )}
@@ -425,7 +442,7 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
           {/* Device Details */}
           <div>
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Device Details</h3>
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {[
                 { label: "IMEI",     value: phone.imei_number },
                 phone.brand.toLowerCase() !== "apple" && phone.ram && { label: "RAM", value: phone.ram },
@@ -433,9 +450,9 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
                 { label: "Acquired", value: formatDate(phone.purchased_date) },
                 phone.sold_date && { label: "Sold On", value: formatDate(phone.sold_date) },
               ].filter(Boolean).map(({ label, value }: any) => (
-                <div key={label} className="flex justify-between text-sm">
-                  <span className="text-slate-500">{label}</span>
-                  <span className="font-medium text-slate-800 text-right">{value}</span>
+                <div key={label} className="flex flex-col text-sm">
+                  <span className="text-[11px] text-slate-400">{label}</span>
+                  <span className="font-medium text-slate-800">{value}</span>
                 </div>
               ))}
 
@@ -491,18 +508,27 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
           {/* Cost Breakdown */}
           <div>
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Pricing Breakdown</h3>
-            <div className="space-y-2 bg-slate-50 rounded-xl p-3">
-              {[
-                { label: "Purchase Price",    value: formatCurrency(phone.purchase_price)     },
-                { label: "Refurbishment Cost",value: formatCurrency(phone.refurbishment_cost) },
-                { label: "Total Cost",        value: formatCurrency(totalCost), bold: true     },
-                { label: "Selling Price",     value: formatCurrency(phone.selling_price), bold: true },
-              ].map(({ label, value, bold }) => (
-                <div key={label} className={cn("flex justify-between text-sm", bold && "border-t border-slate-200 pt-2 mt-1")}>
-                  <span className={bold ? "font-semibold text-slate-700" : "text-slate-500"}>{label}</span>
-                  <span className={bold ? "font-bold text-slate-900" : "font-medium text-slate-700"}>{value}</span>
+            <div className="bg-slate-50 rounded-xl p-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <div className="flex flex-col text-sm">
+                  <span className="text-[11px] text-slate-400">Purchase Price</span>
+                  <span className="font-medium text-slate-700">{formatCurrency(phone.purchase_price)}</span>
                 </div>
-              ))}
+                <div className="flex flex-col text-sm">
+                  <span className="text-[11px] text-slate-400">Refurbishment Cost</span>
+                  <span className="font-medium text-slate-700">{formatCurrency(phone.refurbishment_cost)}</span>
+                </div>
+              </div>
+              <div className="space-y-2 border-t border-slate-200 pt-2 mt-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-slate-700">Total Cost</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(totalCost)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-slate-700">Selling Price</span>
+                  <span className="font-bold text-slate-900">{phone.selling_price > 0 ? formatCurrency(phone.selling_price) : "Not priced yet"}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -553,7 +579,7 @@ function MarkAsSoldDialog({ phone, onClose, onSold }: {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
           <div className="p-6 border-b border-slate-100">
             <h2 className="text-lg font-bold text-slate-900">Mark as Sold</h2>
-            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model}  ·  Grade {phone.condition_grade}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model}{phone.condition_grade ? `  ·  Grade ${phone.condition_grade}` : ""}</p>
           </div>
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
@@ -739,9 +765,9 @@ function TradeInCalculatorDialog({ onClose, brands }: { onClose: () => void; bra
 type BulkRow = {
   id: string
   brand: string; model: string; color: string; storage: string; ram: string
-  pta_status: UsedPTAStatus; condition_grade: ConditionGrade
-  screen_condition: ScreenCondition; body_condition: BodyCondition
-  imei_number: string; purchase_price: string; selling_price: string
+  pta_status: UsedPTAStatus; condition_grade: ConditionGrade | ""
+  screen_condition: ScreenCondition | ""; body_condition: BodyCondition | ""
+  imei_number: string; purchase_price: string
   warranty_days: string; battery_health: string; condition_notes: string
   expanded: boolean
   rowError?: string
@@ -750,15 +776,15 @@ type BulkRow = {
 type LockState = {
   brand: boolean; model: boolean; color: boolean; storage: boolean; ram: boolean
   pta_status: boolean; condition_grade: boolean; screen_condition: boolean
-  body_condition: boolean; purchase_price: boolean; selling_price: boolean; warranty_days: boolean
+  body_condition: boolean; purchase_price: boolean; warranty_days: boolean
 }
 
 const BULK_EMPTY_ROW: Omit<BulkRow, "id"> = {
   brand: "", model: "", color: "", storage: "128GB", ram: "4GB",
-  pta_status: "approved", condition_grade: "B",
-  screen_condition: "perfect", body_condition: "minor_wear",
-  imei_number: "", purchase_price: "", selling_price: "",
-  warranty_days: "7", battery_health: "", condition_notes: "",
+  pta_status: "approved", condition_grade: "",
+  screen_condition: "", body_condition: "",
+  imei_number: "", purchase_price: "",
+  warranty_days: "0", battery_health: "", condition_notes: "",
   expanded: false,
 }
 
@@ -1019,7 +1045,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   const [locks, setLocks] = useState<LockState>({
     brand: false, model: false, color: false, storage: false, ram: false,
     pta_status: false, condition_grade: false, screen_condition: false,
-    body_condition: false, purchase_price: false, selling_price: false, warranty_days: false,
+    body_condition: false, purchase_price: false, warranty_days: false,
   })
   const [saving, setSaving] = useState(false)
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
@@ -1104,6 +1130,25 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     loadCustomers()
   }, [sourceType])
 
+  async function handleAddSupplier(name: string) {
+    const created = await createSupplier({
+      companyName: name, contactPerson: name, phone: "", email: "", address: "", city: "",
+      totalPurchases: 0, outstandingBalance: 0, rating: 0, status: "Active",
+    })
+    setLocalSuppliers(prev => [...prev, created].sort((a, b) => a.companyName.localeCompare(b.companyName)))
+    setSupplierId(created.id)
+    setSupplierErr(false)
+  }
+
+  async function handleAddCustomer(name: string) {
+    const created = await createCustomer({
+      name, phone: "", totalPurchases: 0, totalSpent: 0, loyaltyTier: "Bronze",
+    })
+    setLocalCustomers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+    setSelectedCustomerId(created.id)
+    setSelectedCustomerName(created.name)
+  }
+
   const toggleLock = (key: keyof LockState) =>
     setLocks(prev => ({ ...prev, [key]: !prev[key] }))
 
@@ -1185,8 +1230,6 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       imeisSeen.add(r.imei_number)
       if (!r.purchase_price || isNaN(Number(r.purchase_price)) || Number(r.purchase_price) <= 0)
         return { ...r, rowError: `Row ${n}: enter a valid buy price` }
-      if (!r.selling_price || isNaN(Number(r.selling_price)) || Number(r.selling_price) <= 0)
-        return { ...r, rowError: `Row ${n}: enter a valid sell price` }
       return { ...r, rowError: undefined }
     })
 
@@ -1255,10 +1298,9 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         await supabase.from("used_phones").update({
           status: "in_stock",
           purchase_price: Number(row.purchase_price),
-          selling_price: Number(row.selling_price),
-          condition_grade: row.condition_grade,
-          screen_condition: row.screen_condition,
-          body_condition: row.body_condition,
+          condition_grade: row.condition_grade || null,
+          screen_condition: row.screen_condition || null,
+          body_condition: row.body_condition || null,
           battery_health: row.battery_health ? Number(row.battery_health) : null,
           condition_notes: row.condition_notes.trim() || null,
           pta_status: row.pta_status,
@@ -1266,7 +1308,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           source_type: "purchased",
           source_customer_name: supplierName,
           sold_date: null,
-          warranty_days: Number(row.warranty_days) || 7,
+          warranty_days: Number(row.warranty_days) || 0,
         }).eq("id", (sold as any).id).eq("tenant_id", tenantId)
       }
       const soldImeis = new Set(soldPhones.map((e: any) => e.imei_number))
@@ -1295,18 +1337,17 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       supplier_name: sourceType === "purchased" ? supplierName : null,
       purchased_date: purchaseDate,
       purchase_price: Number(r.purchase_price),
-      selling_price: Number(r.selling_price),
       refurbishment_cost: 0,
-      condition_grade: r.condition_grade,
-      screen_condition: r.screen_condition,
-      body_condition: r.body_condition,
+      condition_grade: r.condition_grade || null,
+      screen_condition: r.screen_condition || null,
+      body_condition: r.body_condition || null,
       battery_health: r.battery_health ? Number(r.battery_health) : null,
       functional_issues: [] as string[],
       accessories_included: [] as string[],
       condition_notes: r.condition_notes.trim() || null,
       pta_status: r.pta_status,
       status: "in_stock" as const,
-      warranty_days: Number(r.warranty_days) || 7,
+      warranty_days: Number(r.warranty_days) || 0,
       photos: [] as string[],
     }))
 
@@ -1428,9 +1469,9 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         color: row.color ?? "",
         storage: row.storage ?? "",
         ram: row.ram ?? "",
-        condition_grade: (row.condition_grade ?? "B") as ConditionGrade,
-        screen_condition: (row.screen_condition ?? "perfect") as ScreenCondition,
-        body_condition: (row.body_condition ?? "minor_wear") as BodyCondition,
+        condition_grade: (row.condition_grade || undefined) as ConditionGrade | undefined,
+        screen_condition: (row.screen_condition || undefined) as ScreenCondition | undefined,
+        body_condition: (row.body_condition || undefined) as BodyCondition | undefined,
         battery_health: row.battery_health ?? undefined,
         functional_issues: row.functional_issues ?? [],
         accessories_included: row.accessories_included ?? [],
@@ -1441,7 +1482,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         selling_price: row.selling_price ?? 0,
         pta_status: (row.pta_status ?? "pending") as UsedPTAStatus,
         status: "in_stock" as PhoneStatus,
-        warranty_days: row.warranty_days ?? 7,
+        warranty_days: row.warranty_days ?? 0,
         condition_notes: row.condition_notes ?? undefined,
         photos: row.photos ?? [],
         purchased_date: row.purchased_date ?? purchaseDate,
@@ -1460,7 +1501,6 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   }
 
   const grandTotal  = rows.reduce((s, r) => s + (Number(r.purchase_price) || 0), 0)
-  const totalProfit = rows.reduce((s, r) => s + ((Number(r.selling_price) || 0) - (Number(r.purchase_price) || 0)), 0)
 
   // Who this batch is being bought from - shown in the Order Summary so it's
   // clear at a glance without scrolling back up to the Purchase Details card.
@@ -1470,7 +1510,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
     : sourceType === "customer_trade_in" ? selectedCustomerName
     : ""
   const allExpanded = rows.every(r => r.expanded)
-  const completedCount = rows.filter(r => r.brand && r.model && r.imei_number.length === 15 && Number(r.purchase_price) > 0 && Number(r.selling_price) > 0).length
+  const completedCount = rows.filter(r => r.brand && r.model && r.imei_number.length === 15 && Number(r.purchase_price) > 0).length
 
   // Walk-in / trade-in purchases must be paid in full - keep Amount Paid
   // locked to the running total so the UI can't drift into a partial payment.
@@ -1568,9 +1608,11 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                   <div className="col-span-2 sm:col-auto sm:w-64">
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Supplier <span className="text-rose-500">*</span></label>
                     <CatalogCombo
+                      label="Supplier"
                       value={localSuppliers.find(s => s.id === supplierId)?.companyName ?? ""}
                       onChange={v => { const s = localSuppliers.find(x => x.companyName === v); setSupplierId(s?.id ?? ""); setSupplierErr(false) }}
                       options={localSuppliers.map(s => s.companyName)}
+                      onAdd={handleAddSupplier}
                       placeholder={suppliersLoading ? "Loading..." : "Select supplier..."}
                       error={supplierErr}
                       disabled={suppliersLoading}
@@ -1584,9 +1626,11 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                   <div className="col-span-2 sm:col-auto sm:w-64">
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Customer <span className="text-rose-500">*</span></label>
                     <CatalogCombo
+                      label="Customer"
                       value={selectedCustomerName}
                       onChange={v => { setSelectedCustomerName(v); const c = localCustomers.find((x: any) => x.name === v); setSelectedCustomerId((c as any)?.id ?? "") }}
                       options={localCustomers.map((c: any) => c.name)}
+                      onAdd={handleAddCustomer}
                       placeholder="Select customer..."
                     />
                   </div>
@@ -1641,9 +1685,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
           {rows.map((row, idx) => {
             const isApple    = row.brand.toLowerCase() === "apple"
             const hasError   = !!row.rowError
-            const isComplete = !!(row.brand && row.model && row.imei_number.length === 15 && Number(row.purchase_price) > 0 && Number(row.selling_price) > 0)
-            const rowProfit  = (Number(row.selling_price) || 0) - (Number(row.purchase_price) || 0)
-            const gradeMeta  = GRADE_META[row.condition_grade]
+            const isComplete = !!(row.brand && row.model && row.imei_number.length === 15 && Number(row.purchase_price) > 0)
+            const gradeMeta  = row.condition_grade ? GRADE_META[row.condition_grade] : undefined
             return (
               <div key={row.id} className={cn(
                 "rounded-xl border bg-white shadow-sm transition-all",
@@ -1673,14 +1716,8 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                         {row.imei_number.length === 15 ? row.imei_number : `${15 - row.imei_number.length} left`}
                       </span>
                     )}
-                    {row.condition_grade && <span className={cn("text-[10px] font-bold px-1 py-0.5 rounded", gradeMeta.bg, gradeMeta.text)}>{row.condition_grade}</span>}
+                    {row.condition_grade && gradeMeta && <span className={cn("text-[10px] font-bold px-1 py-0.5 rounded", gradeMeta.bg, gradeMeta.text)}>{row.condition_grade}</span>}
                     {Number(row.purchase_price) > 0 && <span className="text-[10px] text-slate-400">Buy {formatCurrency(Number(row.purchase_price))}</span>}
-                    {Number(row.selling_price) > 0 && <span className="text-[10px] text-slate-400">Sell {formatCurrency(Number(row.selling_price))}</span>}
-                    {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 && (
-                      <span className={cn("text-[10px] font-semibold", rowProfit >= 0 ? "text-emerald-600" : "text-rose-500")}>
-                        {rowProfit >= 0 ? "+" : ""}{formatCurrency(rowProfit)}
-                      </span>
-                    )}
                     {hasError && <span className="text-[10px] text-rose-500 font-medium">{row.rowError}</span>}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
@@ -1849,11 +1886,13 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                           <div className="grid grid-cols-3 gap-1.5">
                             {(["A+","A","B+","B","C","D"] as ConditionGrade[]).map(g => {
                               const m = GRADE_META[g]
+                              const selected = row.condition_grade === g
                               return (
-                                <button key={g} type="button" onClick={() => updateRow(row.id, "condition_grade", g)}
+                                <button key={g} type="button"
+                                  onClick={() => updateRow(row.id, "condition_grade", selected ? "" : g)}
                                   className={cn(
                                     "h-9 rounded-lg text-xs font-bold border-2 transition-all",
-                                    row.condition_grade === g
+                                    selected
                                       ? cn(m.bg, m.text, m.border, "shadow-sm")
                                       : "border-slate-200 text-slate-400 hover:border-slate-300 bg-white"
                                   )}>
@@ -1876,9 +1915,11 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                               </button>
                               <label className="text-xs font-semibold text-slate-600">Screen</label>
                             </div>
-                            <select value={row.screen_condition} onChange={e => updateRow(row.id, "screen_condition", e.target.value as ScreenCondition)}
+                            <select value={row.screen_condition} onChange={e => updateRow(row.id, "screen_condition", e.target.value as ScreenCondition | "")}
                               className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                                !row.screen_condition ? "text-slate-400" : "",
                                 locks.screen_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
+                              <option value="">None</option>
                               <option value="perfect">Perfect</option>
                               <option value="minor_scratches">Scratches</option>
                               <option value="cracked">Cracked</option>
@@ -1896,9 +1937,11 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                               </button>
                               <label className="text-xs font-semibold text-slate-600">Body</label>
                             </div>
-                            <select value={row.body_condition} onChange={e => updateRow(row.id, "body_condition", e.target.value as BodyCondition)}
+                            <select value={row.body_condition} onChange={e => updateRow(row.id, "body_condition", e.target.value as BodyCondition | "")}
                               className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
+                                !row.body_condition ? "text-slate-400" : "",
                                 locks.body_condition ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
+                              <option value="">None</option>
                               <option value="perfect">Perfect</option>
                               <option value="minor_wear">Minor Wear</option>
                               <option value="dents">Dents</option>
@@ -1917,64 +1960,28 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Pricing</p>
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
 
-                        {/* Buy Price + Sell Price - paired on mobile, natural pair */}
-                        <div className="grid grid-cols-2 gap-3 sm:col-span-4 sm:grid-cols-2">
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <button type="button" onClick={() => toggleLock("purchase_price")}
-                                title={locks.purchase_price ? "Locked" : "Click to lock buy price"}
-                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
-                                  locks.purchase_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                                {locks.purchase_price ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                              </button>
-                              <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-rose-500">*</span></label>
-                            </div>
-                            <MoneyInput value={row.purchase_price}
-                              onChange={v => updateRow(row.id, "purchase_price", v)}
-                              placeholder="0" min="0"
-                              className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
-                                (!row.purchase_price || Number(row.purchase_price) <= 0) && hasError
-                                  ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
-                                  : locks.purchase_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
+                        {/* Buy Price */}
+                        <div className="sm:col-span-4">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onClick={() => toggleLock("purchase_price")}
+                              title={locks.purchase_price ? "Locked" : "Click to lock buy price"}
+                              className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
+                                locks.purchase_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
+                              {locks.purchase_price ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                            </button>
+                            <label className="text-xs font-semibold text-slate-600">Buy Price <span className="text-rose-500">*</span></label>
                           </div>
-
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <button type="button" onClick={() => toggleLock("selling_price")}
-                                title={locks.selling_price ? "Locked" : "Click to lock sell price"}
-                                className={cn("flex items-center justify-center w-5 h-5 rounded-md border transition-colors shrink-0",
-                                  locks.selling_price ? "bg-indigo-100 border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-300 hover:border-indigo-300 hover:text-indigo-400")}>
-                                {locks.selling_price ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                              </button>
-                              <label className="text-xs font-semibold text-slate-600">Sell Price <span className="text-rose-500">*</span></label>
-                            </div>
-                            <MoneyInput value={row.selling_price}
-                              onChange={v => updateRow(row.id, "selling_price", v)}
-                              placeholder="0" min="0"
-                              className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
-                                (!row.selling_price || Number(row.selling_price) <= 0) && hasError
-                                  ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
-                                  : locks.selling_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
-                          </div>
+                          <MoneyInput value={row.purchase_price}
+                            onChange={v => updateRow(row.id, "purchase_price", v)}
+                            placeholder="0" min="0"
+                            className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 bg-white placeholder:text-slate-400 transition-colors",
+                              (!row.purchase_price || Number(row.purchase_price) <= 0) && hasError
+                                ? "border-rose-400 bg-rose-50 focus:ring-rose-400"
+                                : locks.purchase_price ? "border-indigo-400 bg-indigo-50 focus:ring-indigo-500" : "border-slate-300 focus:ring-indigo-500")} />
                         </div>
 
-                        {/* Margin - full width on mobile when shown */}
-                        {Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 && (
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Margin</label>
-                            <div className={cn("h-9 flex items-center px-3 rounded-lg text-sm font-bold border",
-                              rowProfit >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-600 border-rose-200")}>
-                              {rowProfit >= 0 ? "+" : ""}{formatCurrency(rowProfit)}
-                              <span className={cn("ml-1.5 text-xs font-medium",
-                                rowProfit >= 0 ? "text-emerald-500" : "text-rose-400")}>
-                                ({Number(row.selling_price) > 0 ? Math.round((rowProfit / Number(row.selling_price)) * 100) : 0}%)
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
                         {/* Warranty + PTA - paired on mobile */}
-                        <div className={cn("grid grid-cols-2 gap-3", Number(row.purchase_price) > 0 && Number(row.selling_price) > 0 ? "sm:col-span-3" : "sm:col-span-5")}>
+                        <div className="grid grid-cols-2 gap-3 sm:col-span-5">
                           <div>
                             <div className="flex items-center gap-1.5 mb-1.5">
                               <button type="button" onClick={() => toggleLock("warranty_days")}
@@ -1988,7 +1995,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                             <select value={row.warranty_days} onChange={e => updateRow(row.id, "warranty_days", e.target.value)}
                               className={cn("w-full h-9 border rounded-lg px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-colors",
                                 locks.warranty_days ? "border-indigo-400 bg-indigo-50" : "border-slate-300")}>
-                              <option value="0">No warranty</option>
+                              <option value="0">No Warranty</option>
                               <option value="3">3 days</option>
                               <option value="7">7 days</option>
                               <option value="14">14 days</option>
@@ -2121,20 +2128,6 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
                     </div>
                   </div>
 
-                  {/* Est. profit */}
-                  {totalProfit > 0 && (
-                    <div className="border-t border-dashed border-slate-200 pt-3 text-xs text-slate-500 space-y-1.5">
-                      <div className="flex justify-between">
-                        <span>Est. sell revenue</span>
-                        <span className="font-medium text-slate-700">{formatCurrency(rows.reduce((s, r) => s + (Number(r.selling_price) || 0), 0))}</span>
-                      </div>
-                      <div className="flex justify-between text-emerald-600 font-semibold">
-                        <span>Est. profit</span>
-                        <span>+{formatCurrency(totalProfit)}</span>
-                      </div>
-                    </div>
-                  )}
-
                   {splitTotal(splits) >= grandTotal && grandTotal > 0 && (
                     <div className="flex items-center gap-1.5 text-emerald-600 text-xs font-semibold bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-200">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Fully paid
@@ -2204,10 +2197,10 @@ type FormData = {
   // Supplier source
   supplier_id: string; supplier_name: string
   purchased_date: string; purchase_price: string
-  condition_grade: ConditionGrade; screen_condition: ScreenCondition
-  body_condition: BodyCondition; battery_health: string
+  condition_grade: ConditionGrade | ""; screen_condition: ScreenCondition | ""
+  body_condition: BodyCondition | ""; battery_health: string
   functional_issues: string[]; accessories_included: string[]; condition_notes: string
-  refurbishment_cost: string; selling_price: string
+  refurbishment_cost: string
   warranty_days: string; pta_status: UsedPTAStatus; status: PhoneStatus
   photos: string[]
 }
@@ -2219,10 +2212,10 @@ const EMPTY_FORM: FormData = {
   walkin_name: "", walkin_phone: "", walkin_cnic: "", walkin_address: "",
   supplier_id: "", supplier_name: "",
   purchased_date: todayPKT(), purchase_price: "",
-  condition_grade: "B", screen_condition: "perfect", body_condition: "minor_wear",
+  condition_grade: "", screen_condition: "", body_condition: "",
   battery_health: "", functional_issues: [], accessories_included: [], condition_notes: "",
-  refurbishment_cost: "0", selling_price: "",
-  warranty_days: "7", pta_status: "approved", status: "in_stock",
+  refurbishment_cost: "0",
+  warranty_days: "0", pta_status: "approved", status: "in_stock",
   photos: [],
 }
 
@@ -2273,15 +2266,14 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       supplier_name: editPhone.supplier_name ?? "",
       purchased_date: editPhone.purchased_date,
       purchase_price: editPhone.purchase_price.toString(),
-      condition_grade: editPhone.condition_grade,
-      screen_condition: editPhone.screen_condition,
-      body_condition: editPhone.body_condition,
+      condition_grade: editPhone.condition_grade ?? "",
+      screen_condition: editPhone.screen_condition ?? "",
+      body_condition: editPhone.body_condition ?? "",
       battery_health: editPhone.battery_health?.toString() ?? "",
       functional_issues: editPhone.functional_issues,
       accessories_included: editPhone.accessories_included,
       condition_notes: editPhone.condition_notes ?? "",
       refurbishment_cost: editPhone.refurbishment_cost.toString(),
-      selling_price: editPhone.selling_price.toString(),
       warranty_days: editPhone.warranty_days.toString(),
       pta_status: editPhone.pta_status,
       status: editPhone.status,
@@ -2310,7 +2302,30 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
   const [submitting, setSubmitting] = useState(false)
   const [accountErr, setAccountErr] = useState(false)
   const [splits, setSplits] = useState<SplitEntry[]>([])
+  const [localSuppliers, setLocalSuppliers] = useState<Supplier[]>(suppliers)
+  const [localCustomers, setLocalCustomers] = useState<Customer[]>(customers)
+  useEffect(() => { setLocalSuppliers(suppliers) }, [suppliers])
+  useEffect(() => { setLocalCustomers(customers) }, [customers])
   const set = (key: keyof FormData, val: any) => setForm(prev => ({ ...prev, [key]: val }))
+
+  async function handleAddSupplier(name: string) {
+    const created = await createSupplier({
+      companyName: name, contactPerson: name, phone: "", email: "", address: "", city: "",
+      totalPurchases: 0, outstandingBalance: 0, rating: 0, status: "Active",
+    })
+    setLocalSuppliers(prev => [...prev, created].sort((a, b) => a.companyName.localeCompare(b.companyName)))
+    set("supplier_id", created.id)
+    set("supplier_name", created.companyName)
+  }
+
+  async function handleAddCustomer(name: string) {
+    const created = await createCustomer({
+      name, phone: "", totalPurchases: 0, totalSpent: 0, loyaltyTier: "Bronze",
+    })
+    setLocalCustomers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+    set("source_customer_id", created.id)
+    set("source_customer_name", created.name)
+  }
 
   // Default the payment account to the shop's cash account once accounts load,
   // so the common case (paying cash) doesn't require an extra manual selection.
@@ -2349,10 +2364,6 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
         return "Enter the seller's name"
       if (!form.purchase_price || isNaN(Number(form.purchase_price)) || Number(form.purchase_price) <= 0)
         return "Enter a valid purchase price"
-    }
-    if (step === 2) {
-      if (!form.selling_price || isNaN(Number(form.selling_price)) || Number(form.selling_price) <= 0)
-        return "Enter a valid selling price"
     }
     // Not step-specific: catches the case even if Submit is clicked from a later step
     const insufficient = splitInsufficientMap(splits, accounts)
@@ -2411,16 +2422,15 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
       supplier_name: isSupplier ? (form.supplier_name || undefined) : undefined,
       purchased_date: form.purchased_date,
       purchase_price: Number(form.purchase_price),
-      condition_grade: form.condition_grade,
-      screen_condition: form.screen_condition,
-      body_condition: form.body_condition,
+      condition_grade: form.condition_grade || undefined,
+      screen_condition: form.screen_condition || undefined,
+      body_condition: form.body_condition || undefined,
       battery_health: form.battery_health ? Number(form.battery_health) : undefined,
       functional_issues: form.functional_issues,
       accessories_included: form.accessories_included,
       condition_notes: form.condition_notes || undefined,
       refurbishment_cost: Number(form.refurbishment_cost) || 0,
-      selling_price: Number(form.selling_price),
-      warranty_days: Number(form.warranty_days) || 7,
+      warranty_days: Number(form.warranty_days) || 0,
       pta_status: form.pta_status,
       status: form.status,
       photos: form.photos,
@@ -2432,10 +2442,6 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
   }
 
   const totalCost = (Number(form.purchase_price) || 0) + (Number(form.refurbishment_cost) || 0)
-  const profit    = (Number(form.selling_price) || 0) - totalCost
-  const margin    = form.selling_price && Number(form.selling_price) > 0
-    ? ((profit / Number(form.selling_price)) * 100).toFixed(0)
-    : "0"
 
   const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
   const selectCls = inputCls
@@ -2706,22 +2712,20 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   {form.source_type === "customer_trade_in" && (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Select Customer</p>
-                      <select
-                        value={form.source_customer_id}
-                        onChange={e => {
-                          const c = customers.find(c => c.id === e.target.value)
-                          set("source_customer_id", e.target.value)
-                          set("source_customer_name", c?.name ?? "")
+                      <CatalogCombo
+                        label="Customer"
+                        value={localCustomers.find(c => c.id === form.source_customer_id)?.name ?? ""}
+                        onChange={v => {
+                          const c = localCustomers.find(x => x.name === v)
+                          set("source_customer_id", c?.id ?? "")
+                          set("source_customer_name", v)
                         }}
-                        className={selectCls}
-                      >
-                        <option value="">-- Select customer --</option>
-                        {customers.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}{c.phone ? `  ·  ${c.phone}` : ""}</option>
-                        ))}
-                      </select>
+                        options={localCustomers.map(c => c.name)}
+                        onAdd={handleAddCustomer}
+                        placeholder="Select customer..."
+                      />
                       {form.source_customer_id && (() => {
-                        const c = customers.find(x => x.id === form.source_customer_id)
+                        const c = localCustomers.find(x => x.id === form.source_customer_id)
                         return c ? (
                           <div className="flex items-center gap-2 mt-1 text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
                             <span className="font-semibold">{c.name}</span>
@@ -2736,20 +2740,18 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   {form.source_type === "purchased" && (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Select Supplier</p>
-                      <select
-                        value={form.supplier_id}
-                        onChange={e => {
-                          const s = suppliers.find(s => s.id === e.target.value)
-                          set("supplier_id", e.target.value)
-                          set("supplier_name", s?.companyName ?? "")
+                      <CatalogCombo
+                        label="Supplier"
+                        value={localSuppliers.find(s => s.id === form.supplier_id)?.companyName ?? ""}
+                        onChange={v => {
+                          const s = localSuppliers.find(x => x.companyName === v)
+                          set("supplier_id", s?.id ?? "")
+                          set("supplier_name", v)
                         }}
-                        className={selectCls}
-                      >
-                        <option value="">-- Select supplier --</option>
-                        {suppliers.map(s => (
-                          <option key={s.id} value={s.id}>{s.companyName}</option>
-                        ))}
-                      </select>
+                        options={localSuppliers.map(s => s.companyName)}
+                        onAdd={handleAddSupplier}
+                        placeholder="Select supplier..."
+                      />
                     </div>
                   )}
                 </div>
@@ -2773,7 +2775,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       <button
                         key={g}
                         type="button"
-                        onClick={() => set("condition_grade", g)}
+                        onClick={() => set("condition_grade", form.condition_grade === g ? "" : g)}
                         className={cn(
                           "px-4 py-2 rounded-xl font-bold border-2 transition-all text-sm",
                           form.condition_grade === g
@@ -2785,23 +2787,27 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-400 mt-1.5">
-                    {form.condition_grade === "A+" ? "Like new - no visible wear" :
-                     form.condition_grade === "A"  ? "Excellent - very minor wear" :
-                     form.condition_grade === "B+" ? "Good - light scratches, minor issues" :
-                     form.condition_grade === "B"  ? "Moderate wear, functional" :
-                     form.condition_grade === "C"  ? "Heavy wear, multiple issues" :
-                     "Poor - significant damage"}
-                  </p>
+                  {form.condition_grade && (
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      {form.condition_grade === "A+" ? "Like new - no visible wear" :
+                       form.condition_grade === "A"  ? "Excellent - very minor wear" :
+                       form.condition_grade === "B+" ? "Good - light scratches, minor issues" :
+                       form.condition_grade === "B"  ? "Moderate wear, functional" :
+                       form.condition_grade === "C"  ? "Heavy wear, multiple issues" :
+                       "Poor - significant damage"}
+                    </p>
+                  )}
                 </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Screen Condition">
-                    <select value={form.screen_condition} onChange={e => set("screen_condition", e.target.value as ScreenCondition)} className={selectCls}>
+                    <select value={form.screen_condition} onChange={e => set("screen_condition", e.target.value as ScreenCondition | "")} className={selectCls}>
+                      <option value="">None</option>
                       {(Object.entries(SCREEN_LABEL) as [ScreenCondition, string][]).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                   </Field>
                   <Field label="Body Condition">
-                    <select value={form.body_condition} onChange={e => set("body_condition", e.target.value as BodyCondition)} className={selectCls}>
+                    <select value={form.body_condition} onChange={e => set("body_condition", e.target.value as BodyCondition | "")} className={selectCls}>
+                      <option value="">None</option>
                       {(Object.entries(BODY_LABEL) as [BodyCondition, string][]).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                   </Field>
@@ -2869,27 +2875,12 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <Field label="Refurbishment Cost (Rs)">
                     <MoneyInput value={form.refurbishment_cost} onChange={v => set("refurbishment_cost", v)} placeholder="0" min={0} className={inputCls} />
                   </Field>
-                  <Field label="Selling Price (Rs)" required>
-                    <MoneyInput value={form.selling_price} onChange={v => set("selling_price", v)} placeholder="0" min={0} className={inputCls} />
-                  </Field>
-                </div>
-                {/* Profit preview */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-slate-50 rounded-xl p-3">
                     <p className="text-xs text-slate-400">Total Cost</p>
                     <p className="text-sm font-bold text-slate-900">{formatCurrency(totalCost)}</p>
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-3">
-                    <p className="text-xs text-slate-400">Sell Price</p>
-                    <p className="text-sm font-bold text-slate-900">{formatCurrency(Number(form.selling_price) || 0)}</p>
-                  </div>
-                  <div className={cn("rounded-xl p-3", profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
-                    <p className="text-xs text-slate-400">Profit</p>
-                    <p className={cn("text-sm font-bold", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                      {profit >= 0 ? "+" : ""}{formatCurrency(profit)} ({margin}%)
-                    </p>
-                  </div>
                 </div>
+                <p className="text-[11px] text-slate-400">Sale price is set later, when this phone is actually sold.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Field label="PTA Status">
                     <select value={form.pta_status} onChange={e => set("pta_status", e.target.value as UsedPTAStatus)} className={selectCls}>
@@ -2996,9 +2987,9 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                   <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Condition</p>
                     {[
-                      { l: "Grade",   v: form.condition_grade },
-                      { l: "Screen",  v: SCREEN_LABEL[form.screen_condition] },
-                      { l: "Body",    v: BODY_LABEL[form.body_condition] },
+                      ...(form.condition_grade ? [{ l: "Grade", v: form.condition_grade as string }] : []),
+                      ...(form.screen_condition ? [{ l: "Screen", v: SCREEN_LABEL[form.screen_condition] }] : []),
+                      ...(form.body_condition ? [{ l: "Body", v: BODY_LABEL[form.body_condition] }] : []),
                       ...(form.brand.toLowerCase() === "apple" ? [{ l: "Battery", v: form.battery_health ? `${form.battery_health}%` : "Not checked" }] : []),
                       { l: "Issues",  v: form.functional_issues.length === 0 ? "None" : `${form.functional_issues.length} issue(s)` },
                     ].map(({l,v}) => (
@@ -3009,24 +3000,13 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
                     ))}
                   </div>
                 </div>
-                <div className={cn("rounded-xl p-4 border-2", profit >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}>
+                <div className="rounded-xl p-4 border-2 border-slate-200 bg-slate-50">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Financials</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-xs text-slate-400">Total Cost</p>
-                      <p className="text-base font-bold text-slate-900">{formatCurrency(totalCost)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Sell Price</p>
-                      <p className="text-base font-bold text-slate-900">{formatCurrency(Number(form.selling_price) || 0)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Profit ({margin}%)</p>
-                      <p className={cn("text-base font-bold", profit >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                        {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Total Cost</p>
+                    <p className="text-base font-bold text-slate-900">{formatCurrency(totalCost)}</p>
                   </div>
+                  <p className="text-[11px] text-slate-400 mt-2">Sale price is set later, when this phone is actually sold.</p>
                 </div>
                 {form.photos.length > 0 && (
                   <div>
@@ -3360,9 +3340,9 @@ function UsedPhonesPageInner() {
           color: phoneData.color ?? "",
           storage: phoneData.storage ?? "",
           ram: phoneData.ram ?? "",
-          condition_grade: phoneData.condition_grade ?? "B",
-          screen_condition: phoneData.screen_condition ?? "perfect",
-          body_condition: phoneData.body_condition ?? "perfect",
+          condition_grade: phoneData.condition_grade,
+          screen_condition: phoneData.screen_condition,
+          body_condition: phoneData.body_condition,
           battery_health: phoneData.battery_health,
           functional_issues: phoneData.functional_issues ?? [],
           accessories_included: phoneData.accessories_included ?? [],
@@ -3379,7 +3359,7 @@ function UsedPhonesPageInner() {
           selling_price: phoneData.selling_price ?? 0,
           pta_status: phoneData.pta_status ?? "pending",
           status: "in_stock",
-          warranty_days: phoneData.warranty_days ?? 7,
+          warranty_days: phoneData.warranty_days ?? 0,
           condition_notes: phoneData.condition_notes,
           photos: phoneData.photos ?? [],
           purchased_date: phoneData.purchased_date ?? todayPKT(),

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import {
   Plus, Search, Grid3X3, List, Smartphone, Copy, Eye, Pencil, Trash2, Filter,
-  TrendingUp, Package, DollarSign, AlertTriangle, ShoppingBag,
+  TrendingUp, Package, DollarSign, Wallet, AlertTriangle, ShoppingBag,
   Tag, Hash, Palette, HardDrive, Cpu, Truck, FileText, ArrowDownLeft, ArrowUpRight, Layers,
   ImageIcon, X as XIcon, Upload, ChevronDown,
 } from "lucide-react"
@@ -19,6 +19,8 @@ import { format } from "date-fns"
 import { ColumnDef } from "@tanstack/react-table"
 
 import { getMobiles, createMobile, updateMobile, deleteMobile } from "@/lib/api/products"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
 import { getSuppliers } from "@/lib/api/suppliers"
@@ -1892,6 +1894,7 @@ function MobileFormDrawer({
 
 function MobilesPageInner() {
   const router = useRouter()
+  const { user } = useAuth()
   const [mobileList, setMobileList] = useState<Mobile[]>([])
   const [supplierList, setSupplierList] = useState<Supplier[]>([])
   const [brands, setBrands] = useState<string[]>([])
@@ -2224,7 +2227,10 @@ function MobilesPageInner() {
     const totalStock = inStock.reduce((s, m) => s + m.stock, 0)
     const outOfStock = mobileList.filter(m => m.stock === 0).length
     const totalValue = inStock.reduce((s, m) => s + m.sellingPrice * m.stock, 0)
-    return { total, totalStock, outOfStock, totalValue }
+    // What was actually spent to acquire the stock currently on hand - distinct
+    // from totalValue above (potential resale value at current selling prices).
+    const totalCost = inStock.reduce((s, m) => s + m.purchasePrice * m.stock, 0)
+    return { total, totalStock, outOfStock, totalValue, totalCost }
   }, [mobileList])
 
   // â"€â"€â"€ Filtered list â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -2302,6 +2308,18 @@ function MobilesPageInner() {
     try {
       await deleteMobile(deleteTarget.id)
       toast.success(`${deleteTarget.brand} ${deleteTarget.model} deleted successfully`)
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Products",
+        entityId: deleteTarget.id,
+        entityName: `${deleteTarget.brand} ${deleteTarget.model}`,
+        description: `Deleted mobile ${deleteTarget.brand} ${deleteTarget.model} (stock: ${deleteTarget.stock})`,
+        oldValue: JSON.stringify({ brand: deleteTarget.brand, model: deleteTarget.model, stock: deleteTarget.stock, sellingPrice: deleteTarget.sellingPrice }),
+      })
       setDeleteTarget(null)
       setDeleteDialogOpen(false)
       await fetchData()
@@ -2549,7 +2567,7 @@ function MobilesPageInner() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
         <StatCard
           title="Total Models"
           value={String(stats.total)}
@@ -2567,6 +2585,14 @@ function MobilesPageInner() {
           subtext="across all models"
         />
         <StatCard
+          title="Inventory Cost"
+          value={formatCurrency(stats.totalCost)}
+          icon={Wallet}
+          iconBg="bg-cyan-100"
+          gradient="from-cyan-50 to-cyan-100"
+          subtext="spent to acquire stock"
+        />
+        <StatCard
           title="Inventory Value"
           value={formatCurrency(stats.totalValue)}
           icon={DollarSign}
@@ -2575,6 +2601,8 @@ function MobilesPageInner() {
           subtext="at selling price"
         />
         <StatCard
+          className="col-span-2 sm:col-span-3 lg:col-span-1"
+          centerOnMobile
           title="Out of Stock"
           value={String(stats.outOfStock)}
           icon={AlertTriangle}

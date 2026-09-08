@@ -11,8 +11,11 @@ import { toast } from "sonner"
 import { getSales } from "@/lib/api/sales"
 import { getPurchases } from "@/lib/api/purchases"
 import { getMobiles, getAccessories } from "@/lib/api/products"
+import { getUsedPhones } from "@/lib/api/inventory"
 import { getSuppliers } from "@/lib/api/suppliers"
-import type { Sale, Purchase, Mobile, Accessory, Supplier } from "@/data/types"
+import { getExpenses } from "@/lib/api/expenses"
+import type { Sale, Purchase, Mobile, Accessory, Supplier, Expense } from "@/data/types"
+import type { UsedPhone } from "@/data/used-phones"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -106,13 +109,15 @@ function ReportsPageInner() {
   const [purchases, setPurchases]       = useState<Purchase[]>([])
   const [mobiles, setMobiles]           = useState<Mobile[]>([])
   const [accessories, setAccessories]   = useState<Accessory[]>([])
+  const [usedPhones, setUsedPhones]     = useState<UsedPhone[]>([])
   const [suppliers, setSuppliers]       = useState<Supplier[]>([])
+  const [expenses, setExpenses]         = useState<Expense[]>([])
 
   useEffect(() => {
     async function load() {
       try {
-        const [s, p, m, a, sup] = await Promise.all([getSales(), getPurchases(), getMobiles(), getAccessories(), getSuppliers()])
-        setSales(s); setPurchases(p); setMobiles(m); setAccessories(a); setSuppliers(sup)
+        const [s, p, m, a, up, sup, exp] = await Promise.all([getSales(), getPurchases(), getMobiles(), getAccessories(), getUsedPhones(), getSuppliers(), getExpenses()])
+        setSales(s); setPurchases(p); setMobiles(m); setAccessories(a); setUsedPhones(up); setSuppliers(sup); setExpenses(exp)
       } catch { toast.error("Failed to load reports data") }
       finally { setLoading(false) }
     }
@@ -187,28 +192,43 @@ function ReportsPageInner() {
     const costMap: Record<string, number> = {}
     mobiles.forEach((m) => { costMap[m.id] = m.purchasePrice })
     accessories.forEach((a) => { costMap[a.id] = a.purchasePrice })
+    usedPhones.forEach((p) => { costMap[p.id] = p.purchase_price + p.refurbishment_cost })
     const months = Array.from({ length: 6 }, (_, i) => {
       const d = subMonths(startOfMonth(now), 5 - i)
       return { key: format(d, "yyyy-MM"), label: format(d, "MMM yy") }
     })
+    // Only Paid expenses count against profit - a Pending expense hasn't
+    // actually left the business yet.
+    const paidExpenses = expenses.filter((e) => e.status === "Paid")
     const monthlyRows = months.map(({ key, label }) => {
       const monthSales = sales.filter((s) => s.date.startsWith(key) && s.status !== "Refunded")
       const revenue = monthSales.reduce((a, s) => a + s.total, 0)
-      const cost = monthSales.reduce((a, s) => a + s.items.reduce((b, item) => b + (costMap[item.productId] || item.unitPrice * 0.82) * item.quantity, 0), 0)
+      // Items whose cost can't be found (deleted/replaced product row) are
+      // excluded from cost - a missing cost isn't a free item, and guessing
+      // a margin would silently distort profit instead of surfacing the gap.
+      const cost = monthSales.reduce((a, s) => a + s.items.reduce((b, item) => {
+        const itemCost = costMap[item.productId]
+        return itemCost === undefined ? b : b + itemCost * item.quantity
+      }, 0), 0)
       const profit = revenue - cost
-      return { month: label, Revenue: revenue, Cost: cost, Profit: profit, margin: revenue ? (profit / revenue) * 100 : 0 }
+      const monthExpenses = paidExpenses.filter((e) => e.date.startsWith(key)).reduce((a, e) => a + e.amount, 0)
+      const netProfit = profit - monthExpenses
+      return { month: label, Revenue: revenue, Cost: cost, Profit: profit, Expenses: monthExpenses, NetProfit: netProfit, margin: revenue ? (profit / revenue) * 100 : 0 }
     })
     const grossRevenue = monthlyRows.reduce((a, r) => a + r.Revenue, 0)
     const totalCost    = monthlyRows.reduce((a, r) => a + r.Cost, 0)
     const grossProfit  = grossRevenue - totalCost
+    const totalExpenses = monthlyRows.reduce((a, r) => a + r.Expenses, 0)
+    const netProfit = grossProfit - totalExpenses
     return {
       grossRevenue, totalCost, grossProfit, profitMargin: grossRevenue ? (grossProfit / grossRevenue) * 100 : 0,
+      totalExpenses, netProfit, netProfitMargin: grossRevenue ? (netProfit / grossRevenue) * 100 : 0,
       monthlyRows, tableRows: monthlyRows.map((r, i) => {
         const prev = i > 0 ? monthlyRows[i - 1].Profit : null
         return { ...r, momChange: prev !== null && prev !== 0 ? ((r.Profit - prev) / Math.abs(prev)) * 100 : null }
       }),
     }
-  }, [sales, mobiles, accessories])
+  }, [sales, mobiles, accessories, usedPhones, expenses])
 
   // â"€â"€ Inventory data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const inventoryData = useMemo(() => {
@@ -459,11 +479,13 @@ function ReportsPageInner() {
 
         {/* â•â• PROFIT & LOSS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <TabsContent value="pl" className="space-y-3 mt-0">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             <StatCard title="Gross Revenue"  value={formatCurrency(plData.grossRevenue)}                     subtext="Last 6 months"      icon={DollarSign}  iconBg="bg-indigo-100" />
             <StatCard title="Total Cost"     value={formatCurrency(plData.totalCost)}                        subtext="COGS - last 6 months" icon={TrendingDown} iconBg="bg-rose-100" />
             <StatCard title="Gross Profit"   value={formatCurrency(plData.grossProfit)}                      subtext="Revenue minus cost"  icon={TrendingUp}  iconBg="bg-indigo-100" trend={parseFloat(plData.profitMargin.toFixed(1))} />
-            <StatCard title="Profit Margin"  value={`${plData.profitMargin.toFixed(1)}%`}                   subtext="Gross margin"        icon={BarChart2}   iconBg="bg-indigo-100" />
+            <StatCard title="Expenses"       value={formatCurrency(plData.totalExpenses)}                    subtext="Paid - last 6 months" icon={TrendingDown} iconBg="bg-amber-100" />
+            <StatCard title="Net Profit"     value={`${plData.netProfit < 0 ? "-" : ""}${formatCurrency(Math.abs(plData.netProfit))}`} subtext="Gross profit minus expenses" icon={DollarSign} iconBg={plData.netProfit < 0 ? "bg-rose-100" : "bg-emerald-100"} valueClassName={plData.netProfit < 0 ? "text-rose-600" : undefined} />
+            <StatCard title="Net Margin"     value={`${plData.netProfitMargin.toFixed(1)}%`}                 subtext="Net profit / revenue" icon={BarChart2}   iconBg="bg-indigo-100" />
           </div>
 
           <SectionCard title="Monthly Revenue vs Cost - Last 6 Months">
@@ -499,10 +521,16 @@ function ReportsPageInner() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-[10px]">
+                  <div className="flex items-center justify-between text-[10px] flex-wrap gap-x-2">
                     <span className="text-indigo-600 font-medium">Rev {formatCurrency(row.Revenue)}</span>
                     <span className="text-rose-500 font-medium">Cost {formatCurrency(row.Cost)}</span>
                     <span className="font-bold text-emerald-600">Profit {formatCurrency(row.Profit)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-amber-600 font-medium">Expenses {formatCurrency(row.Expenses)}</span>
+                    <span className={`font-bold ${row.NetProfit < 0 ? "text-rose-600" : "text-cyan-600"}`}>
+                      Net {row.NetProfit < 0 ? "-" : ""}{formatCurrency(Math.abs(row.NetProfit))}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -511,7 +539,7 @@ function ReportsPageInner() {
             <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
-                  <TH>Month</TH><TH right>Revenue</TH><TH right>Cost</TH><TH right>Profit</TH><TH right>Margin</TH><TH right>MoM Change</TH>
+                  <TH>Month</TH><TH right>Revenue</TH><TH right>Cost</TH><TH right>Profit</TH><TH right>Expenses</TH><TH right>Net Profit</TH><TH right>Margin</TH><TH right>MoM Change</TH>
                 </tr></thead>
                 <tbody>
                   {plData.tableRows.map((row, i) => (
@@ -520,6 +548,10 @@ function ReportsPageInner() {
                       <TD right className="text-indigo-600 font-medium">{formatCurrency(row.Revenue)}</TD>
                       <TD right className="text-rose-500 font-medium">{formatCurrency(row.Cost)}</TD>
                       <TD right className="font-bold text-emerald-600">{formatCurrency(row.Profit)}</TD>
+                      <TD right className="text-amber-600 font-medium">{formatCurrency(row.Expenses)}</TD>
+                      <TD right className={`font-bold ${row.NetProfit < 0 ? "text-rose-600" : "text-cyan-600"}`}>
+                        {row.NetProfit < 0 ? "-" : ""}{formatCurrency(Math.abs(row.NetProfit))}
+                      </TD>
                       <TD right>
                         <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border text-indigo-600 border-indigo-200 bg-indigo-50">{row.margin.toFixed(1)}%</span>
                       </TD>

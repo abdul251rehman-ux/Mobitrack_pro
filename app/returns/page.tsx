@@ -11,6 +11,8 @@ import { toast } from "sonner"
 
 import { getReturns, createReturn, updateReturnStatus } from "@/lib/api/returns"
 import { getSales } from "@/lib/api/sales"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { getFinanceAccounts } from "@/lib/api/finance"
 import type { Sale } from "@/data/types"
 import { supabase } from "@/lib/supabase"
@@ -121,6 +123,7 @@ function ReturnsPageInner() {
   const autoOpened = useRef(false)
 
   // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  const { user } = useAuth()
   const [returnsList, setReturnsList] = useState<Return[]>([])
   const [salesList, setSalesList] = useState<Sale[]>([])
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
@@ -426,15 +429,33 @@ function ReturnsPageInner() {
 
   // â"€â"€ Status actions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
+  function logReturnStatusChange(ret: Return, newStatus: ReturnStatus, action: "APPROVE" | "REJECT" | "UPDATE") {
+    createAuditLog({
+      timestamp: new Date().toISOString(),
+      userId: user?.id ?? "system",
+      userName: user?.name ?? "Unknown",
+      userRole: user?.role ?? "Admin",
+      action,
+      module: "Returns",
+      entityId: ret.id,
+      entityName: ret.returnNumber,
+      description: `Return ${ret.returnNumber} (invoice ${ret.invoiceNumber}) - ${ret.status} → ${newStatus}`,
+      oldValue: JSON.stringify({ status: ret.status }),
+      newValue: JSON.stringify({ status: newStatus }),
+    }).catch(() => {})
+  }
+
   async function approveReturn(id: string) {
     if (processingId) return
     setProcessingId(id)
     try {
       await updateReturnStatus(id, "Approved")
+      const ret = returnsList.find(r => r.id === id)
       setReturnsList((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "Approved" as ReturnStatus } : r))
       )
       toast.success("Return approved")
+      if (ret) logReturnStatusChange(ret, "Approved", "APPROVE")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve return")
     } finally {
@@ -479,6 +500,7 @@ function ReturnsPageInner() {
       }
 
       await updateReturnStatus(id, "Rejected")
+      const ret = returnsList.find(r => r.id === id)
       setReturnsList((prev) =>
         prev.map((r) =>
           r.id === id
@@ -487,6 +509,7 @@ function ReturnsPageInner() {
         )
       )
       toast.success("Return rejected - cash refund reversed")
+      if (ret) logReturnStatusChange(ret, "Rejected", "REJECT")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to reject return")
     } finally {
@@ -575,6 +598,7 @@ function ReturnsPageInner() {
         r.id === id ? { ...r, status: "Completed" as ReturnStatus, resolvedAt: new Date().toISOString() } : r
       ))
       toast.success("Return completed - inventory restocked & refund recorded")
+      logReturnStatusChange(ret, "Completed", "UPDATE")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to complete return")
     } finally {

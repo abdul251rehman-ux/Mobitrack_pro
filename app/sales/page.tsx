@@ -12,6 +12,8 @@ import { useRouter } from "next/navigation"
 
 import { getSales, voidSale } from "@/lib/api/sales"
 import { getTenant } from "@/lib/api/settings"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import type { ShopInfo } from "@/lib/pdf/invoice"
 import { Sale } from "@/data/types"
 import { generateInvoicePDF } from "@/lib/pdf/invoice"
@@ -58,6 +60,7 @@ const THIS_MONTH_PREFIX = TODAY_STR.substring(0, 7)
 function SalesPageInner() {
   const router = useRouter()
   const { t } = useLanguage()
+  const { user } = useAuth()
 
   // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [salesList, setSalesList] = useState<Sale[]>([])
@@ -113,6 +116,18 @@ function SalesPageInner() {
 
       setSalesList(prev => prev.filter(s => s.id !== sale.id))
       toast.success(`Sale ${sale.invoiceNumber} deleted`)
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Sales",
+        entityId: sale.id,
+        entityName: sale.invoiceNumber,
+        description: `Deleted sale ${sale.invoiceNumber} - ${sale.customerName} (${formatCurrency(sale.total)})`,
+        oldValue: JSON.stringify({ invoiceNumber: sale.invoiceNumber, total: sale.total, customerName: sale.customerName, status: sale.status }),
+      })
       setDeleteTarget(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete sale")

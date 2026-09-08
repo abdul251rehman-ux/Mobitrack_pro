@@ -14,6 +14,8 @@ import { toast } from "sonner"
 
 import { getExpenses, createExpense, updateExpense, deleteExpense } from "@/lib/api/expenses"
 import { getFinanceAccounts } from "@/lib/api/finance"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { Expense, ExpenseCategory, BuiltInExpenseCategory, ExpenseType, ExpensePayment } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
@@ -606,6 +608,7 @@ function DeleteDialog({ open, expense, onConfirm, onCancel }: {
 
 function ExpensesPageInner() {
   const { language } = useLanguage()
+  const { user } = useAuth()
   const [list, setList] = useState<Expense[]>([])
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
   const [defaultAccountId, setDefaultAccountId] = useState("")
@@ -785,6 +788,18 @@ function ExpensesPageInner() {
       await deleteExpense(deleteTarget.id)
       setList(prev => prev.filter(e => e.id !== deleteTarget.id))
       toast.success("Expense deleted")
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Expenses",
+        entityId: deleteTarget.id,
+        entityName: deleteTarget.title,
+        description: `Deleted expense "${deleteTarget.title}" (${formatCurrency(deleteTarget.amount)})`,
+        oldValue: JSON.stringify({ title: deleteTarget.title, amount: deleteTarget.amount, category: deleteTarget.category }),
+      })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete expense")
     }

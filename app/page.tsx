@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import {
-  TrendingUp, ShoppingCart, Package, DollarSign,
+  TrendingUp, ShoppingCart, Package, DollarSign, Wallet,
   ArrowRight, AlertTriangle, Plus, BarChart2, Smartphone,
   ShoppingBag, CheckCircle2, Users, Truck, Tag, ArrowUpRight,
   ArrowDownRight, Calendar, ChevronDown, Clock, CalendarDays, X,
@@ -17,9 +17,12 @@ import { toast } from "sonner"
 import { getSales } from "@/lib/api/sales"
 import { getPurchases } from "@/lib/api/purchases"
 import { getMobiles, getAccessories } from "@/lib/api/products"
+import { getUsedPhones } from "@/lib/api/inventory"
 import { getCustomers } from "@/lib/api/customers"
 import { getSuppliers } from "@/lib/api/suppliers"
-import type { Sale, Purchase, Mobile, Accessory, Customer, Supplier } from "@/data/types"
+import { getExpenses } from "@/lib/api/expenses"
+import type { Sale, Purchase, Mobile, Accessory, Customer, Supplier, Expense } from "@/data/types"
+import type { UsedPhone } from "@/data/used-phones"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
 import { useAuth } from "@/context/auth-context"
@@ -68,7 +71,7 @@ const BarTooltip = ({ active, payload, label }: any) => {
 
 const BAR_COLORS = ["#2563EB", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"]
 
-type Period = "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "year" | "range"
+type Period = "today" | "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "year" | "range"
 
 /* â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 export default function DashboardPage() {
@@ -88,27 +91,33 @@ export default function DashboardPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [mobiles, setMobiles] = useState<Mobile[]>([])
   const [accessories, setAccessories] = useState<Accessory[]>([])
+  const [usedPhones, setUsedPhones] = useState<UsedPhone[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [expenses, setExpenses] = useState<Expense[]>([])
   const [shopName, setShopName] = useState("MobiTrack Pro")
 
   useEffect(() => {
     async function load() {
       try {
-        const [s, p, m, a, c, sup] = await Promise.all([
+        const [s, p, m, a, up, c, sup, exp] = await Promise.all([
           getSales(),
           getPurchases(),
           getMobiles(),
           getAccessories(),
+          getUsedPhones(),
           getCustomers(),
           getSuppliers(),
+          getExpenses(),
         ])
         setSales(s)
         setPurchases(p)
         setMobiles(m)
         setAccessories(a)
+        setUsedPhones(up)
         setCustomers(c)
         setSuppliers(sup)
+        setExpenses(exp)
 
         if (user?.tenantId) {
           const { data: tenant } = await supabase
@@ -140,6 +149,7 @@ export default function DashboardPage() {
 
   const filteredSales = useMemo(() => {
     const base = sales.filter(s => s.status !== "Refunded")
+    if (period === "today") return base.filter(s => s.date === todayStr)
     if (period === "yesterday") return base.filter(s => s.date === yesterdayStr)
     if (period === "thisWeek") return base.filter(s => s.date >= thisWeekStart && s.date <= todayStr)
     if (period === "lastWeek") return base.filter(s => s.date >= lastWeekStartStr && s.date <= lastWeekEndStr)
@@ -152,6 +162,7 @@ export default function DashboardPage() {
 
   const filteredPurchases = useMemo(() => {
     const base = purchases
+    if (period === "today") return base.filter(p => p.date === todayStr)
     if (period === "yesterday") return base.filter(p => p.date === yesterdayStr)
     if (period === "thisWeek") return base.filter(p => p.date >= thisWeekStart && p.date <= todayStr)
     if (period === "lastWeek") return base.filter(p => p.date >= lastWeekStartStr && p.date <= lastWeekEndStr)
@@ -162,11 +173,41 @@ export default function DashboardPage() {
     return base.filter(p => p.date.startsWith(currentMonthKey))
   }, [period, purchases, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
 
+  // Only Paid expenses count against profit - a Pending expense hasn't
+  // actually left the business yet.
+  const filteredExpenses = useMemo(() => {
+    const base = expenses.filter(e => e.status === "Paid")
+    if (period === "today") return base.filter(e => e.date === todayStr)
+    if (period === "yesterday") return base.filter(e => e.date === yesterdayStr)
+    if (period === "thisWeek") return base.filter(e => e.date >= thisWeekStart && e.date <= todayStr)
+    if (period === "lastWeek") return base.filter(e => e.date >= lastWeekStartStr && e.date <= lastWeekEndStr)
+    if (period === "month") return base.filter(e => e.date.startsWith(currentMonthKey))
+    if (period === "lastMonth") return base.filter(e => e.date.startsWith(lastMonthKey))
+    if (period === "year") return base.filter(e => e.date.startsWith(currentYearKey))
+    if (period === "range" && dateFrom && dateTo) return base.filter(e => e.date >= dateFrom && e.date <= dateTo)
+    return base.filter(e => e.date.startsWith(currentMonthKey))
+  }, [period, expenses, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
+
+  const periodExpensesTotal = useMemo(() => filteredExpenses.reduce((s, e) => s + e.amount, 0), [filteredExpenses])
+
   const periodRevenue    = useMemo(() => filteredSales.reduce((s, x) => s + x.total, 0), [filteredSales])
   const periodPurchases  = useMemo(() => filteredPurchases.reduce((s, x) => s + x.total, 0), [filteredPurchases])
 
-  const mobileMap = useMemo(() => new Map(mobiles.map(m => [m.id, m.purchasePrice])), [mobiles])
-  const accMap    = useMemo(() => new Map(accessories.map(a => [a.id, a.purchasePrice])), [accessories])
+  const mobileMap    = useMemo(() => new Map(mobiles.map(m => [m.id, m.purchasePrice])), [mobiles])
+  const accMap       = useMemo(() => new Map(accessories.map(a => [a.id, a.purchasePrice])), [accessories])
+  const usedPhoneMap = useMemo(() => new Map(usedPhones.map(p => [p.id, p.purchase_price + p.refurbishment_cost])), [usedPhones])
+
+  // Total money currently tied up in inventory on hand right now - not a period
+  // figure like the cards above, this is a snapshot across mobiles + accessories
+  // + used phones (excluding sold/returned ones, which are no longer held).
+  const totalInventoryInvestment = useMemo(() => {
+    const mobilesCost     = mobiles.reduce((s, m) => s + m.purchasePrice * m.stock, 0)
+    const accessoriesCost = accessories.reduce((s, a) => s + a.purchasePrice * a.stock, 0)
+    const usedPhonesCost  = usedPhones
+      .filter(p => p.status !== "sold" && p.status !== "returned")
+      .reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
+    return mobilesCost + accessoriesCost + usedPhonesCost
+  }, [mobiles, accessories, usedPhones])
 
   // Items whose cost can't be found in the current catalog (deleted/replaced
   // product row, etc.) are excluded from both profit AND the revenue used for
@@ -180,7 +221,7 @@ export default function DashboardPage() {
       let saleRevenueCounted = 0
       let itemProfit = 0
       for (const item of sale.items) {
-        const costMap = item.productType === "Mobile" ? mobileMap : accMap
+        const costMap = item.productType === "Mobile" ? mobileMap : item.productType === "UsedPhone" ? usedPhoneMap : accMap
         const cost = costMap.get(item.productId)
         if (cost === undefined) { hasGaps = true; continue }
         itemProfit += (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
@@ -190,7 +231,12 @@ export default function DashboardPage() {
       revenueCounted += saleRevenueCounted
     }
     return { periodProfit: profit, periodProfitRevenue: revenueCounted, periodProfitHasGaps: hasGaps }
-  }, [filteredSales, mobileMap, accMap])
+  }, [filteredSales, mobileMap, accMap, usedPhoneMap])
+
+  // Net Profit = Gross Profit - operating expenses (rent, salaries, utilities,
+  // etc. from the Expenses page) for the same period - what the owner actually
+  // kept, as opposed to Gross Profit which only nets out cost of goods sold.
+  const periodNetProfit = periodProfit - periodExpensesTotal
 
   const salesSparkData = useMemo(() => {
     const base = (arr: typeof sales) => arr.filter(s => s.status !== "Refunded")
@@ -200,7 +246,7 @@ export default function DashboardPage() {
         return { v: base(sales).filter(s => s.date.startsWith(monthKey)).reduce((s, x) => s + x.total, 0) }
       })
     }
-    if (period === "yesterday") {
+    if (period === "today" || period === "yesterday") {
       return Array.from({ length: 7 }, (_, i) => {
         const d = format(subDays(todayParsed, 6 - i), "yyyy-MM-dd")
         return { v: base(sales).filter(s => s.date === d).reduce((s, x) => s + x.total, 0) }
@@ -242,7 +288,7 @@ export default function DashboardPage() {
         return { v: purchases.filter(p => p.date.startsWith(monthKey)).reduce((s, x) => s + x.total, 0) }
       })
     }
-    if (period === "yesterday") {
+    if (period === "today" || period === "yesterday") {
       return Array.from({ length: 7 }, (_, i) => {
         const d = format(subDays(todayParsed, 6 - i), "yyyy-MM-dd")
         return { v: purchases.filter(p => p.date === d).reduce((s, x) => s + x.total, 0) }
@@ -290,16 +336,16 @@ export default function DashboardPage() {
       const revenue    = monthSales.reduce((s, x) => s + x.total, 0)
       const profit     = monthSales.reduce((total, sale) => {
         const itemProfit = sale.items.reduce((sub, item) => {
-          const cost = item.productType === "Mobile"
-            ? (mobileMap.get(item.productId) ?? 0)
-            : (accMap.get(item.productId) ?? 0)
+          const costMap = item.productType === "Mobile" ? mobileMap : item.productType === "UsedPhone" ? usedPhoneMap : accMap
+          const cost = costMap.get(item.productId)
+          if (cost === undefined) return sub
           return sub + (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
         }, 0)
         return total + itemProfit - (sale.discount ?? 0)
       }, 0)
       return { month: monthLabel, Revenue: revenue, Profit: Math.max(0, profit) }
     })
-  }, [mobileMap, accMap, sales])
+  }, [mobileMap, accMap, usedPhoneMap, sales])
 
   const topProducts = useMemo(() => {
     const map: Record<string, { name: string; units: number }> = {}
@@ -328,6 +374,7 @@ export default function DashboardPage() {
   const totalPurchasesCount = purchases.length
 
   const periodLabel = {
+    today: t("dash.Today"),
     yesterday: t("dash.Yesterday"),
     thisWeek: t("dash.This Week"),
     lastWeek: t("dash.Last Week"),
@@ -338,6 +385,7 @@ export default function DashboardPage() {
   }[period]
 
   const FILTER_OPTIONS: { value: Period; label: string; icon: React.ElementType; desc: string }[] = [
+    { value: "today",     label: t("dash.Today"),        icon: Clock,        desc: t("dash.Sales from today") },
     { value: "yesterday", label: t("dash.Yesterday"),    icon: Clock,        desc: t("dash.Sales from yesterday") },
     { value: "thisWeek",  label: t("dash.This Week"),    icon: CalendarDays, desc: t("dash.Mon to today") },
     { value: "lastWeek",  label: t("dash.Last Week"),    icon: CalendarDays, desc: t("dash.Mon to Sun prev") },
@@ -526,10 +574,16 @@ export default function DashboardPage() {
               shadow: "shadow-violet-200/60",
             },
             {
-              label: t("dash.Gross Profit"), value: formatCurrency(Math.max(0, Math.round(periodProfit))),
+              label: t("dash.Gross Profit"), value: `${periodProfit < 0 ? "-" : ""}${formatCurrency(Math.round(Math.abs(periodProfit)))}`,
               sub: `${periodProfitRevenue > 0 ? Math.round((periodProfit / periodProfitRevenue) * 100) : 0}% ${t("dash.margin")}${periodProfitHasGaps ? " *" : ""}`,
-              icon: DollarSign, grad: "from-emerald-500 to-emerald-600",
-              shadow: "shadow-emerald-200/60",
+              icon: DollarSign, grad: periodProfit < 0 ? "from-rose-500 to-rose-600" : "from-emerald-500 to-emerald-600",
+              shadow: periodProfit < 0 ? "shadow-rose-200/60" : "shadow-emerald-200/60",
+            },
+            {
+              label: t("dash.Net Profit"), value: `${periodNetProfit < 0 ? "-" : ""}${formatCurrency(Math.round(Math.abs(periodNetProfit)))}`,
+              sub: `${t("dash.After expenses")} - ${formatCurrency(Math.round(periodExpensesTotal))}`,
+              icon: ArrowUpRight, grad: periodNetProfit < 0 ? "from-rose-500 to-rose-600" : "from-cyan-500 to-cyan-600",
+              shadow: periodNetProfit < 0 ? "shadow-rose-200/60" : "shadow-cyan-200/60",
             },
           ] as const).map(({ label, value, sub, icon: Icon, grad, shadow }) => (
             <div key={label} className={`relative overflow-hidden rounded-xl bg-linear-to-r ${grad} px-4 py-3.5 shadow-md ${shadow}`}>
@@ -549,7 +603,7 @@ export default function DashboardPage() {
         </div>
 
         {/* â"€â"€ DESKTOP: gradient cards with sparklines â"€â"€ */}
-        <div className="hidden sm:grid sm:grid-cols-3 gap-3">
+        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Sales Card */}
           <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 p-4 shadow-md shadow-indigo-200/50">
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
@@ -615,20 +669,20 @@ export default function DashboardPage() {
           </div>
 
           {/* Profit Card */}
-          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-emerald-500 to-emerald-700 p-4 shadow-md shadow-emerald-200/50">
+          <div className={`relative overflow-hidden rounded-xl bg-linear-to-br p-4 shadow-md ${periodProfit < 0 ? "from-rose-500 to-rose-700 shadow-rose-200/50" : "from-emerald-500 to-emerald-700 shadow-emerald-200/50"}`}>
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-emerald-200 text-xs font-medium">Gross Profit</p>
-                  <p className="text-emerald-100 text-[10px]">{periodLabel}</p>
+                  <p className={`text-xs font-medium ${periodProfit < 0 ? "text-rose-200" : "text-emerald-200"}`}>Gross Profit</p>
+                  <p className={`text-[10px] ${periodProfit < 0 ? "text-rose-100" : "text-emerald-100"}`}>{periodLabel}</p>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
                   <DollarSign className="w-3.5 h-3.5 text-white" />
                 </div>
               </div>
-              <p className="text-white text-xl font-bold tracking-tight leading-tight mb-0.5">{formatCurrency(Math.max(0, Math.round(periodProfit)))}</p>
-              <p className="text-emerald-200 text-[11px]">
+              <p className="text-white text-xl font-bold tracking-tight leading-tight mb-0.5">{periodProfit < 0 ? "-" : ""}{formatCurrency(Math.round(Math.abs(periodProfit)))}</p>
+              <p className={`text-[11px] ${periodProfit < 0 ? "text-rose-200" : "text-emerald-200"}`}>
                 {periodProfitRevenue > 0 ? Math.round((periodProfit / periodProfitRevenue) * 100) : 0}% gross margin
                 {periodProfitHasGaps && <span title="Some sold items are missing cost data and were excluded from this calculation"> *</span>}
               </p>
@@ -648,6 +702,47 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Net Profit Card - Gross Profit minus operating expenses for the period */}
+          <div className={`relative overflow-hidden rounded-xl bg-linear-to-br p-4 shadow-md ${periodNetProfit < 0 ? "from-rose-500 to-rose-700 shadow-rose-200/50" : "from-cyan-500 to-cyan-700 shadow-cyan-200/50"}`}>
+            <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className={`text-xs font-medium ${periodNetProfit < 0 ? "text-rose-200" : "text-cyan-200"}`}>{t("dash.Net Profit")}</p>
+                  <p className={`text-[10px] ${periodNetProfit < 0 ? "text-rose-100" : "text-cyan-100"}`}>{periodLabel}</p>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                  <ArrowUpRight className="w-3.5 h-3.5 text-white" />
+                </div>
+              </div>
+              <p className="text-white text-xl font-bold tracking-tight leading-tight mb-0.5">
+                {periodNetProfit < 0 ? "-" : ""}{formatCurrency(Math.round(Math.abs(periodNetProfit)))}
+              </p>
+              <p className={`text-[11px] ${periodNetProfit < 0 ? "text-rose-200" : "text-cyan-200"}`}>
+                {t("dash.After expenses")} - {formatCurrency(Math.round(periodExpensesTotal))}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* â"€â"€ Total Inventory Investment - a live snapshot of stock currently held,
+          not scoped to the period filter above (it wouldn't make sense to say
+          "last month's inventory investment" - what's on the shelf is what it is
+          right now). Styled as a plain white stat card, same family as the Stat
+          Counters row below, rather than a gradient banner - it's neutral
+          snapshot data, not a period result, so it shouldn't compete visually
+          with the Financial Overview cards above it â"€â"€ */}
+      {canSeeFinancials && (
+      <div className="mb-4 flex items-center gap-3 rounded-xl bg-white border border-cyan-100 px-4 py-3 shadow-sm">
+        <div className="w-9 h-9 rounded-lg bg-cyan-50 flex items-center justify-center shrink-0">
+          <Wallet className="w-4 h-4 text-cyan-600" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalInventoryInvestment))}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Total Inventory Investment - stock currently on hand</p>
         </div>
       </div>
       )}

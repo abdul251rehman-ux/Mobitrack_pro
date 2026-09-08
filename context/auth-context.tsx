@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { hashPassword, verifyPassword, isPasswordHashed } from "@/lib/api/helpers"
+import { createAuditLog } from "@/lib/api/audit"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setUser(authUser)
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...authUser, _loginedAt: Date.now() }))
+
+    createAuditLog({
+      timestamp: new Date().toISOString(),
+      userId: authUser.id,
+      userName: authUser.name,
+      userRole: authUser.role,
+      action: "LOGIN",
+      module: "Auth",
+      description: `${authUser.name} logged in`,
+    }).catch(() => {})
+
     return true
   }, [])
 
@@ -300,9 +312,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    if (user) {
+      await createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "LOGOUT",
+        module: "Auth",
+        description: `${user.name} logged out`,
+      }).catch(() => {})
+    }
     setUser(null)
     localStorage.removeItem(STORAGE_KEY)
-  }, [])
+  }, [user])
 
   const hasPermission = useCallback(
     (permission: string): boolean => {

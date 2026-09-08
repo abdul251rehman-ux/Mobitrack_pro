@@ -116,7 +116,7 @@ function ReviewSaleModal({
   const [discount, setDiscount] = useState("0")
   const [tax, setTax] = useState("0")
   const [splitPayments, setSplitPayments] = useState<SplitPayment[]>([])
-  const [warrantyDays, setWarrantyDays] = useState("7")
+  const [warrantyDays, setWarrantyDays] = useState("0")
   const [notes, setNotes] = useState("")
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0), [cart])
@@ -180,7 +180,9 @@ function ReviewSaleModal({
                   <div className="flex-1 min-w-0 basis-full sm:basis-0">
                     <p className="text-sm font-semibold text-slate-800 truncate">{item.productName}</p>
                     <p className="text-[10px] text-slate-400 truncate">{[item.color, item.storage, item.category].filter(Boolean).join(" - ")}</p>
-                    <p className="text-[10px] font-semibold text-emerald-600">{formatCurrency(item.unitPrice)} {t("sale.each")}</p>
+                    <p className="text-[10px] font-semibold text-emerald-600">{formatCurrency(item.unitPrice)} {t("sale.each")}
+                      {item.costPrice > 0 && <span className="ml-1.5 font-normal text-slate-400">(cost {formatCurrency(item.costPrice)})</span>}
+                    </p>
                     {item.productType !== "Accessory" && item.imei && (
                       <span className="font-mono text-[10px] text-slate-400 bg-slate-100 rounded px-2 py-0.5 tracking-wider select-all mt-1 inline-block truncate max-w-full">{item.imei}</span>
                     )}
@@ -618,12 +620,19 @@ export default function NewSalePage() {
     }))
   }
 
+  // Sale price is decided here, not copied from a pre-set catalog price -
+  // purchases only capture cost. Manual entry, with cost shown as reference.
+  function setCartUnitPrice(id: string, price: number) {
+    setCartItems(prev => prev.map(c => c.id === id ? { ...c, unitPrice: price, lineTotal: price * c.quantity } : c))
+  }
+
   // â"€â"€ Review modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [reviewOpen, setReviewOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   function handleOpenReview() {
     if (cartItems.length === 0) { toast.error(t("sale.Add items first")); return }
+    if (cartItems.some(i => i.unitPrice <= 0)) { toast.error("Enter a sale price for every item"); return }
     if (customerMode === "existing" && !selectedCustomerId) { toast.error(t("sale.Select a customer")); return }
     setReviewOpen(true)
   }
@@ -1019,7 +1028,11 @@ export default function NewSalePage() {
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-sm font-extrabold text-slate-800">{formatCurrency(p.price)}</p>
+                        {p.price > 0 ? (
+                          <p className="text-sm font-extrabold text-slate-800">{formatCurrency(p.price)}</p>
+                        ) : p.costPrice > 0 ? (
+                          <p className="text-xs font-semibold text-slate-400">Cost {formatCurrency(p.costPrice)}</p>
+                        ) : null}
                         <span className={cn("text-[10px] font-semibold",
                           p.type === "UsedPhone" ? "text-amber-600" : p.type === "Mobile" ? "text-indigo-600" : "text-emerald-600")}>
                           {p.type === "UsedPhone" ? t("sale.Used") : p.type === "Mobile" ? t("sale.Mobiles") : t("sale.Accessories")}
@@ -1194,6 +1207,9 @@ export default function NewSalePage() {
                           <p className="text-[10px] text-slate-400 truncate">{[item.color, item.storage].filter(Boolean).join(" - ")}</p>
                         )}
                         {item.imei && <p className="text-[10px] font-mono text-slate-400 truncate">{item.imei}</p>}
+                        {item.costPrice > 0 && (
+                          <p className="text-[10px] text-slate-400">Cost {formatCurrency(item.costPrice)}</p>
+                        )}
                         {(item.productType === "Accessory" || (item.productType === "Mobile" && !item.imei)) && (
                           <div className="flex items-center gap-1 mt-1">
                             <button onClick={() => adjustCartQty(item.id, -1)} disabled={item.quantity <= 1}
@@ -1209,7 +1225,22 @@ export default function NewSalePage() {
                         )}
                       </div>
                       <div className="shrink-0 text-right flex flex-col items-end gap-1">
-                        <span className="text-xs font-bold text-slate-800">{formatCurrency(item.unitPrice * item.quantity)}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400">Rs</span>
+                          <MoneyInput
+                            value={item.unitPrice || ""}
+                            onChange={v => setCartUnitPrice(item.id, parseFloat(v) || 0)}
+                            placeholder="0"
+                            min={0}
+                            className={cn(
+                              "w-20 h-6 px-1.5 text-xs font-bold text-right rounded-md border focus:outline-none focus:ring-1 focus:ring-indigo-400",
+                              item.unitPrice <= 0 ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"
+                            )}
+                          />
+                        </div>
+                        {item.quantity > 1 && (
+                          <span className="text-[10px] text-slate-400">{formatCurrency(item.unitPrice * item.quantity)} total</span>
+                        )}
                         <button onClick={() => removeFromCart(item.id)}
                           className="text-slate-300 hover:text-rose-500 transition-colors">
                           <Trash2 className="w-3 h-3" />
