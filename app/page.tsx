@@ -5,7 +5,7 @@ import {
   TrendingUp, ShoppingCart, Package, DollarSign, Wallet,
   ArrowRight, AlertTriangle, Plus, BarChart2, Smartphone,
   ShoppingBag, CheckCircle2, Users, Truck, Tag, ArrowUpRight,
-  ArrowDownRight, Calendar, ChevronDown, Clock, CalendarDays, X,
+  ArrowDownRight, ArrowDownLeft, Calendar, ChevronDown, Clock, CalendarDays, X,
   LayoutDashboard,
 } from "lucide-react"
 import {
@@ -21,6 +21,7 @@ import { getUsedPhones } from "@/lib/api/inventory"
 import { getCustomers } from "@/lib/api/customers"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getExpenses } from "@/lib/api/expenses"
+import { getPersons, getPersonTransactions, type Person, type PersonTransaction } from "@/lib/api/persons"
 import type { Sale, Purchase, Mobile, Accessory, Customer, Supplier, Expense } from "@/data/types"
 import type { UsedPhone } from "@/data/used-phones"
 import { PageWrapper } from "@/components/layout/page-wrapper"
@@ -95,12 +96,14 @@ export default function DashboardPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [persons, setPersons] = useState<Person[]>([])
+  const [personTransactions, setPersonTransactions] = useState<PersonTransaction[]>([])
   const [shopName, setShopName] = useState("MobiTrack Pro")
 
   useEffect(() => {
     async function load() {
       try {
-        const [s, p, m, a, up, c, sup, exp] = await Promise.all([
+        const [s, p, m, a, up, c, sup, exp, pers, persTx] = await Promise.all([
           getSales(),
           getPurchases(),
           getMobiles(),
@@ -109,6 +112,8 @@ export default function DashboardPage() {
           getCustomers(),
           getSuppliers(),
           getExpenses(),
+          getPersons(),
+          getPersonTransactions(),
         ])
         setSales(s)
         setPurchases(p)
@@ -118,6 +123,8 @@ export default function DashboardPage() {
         setCustomers(c)
         setSuppliers(sup)
         setExpenses(exp)
+        setPersons(pers)
+        setPersonTransactions(persTx)
 
         if (user?.tenantId) {
           const { data: tenant } = await supabase
@@ -208,6 +215,29 @@ export default function DashboardPage() {
       .reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
     return mobilesCost + accessoriesCost + usedPhonesCost
   }, [mobiles, accessories, usedPhones])
+
+  // Three running balances, not period figures - "how much do we currently owe /
+  // get owed right now", same reasoning as Total Inventory Investment above.
+  const totalPayableToSuppliers = useMemo(
+    () => purchases.reduce((s, p) => s + p.balanceDue, 0),
+    [purchases]
+  )
+  const totalReceivableFromCustomers = useMemo(
+    () => sales
+      .filter(s => s.status !== "Refunded")
+      .reduce((s, x) => s + Math.max(0, x.total - x.amountReceived), 0),
+    [sales]
+  )
+  const totalReceivableFromPersons = useMemo(() => {
+    const balances = new Map<string, number>(persons.map(p => [p.id, p.openingBalance]))
+    for (const tx of personTransactions) {
+      const delta = tx.type === "gave" ? tx.amount : -tx.amount
+      balances.set(tx.personId, (balances.get(tx.personId) ?? 0) + delta)
+    }
+    // Only positive balances count as receivable - a negative one means we owe
+    // that person, which is a separate liability and shouldn't offset this total.
+    return [...balances.values()].reduce((s, bal) => s + Math.max(0, bal), 0)
+  }, [persons, personTransactions])
 
   // Items whose cost can't be found in the current catalog (deleted/replaced
   // product row, etc.) are excluded from both profit AND the revenue used for
@@ -736,13 +766,45 @@ export default function DashboardPage() {
           snapshot data, not a period result, so it shouldn't compete visually
           with the Financial Overview cards above it â"€â"€ */}
       {canSeeFinancials && (
-      <div className="mb-4 flex items-center gap-3 rounded-xl bg-white border border-cyan-100 px-4 py-3 shadow-sm">
-        <div className="w-9 h-9 rounded-lg bg-cyan-50 flex items-center justify-center shrink-0">
-          <Wallet className="w-4 h-4 text-cyan-600" />
+      <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="flex items-center gap-3 rounded-xl bg-white border border-cyan-100 px-4 py-3 shadow-sm">
+          <div className="w-9 h-9 rounded-lg bg-cyan-50 flex items-center justify-center shrink-0">
+            <Wallet className="w-4 h-4 text-cyan-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalInventoryInvestment))}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Inventory Investment - stock on hand</p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalInventoryInvestment))}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Total Inventory Investment - stock currently on hand</p>
+
+        <div className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm">
+          <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+            <ArrowUpRight className="w-4 h-4 text-rose-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalPayableToSuppliers))}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Payable to Suppliers - we owe</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm">
+          <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+            <ArrowDownLeft className="w-4 h-4 text-rose-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalReceivableFromCustomers))}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Receivable from Customers - owed to us</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm">
+          <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+            <ArrowDownLeft className="w-4 h-4 text-rose-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalReceivableFromPersons))}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Receivable from Persons - owed to us</p>
+          </div>
         </div>
       </div>
       )}
