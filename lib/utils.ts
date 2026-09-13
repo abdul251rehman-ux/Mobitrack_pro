@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number): string {
-  return `₨ ${amount.toLocaleString("en-PK")}`;
+  return `₨ ${(amount ?? 0).toLocaleString("en-PK")}`;
 }
 
 export function formatDate(date: string | Date): string {
