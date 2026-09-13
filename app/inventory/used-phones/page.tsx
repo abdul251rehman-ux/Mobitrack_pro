@@ -3067,7 +3067,10 @@ function UsedPhonesPageInner() {
   const [search, setSearch]             = useState("")
   const [gradeFilter, setGradeFilter]   = useState<ConditionGrade | "">("")
   const [brandFilter, setBrandFilter]   = useState("")
-  const [statusFilter, setStatusFilter] = useState<PhoneStatus | "">("")
+  // Defaults to in-stock only so sold phones don't bury the sellable inventory
+  // on page load - the Status filter can still be switched to Sold or All.
+  const DEFAULT_STATUS_FILTER: PhoneStatus | "" = "in_stock"
+  const [statusFilter, setStatusFilter] = useState<PhoneStatus | "">(DEFAULT_STATUS_FILTER)
   const [ptaFilter, setPtaFilter]       = useState<UsedPTAStatus | "">("")
   const [minPrice, setMinPrice]         = useState("")
   const [maxPrice, setMaxPrice]         = useState("")
@@ -3498,10 +3501,10 @@ function UsedPhonesPageInner() {
     setShowBulkDialog(false)
   }
 
-  const hasFilters = gradeFilter || brandFilter || statusFilter || ptaFilter || minPrice || maxPrice || minBattery
+  const hasFilters = gradeFilter || brandFilter || statusFilter !== DEFAULT_STATUS_FILTER || ptaFilter || minPrice || maxPrice || minBattery
 
   const clearFilters = () => {
-    setGradeFilter(""); setBrandFilter(""); setStatusFilter(""); setPtaFilter("")
+    setGradeFilter(""); setBrandFilter(""); setStatusFilter(DEFAULT_STATUS_FILTER); setPtaFilter("")
     setMinPrice(""); setMaxPrice(""); setMinBattery(""); setSearch(""); resetPage()
   }
 
