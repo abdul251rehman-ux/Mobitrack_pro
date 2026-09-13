@@ -578,7 +578,7 @@ export default function NewSalePage() {
       .filter(u => u.status === "in_stock" && matchesPrice(u.selling_price) && (!categoryFilter || ptaLabel(u.pta_status) === categoryFilter)
         && (!storageFilter || (u.storage || "").toLowerCase() === storageFilter.toLowerCase())
         && (!q || `${u.brand} ${u.model} ${u.color} ${u.storage} ${u.imei_number} ${u.pta_status}`.toLowerCase().includes(q)))
-      .map(u => ({ id: u.id, productId: u.id, name: `${u.brand} ${u.model} (Used - ${u.condition_grade})`, type: "UsedPhone" as const, price: u.selling_price, costPrice: (u.purchase_price || 0) + (u.refurbishment_cost || 0), stock: 1, imei: u.imei_number, color: u.color, storage: u.storage })) : []
+      .map(u => ({ id: u.id, productId: u.id, name: `${u.brand} ${u.model} (Used - ${u.condition_grade})`, type: "UsedPhone" as const, price: u.selling_price ?? 0, costPrice: (u.purchase_price || 0) + (u.refurbishment_cost || 0), stock: 1, imei: u.imei_number, color: u.color, storage: u.storage })) : []
     return [...mResults, ...aResults, ...uResults].slice(0, 80)
   }, [productSearch, imeiResults, accessories, usedPhones, typeFilter, categoryFilter, priceFilter, storageFilter])
 

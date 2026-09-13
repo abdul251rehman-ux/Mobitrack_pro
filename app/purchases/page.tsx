@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import { getPurchases } from "@/lib/api/purchases"
+import { getPurchases, updatePurchaseStatus } from "@/lib/api/purchases"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { Purchase, PurchaseItem, Supplier } from "@/data/types"
 import { DataTable } from "@/components/shared/data-table"
@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
 import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -43,7 +44,7 @@ const _now = new Date()
 const WEEK_START = new Date(_now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
 // ─── Table Columns ─────────────────────────────────────────────────────────
-function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => void): ColumnDef<Purchase>[] {
+function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => void, onMarkPaid: (p: Purchase) => void): ColumnDef<Purchase>[] {
   return [
     {
       accessorKey: "poNumber",
@@ -120,7 +121,20 @@ function buildColumns(onView: (p: Purchase) => void, onEdit: (p: Purchase) => vo
     {
       accessorKey: "paymentStatus",
       header: "Payment",
-      cell: ({ row }) => <StatusBadge status={row.getValue("paymentStatus")} />,
+      cell: ({ row }) => {
+        const status: string = row.getValue("paymentStatus")
+        if (status === "Paid") return <StatusBadge status={status} />
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMarkPaid(row.original) }}
+            title="Mark as fully paid"
+            className="cursor-pointer hover:opacity-75 transition-opacity"
+          >
+            <StatusBadge status={status} />
+          </button>
+        )
+      },
     },
     {
       accessorKey: "deliveryStatus",
@@ -389,6 +403,8 @@ function PurchasesPageInner() {
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [viewPurchase, setViewPurchase] = useState<Purchase | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
+  const [markPaidTarget, setMarkPaidTarget] = useState<Purchase | null>(null)
+  const [markingPaid, setMarkingPaid] = useState(false)
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const todayStats = useMemo(() => {
@@ -471,8 +487,33 @@ function PurchasesPageInner() {
     router.push(`/purchases/${purchase.id}/edit`)
   }
 
+  function handleMarkPaid(purchase: Purchase) {
+    setMarkPaidTarget(purchase)
+  }
+
+  async function confirmMarkPaid() {
+    if (!markPaidTarget) return
+    setMarkingPaid(true)
+    try {
+      await updatePurchaseStatus(markPaidTarget.id, {
+        paymentStatus: "Paid",
+        amountPaid: markPaidTarget.total,
+        balanceDue: 0,
+      })
+      setPurchases(prev => prev.map(p =>
+        p.id === markPaidTarget.id ? { ...p, paymentStatus: "Paid", amountPaid: p.total, balanceDue: 0 } : p
+      ))
+      toast.success(`${markPaidTarget.poNumber} marked as Paid`)
+      setMarkPaidTarget(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update payment status")
+    } finally {
+      setMarkingPaid(false)
+    }
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const columns = useMemo(() => buildColumns(handleView, handleEdit), [])
+  const columns = useMemo(() => buildColumns(handleView, handleEdit, handleMarkPaid), [])
 
   // ── Filter toolbar ────────────────────────────────────────────────────────
   const toolbar = (
@@ -758,7 +799,18 @@ function PurchasesPageInner() {
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span className="font-mono text-indigo-600 text-sm font-bold">{purchase.poNumber}</span>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <StatusBadge status={purchase.paymentStatus} />
+                    {purchase.paymentStatus === "Paid" ? (
+                      <StatusBadge status={purchase.paymentStatus} />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleMarkPaid(purchase) }}
+                        title="Mark as fully paid"
+                        className="cursor-pointer hover:opacity-75 transition-opacity"
+                      >
+                        <StatusBadge status={purchase.paymentStatus} />
+                      </button>
+                    )}
                     <StatusBadge
                       status={purchase.deliveryStatus}
                       className={purchase.deliveryStatus === "Partial" ? "bg-indigo-100 text-indigo-700" : undefined}
@@ -858,6 +910,19 @@ function PurchasesPageInner() {
         purchase={viewPurchase}
         open={viewOpen}
         onClose={() => setViewOpen(false)}
+      />
+
+      {/* ── Mark Paid Confirmation ───────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={markPaidTarget !== null}
+        onOpenChange={(open) => { if (!open) setMarkPaidTarget(null) }}
+        title="Mark as Paid?"
+        description={markPaidTarget
+          ? `${markPaidTarget.poNumber} — the remaining balance of ${formatCurrency(markPaidTarget.balanceDue)} will be marked as paid. This only updates this purchase order and does not record a payment in Finance or the Supplier Ledger.`
+          : ""}
+        confirmLabel="Mark as Paid"
+        onConfirm={confirmMarkPaid}
+        loading={markingPaid}
       />
 
     </PageWrapper>
