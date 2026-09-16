@@ -251,8 +251,14 @@ export default function DashboardPage() {
       let saleRevenueCounted = 0
       let itemProfit = 0
       for (const item of sale.items) {
-        const costMap = item.productType === "Mobile" ? mobileMap : item.productType === "UsedPhone" ? usedPhoneMap : accMap
-        const cost = costMap.get(item.productId)
+        // fn_create_sale stores used-phone sale items with product_type='Mobile' too
+        // (sale_items has no separate UsedPhone type) - "UsedPhone" here never
+        // actually appears on a persisted item, so a plain "Mobile" lookup has to
+        // check both cost tables since a real IMEI mobile and a used phone share
+        // the same product_type but live in different tables/id-spaces.
+        const cost = item.productType === "Accessory"
+          ? accMap.get(item.productId)
+          : mobileMap.get(item.productId) ?? usedPhoneMap.get(item.productId)
         if (cost === undefined) { hasGaps = true; continue }
         itemProfit += (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
         saleRevenueCounted += item.unitPrice * item.quantity

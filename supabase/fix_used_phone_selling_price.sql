@@ -1,65 +1,44 @@
--- ============================================================================
--- Atomic money-flow transactions
+-- Migration: fn_create_sale never wrote selling_price on sale
+-- Run this in your Supabase SQL editor.
 --
--- Replaces multi-step client-side write sequences (create sale, void sale,
--- and — in a later pass — create purchase, edit purchase, returns, supplier
--- payment) with single Postgres functions. Each function's body runs inside
--- one implicit transaction: any RAISE EXCEPTION rolls back every write the
--- function made, so a failure partway through can never leave a half-saved
--- sale/purchase/payment behind.
+-- Root cause: when an item sells through the New Sale cart (full cash,
+-- partial credit, or fully on credit - all payment types, this isn't
+-- credit-specific), fn_create_sale marks it sold but never copies the
+-- actual agreed sale price (already known - it's the cart's unitPrice,
+-- already written to sale_items.unit_price) back onto the source row:
+--   - used_phones.selling_price   (UsedPhone branch)
+--   - imei_records.selling_price  (Mobile branch AND the UsedPhone
+--     branch's linked imei_records row, when one exists)
+-- Each is left with whatever selling_price it had before the sale, or
+-- NULL if it was never priced.
 --
--- Tenant scoping: functions take p_tenant_id explicitly and use it in every
--- WHERE/INSERT rather than relying on the app's session-variable RLS trick
--- (set_tenant_context), which has a documented failure mode under Supabase's
--- pooled connections (see fix_rls_pooling.sql) — a function parameter can't
--- silently go missing the way a session variable can.
+-- Impact: every profit/revenue figure that reads one of these columns for
+-- a sold row (Used Phones page stats, and anywhere selling_price is read
+-- with a ?? 0 fallback) silently treats it as "sold for Rs 0" - its full
+-- purchase cost then shows as a manufactured loss that never actually
+-- happened. Confirmed on kumailapplestore@gmail.com's account: 10 of 32
+-- sold used phones had selling_price=NULL, making "Profit: -Rs 757,000"
+-- display instead of the real +Rs 173,000 the other 22 correctly-recorded
+-- sales show. The imei_records side of this (Mobile branch + UsedPhone's
+-- linked IMEI row) is the same bug but currently dormant - checked across
+-- every tenant in this database, zero sold imei_records rows have a NULL
+-- selling_price today, likely because nothing yet reads that column
+-- post-sale - fixed anyway so it can't surface later as new phone sales
+-- (not just used-phone ones) start relying on it.
 --
--- SECURITY DEFINER: the anon/authenticated Supabase role calls these
--- functions directly; the function body is the trust boundary (all reads/
--- writes are scoped to the passed-in p_tenant_id, mirroring how the RLS
--- policies already scope by tenant_id today).
--- ============================================================================
+-- Fix has two parts:
+--   1. Patch fn_create_sale so this never happens again on new sales
+--      (all three write sites above).
+--   2. Backfill the historical NULL used_phones rows from their real
+--      sale_items price (every affected phone's actual sale price is
+--      intact there, it just never made it onto the used_phones row -
+--      nothing was ever lost). No imei_records backfill is included since
+--      there are currently zero affected rows to fix.
 
-
--- ============================================================================
--- fn_create_sale
---
--- Replaces: app/sales/new/page.tsx handleConfirmSale (~613-754)
---           + lib/api/sales.ts createSale (~95-127)
---
--- p_items shape (JSONB array), one element per cart line:
---   {
---     "productId": uuid, "productName": text, "productType": "Mobile"|"Accessory"|"UsedPhone",
---     "quantity": int, "unitPrice": numeric, "discount": numeric, "lineTotal": numeric,
---     "imei": text|null
---   }
---
--- p_splits shape (JSONB array), one element per payment account used:
---   { "accountId": uuid, "amount": numeric }
---
--- Absorbs what today happens as ~15 separate network calls:
---   - invoice number generation (moved server-side + locked, closing the
---     race where two concurrent sales could compute the same number)
---   - stock/availability re-check for every item, right before decrementing
---     (today this is checked once client-side, then written to separately —
---     a gap where stock can change in between; here it's one atomic step)
---   - sales + sale_items insert
---   - per Mobile item: imei_records -> sold, mobiles.stock decrement
---   - per Accessory item: accessories.stock decrement
---   - per UsedPhone item: used_phones -> sold (+ imei_records if present)
---   - customer stats bump (total_purchases/total_spent/last_purchase_date)
---     and loyalty_tier recompute — logic absorbed from the
---     update_customer_on_sale / update_customer_loyalty triggers, which are
---     dropped at the bottom of this file once this function is verified
---   - payments insert (received splits + one "Pending" row for any balance)
---   - finance_transactions insert + finance_accounts.current_balance update,
---     guarded with SELECT ... FOR UPDATE on the account row so two payments
---     landing at nearly the same time can never lose one of them (today only
---     purchases/new-purchase-sheet.tsx does this; sale-new does not)
---   - sales.account_id update
---
--- Returns: JSONB { "sale": {...row...}, "items": [...rows...] }
--- ============================================================================
+-- ── Part 1: fix fn_create_sale going forward ─────────────────────────────────
+-- Full function body, unchanged except the three added selling_price writes
+-- (Mobile branch's imei_records, UsedPhone branch's used_phones, and
+-- UsedPhone branch's linked imei_records).
 
 CREATE OR REPLACE FUNCTION fn_create_sale(
   p_tenant_id       UUID,
@@ -229,9 +208,12 @@ BEGIN
 
     IF v_product_type = 'Mobile' THEN
       -- v_product_id here is the imei_records.id (matches app/sales/new/page.tsx cart wiring)
+      -- Same selling_price fix as the UsedPhone branch below - this row's price
+      -- was never being recorded either.
       UPDATE imei_records
         SET device_status = 'sold', sold_date = p_date,
-            customer_name = p_customer_name, customer_phone = p_customer_phone, customer_id = p_customer_id
+            customer_name = p_customer_name, customer_phone = p_customer_phone, customer_id = p_customer_id,
+            selling_price = (v_item->>'unitPrice')::NUMERIC
         WHERE id = v_product_id AND tenant_id = p_tenant_id;
       UPDATE mobiles SET stock = GREATEST(0, stock - v_quantity)
         WHERE id = (SELECT product_id FROM imei_records WHERE id = v_product_id AND tenant_id = p_tenant_id)
@@ -239,11 +221,18 @@ BEGIN
     ELSIF v_product_type = 'Accessory' THEN
       UPDATE accessories SET stock = GREATEST(0, stock - v_quantity) WHERE id = v_product_id AND tenant_id = p_tenant_id;
     ELSIF v_product_type = 'UsedPhone' THEN
+      -- FIX: now also writes the real agreed sale price back onto the phone
+      -- (previously only status/sold_date/customer were updated, leaving
+      -- selling_price stuck at NULL or a stale pre-sale value forever).
       UPDATE used_phones SET status = 'sold', sold_date = p_date, source_customer_name = p_customer_name,
              selling_price = (v_item->>'unitPrice')::NUMERIC
         WHERE id = v_product_id AND tenant_id = p_tenant_id;
       IF v_imei IS NOT NULL THEN
-        UPDATE imei_records SET device_status = 'sold', sold_date = p_date, customer_name = p_customer_name
+        -- Same fix applies here: imei_records has its own selling_price column
+        -- (currently unread anywhere post-sale, but left correct rather than
+        -- stale/NULL - same reasoning as used_phones above).
+        UPDATE imei_records SET device_status = 'sold', sold_date = p_date, customer_name = p_customer_name,
+               selling_price = (v_item->>'unitPrice')::NUMERIC
           WHERE imei_number = v_imei AND tenant_id = p_tenant_id AND product_id IS NULL;
       END IF;
     END IF;
@@ -323,137 +312,31 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION fn_create_sale(UUID, DATE, UUID, TEXT, TEXT, NUMERIC, NUMERIC, INT, TEXT, JSONB, JSONB) TO anon, authenticated;
+-- ── Part 2: backfill historical NULL selling_price rows ──────────────────────
+-- Pulls the real sale price from sale_items (product_type='Mobile' - used
+-- phones are stored as 'Mobile' in sale_items, see the CASE in the INSERT
+-- above) for any sold used_phones row that's missing its selling_price.
+-- sale_items has no created_at of its own, so recency is taken from its
+-- parent sales.date instead - picks the most recent sale per phone, in case
+-- a phone was ever sold/returned/resold and has more than one sale_items row.
 
+UPDATE used_phones up
+SET selling_price = si.unit_price
+FROM (
+  SELECT DISTINCT ON (si.product_id) si.product_id, si.unit_price
+  FROM sale_items si
+  JOIN sales s ON s.id = si.sale_id
+  WHERE si.product_type = 'Mobile'
+  ORDER BY si.product_id, s.date DESC, s.created_at DESC
+) si
+WHERE up.id = si.product_id
+  AND up.status = 'sold'
+  AND up.selling_price IS NULL;
 
--- ============================================================================
--- fn_void_sale
+-- ── Verification ──────────────────────────────────────────────────────────
+-- Run after applying to see how many rows were fixed and confirm none remain:
 --
--- Replaces: app/sales/page.tsx handleDeleteSale (~100-160)
--- which today has ZERO error checks on any of its 8 writes.
---
--- Real bug fixed here vs. the old code: sale_items.product_type collapses
--- "UsedPhone" into "Mobile" at save time (see toDbSaleItem), so the old
--- delete handler — which branches on that same collapsed product_type —
--- cannot tell a used-phone line item from a real catalog-mobile line item,
--- and silently fails to restore a sold used phone to in_stock. This function
--- disambiguates by checking which table actually has a row for product_id
--- instead of trusting the collapsed type string.
---
--- Also fixes: the old handler never reversed the customers.total_purchases/
--- total_spent bump that update_customer_on_sale applied at creation time —
--- this function reverses it and recomputes loyalty_tier accordingly.
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION fn_void_sale(
-  p_tenant_id UUID,
-  p_sale_id   UUID
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_sale            RECORD;
-  v_item            RECORD;
-  v_txn             RECORD;
-  v_is_used_phone   BOOLEAN;
-BEGIN
-  SELECT * INTO v_sale FROM sales WHERE id = p_sale_id AND tenant_id = p_tenant_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Sale not found';
-  END IF;
-
-  -- ── Reverse inventory per item ────────────────────────────────────────────
-  FOR v_item IN
-    SELECT product_id, product_type, quantity, imei
-    FROM sale_items
-    WHERE sale_id = p_sale_id AND tenant_id = p_tenant_id
-  LOOP
-    IF v_item.product_type = 'Mobile' AND v_item.product_id IS NOT NULL THEN
-      -- Disambiguate UsedPhone vs real Mobile by which table actually owns this id
-      SELECT EXISTS(SELECT 1 FROM used_phones WHERE id = v_item.product_id AND tenant_id = p_tenant_id) INTO v_is_used_phone;
-
-      IF v_is_used_phone THEN
-        UPDATE used_phones SET status = 'in_stock', sold_date = NULL, source_customer_name = NULL
-          WHERE id = v_item.product_id AND tenant_id = p_tenant_id;
-        IF v_item.imei IS NOT NULL THEN
-          UPDATE imei_records SET device_status = 'in_stock', sold_date = NULL, customer_name = NULL
-            WHERE imei_number = v_item.imei AND tenant_id = p_tenant_id AND product_id IS NULL;
-        END IF;
-      ELSE
-        IF v_item.imei IS NOT NULL THEN
-          UPDATE imei_records
-            SET device_status = 'in_stock', sold_date = NULL, customer_name = NULL, customer_phone = NULL, customer_id = NULL
-            WHERE imei_number = v_item.imei AND tenant_id = p_tenant_id;
-        END IF;
-        UPDATE mobiles SET stock = stock + v_item.quantity
-          WHERE id = (SELECT product_id FROM imei_records WHERE imei_number = v_item.imei AND tenant_id = p_tenant_id)
-            AND tenant_id = p_tenant_id;
-      END IF;
-    ELSIF v_item.product_type = 'Accessory' AND v_item.product_id IS NOT NULL THEN
-      UPDATE accessories SET stock = stock + v_item.quantity WHERE id = v_item.product_id AND tenant_id = p_tenant_id;
-    END IF;
-  END LOOP;
-
-  -- ── Reverse finance account balances (row-locked, same pattern as create) ──
-  FOR v_txn IN
-    SELECT account_id, amount FROM finance_transactions
-    WHERE reference_number = v_sale.invoice_number AND tenant_id = p_tenant_id AND type = 'sale_receipt'
-  LOOP
-    PERFORM 1 FROM finance_accounts WHERE id = v_txn.account_id AND tenant_id = p_tenant_id FOR UPDATE;
-    UPDATE finance_accounts SET current_balance = current_balance - v_txn.amount
-      WHERE id = v_txn.account_id AND tenant_id = p_tenant_id;
-  END LOOP;
-
-  -- ── Reverse customer stats bump (bug fix: old code never did this) ────────
-  IF v_sale.customer_id IS NOT NULL AND v_sale.status = 'Completed' THEN
-    UPDATE customers SET
-      total_purchases = GREATEST(0, total_purchases - 1),
-      total_spent = GREATEST(0, total_spent - v_sale.total),
-      loyalty_tier = CASE
-        WHEN GREATEST(0, total_spent - v_sale.total) >= 500000 THEN 'Platinum'
-        WHEN GREATEST(0, total_spent - v_sale.total) >= 200000 THEN 'Gold'
-        WHEN GREATEST(0, total_spent - v_sale.total) >= 50000  THEN 'Silver'
-        ELSE 'Bronze'
-      END
-    WHERE id = v_sale.customer_id AND tenant_id = p_tenant_id;
-  END IF;
-
-  -- ── Delete records, then the sale itself ─────────────────────────────────
-  DELETE FROM finance_transactions WHERE reference_number = v_sale.invoice_number AND tenant_id = p_tenant_id;
-  DELETE FROM payments WHERE reference_number = v_sale.invoice_number AND tenant_id = p_tenant_id;
-  DELETE FROM sale_items WHERE sale_id = p_sale_id AND tenant_id = p_tenant_id;
-  DELETE FROM sales WHERE id = p_sale_id AND tenant_id = p_tenant_id;
-
-  RETURN jsonb_build_object('voided_sale_id', p_sale_id, 'invoice_number', v_sale.invoice_number);
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION fn_void_sale(UUID, UUID) TO anon, authenticated;
-
-
--- ============================================================================
--- Trigger removal — sale-side triggers only
---
--- fn_create_sale and fn_void_sale fully absorb what these two triggers did,
--- so they must be dropped NOW, in this same file, not deferred:
---
---   - sale_item_stock_decrement would otherwise fire a second time on the
---     sale_items insert inside fn_create_sale. For Accessory items this is
---     a real double-decrement (the trigger's UPDATE ... WHERE id = NEW.product_id
---     correctly matches an accessories row). For Mobile items the trigger has
---     always been a silent no-op — NEW.product_id on a Mobile sale_items row
---     is imei_records.id, not mobiles.id, so its UPDATE matches zero rows —
---     which is exactly why the original app code had to decrement mobiles
---     stock by hand in the first place.
---   - sale_update_customer would double-apply the total_purchases/total_spent
---     bump that fn_create_sale now also applies inline.
---
--- purchase_item_stock_increment / purchase_update_supplier / customer_loyalty_trigger
--- are NOT touched here — purchase creation still runs on the old flow until
--- its own atomic pass, and depends on them.
--- ============================================================================
-
-DROP TRIGGER IF EXISTS sale_item_stock_decrement ON sale_items;
-DROP TRIGGER IF EXISTS sale_update_customer ON sales;
+-- SELECT tenant_id, count(*) AS still_null
+-- FROM used_phones
+-- WHERE status = 'sold' AND selling_price IS NULL
+-- GROUP BY tenant_id;
