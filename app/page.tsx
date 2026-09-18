@@ -15,6 +15,7 @@ import {
 import Link from "next/link"
 import { toast } from "sonner"
 import { getSales } from "@/lib/api/sales"
+import { getPayments } from "@/lib/api/payments"
 import { getPurchases } from "@/lib/api/purchases"
 import { getMobiles, getAccessories } from "@/lib/api/products"
 import { getUsedPhones } from "@/lib/api/inventory"
@@ -22,7 +23,7 @@ import { getCustomers } from "@/lib/api/customers"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getExpenses } from "@/lib/api/expenses"
 import { getPersons, getPersonTransactions, type Person, type PersonTransaction } from "@/lib/api/persons"
-import type { Sale, Purchase, Mobile, Accessory, Customer, Supplier, Expense } from "@/data/types"
+import type { Sale, Purchase, Mobile, Accessory, Customer, Supplier, Expense, Payment } from "@/data/types"
 import type { UsedPhone } from "@/data/used-phones"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
@@ -87,8 +88,15 @@ export default function DashboardPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [showFilterMenu, setShowFilterMenu] = useState(false)
+  const [breakdownCard, setBreakdownCard] = useState<
+    "payable" | "receivableCustomers" | "receivablePersons"
+    | "sales" | "purchases" | "grossProfit" | "netProfit" | "inventory"
+    | "collected" | "outstanding" | "cashIn"
+    | null
+  >(null)
   const [loading, setLoading] = useState(true)
   const [sales, setSales] = useState<Sale[]>([])
+  const [payments, setPayments] = useState<Payment[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [mobiles, setMobiles] = useState<Mobile[]>([])
   const [accessories, setAccessories] = useState<Accessory[]>([])
@@ -103,8 +111,9 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [s, p, m, a, up, c, sup, exp, pers, persTx] = await Promise.all([
+        const [s, pay, p, m, a, up, c, sup, exp, pers, persTx] = await Promise.all([
           getSales(),
+          getPayments(),
           getPurchases(),
           getMobiles(),
           getAccessories(),
@@ -116,6 +125,7 @@ export default function DashboardPage() {
           getPersonTransactions(),
         ])
         setSales(s)
+        setPayments(pay)
         setPurchases(p)
         setMobiles(m)
         setAccessories(a)
@@ -167,6 +177,33 @@ export default function DashboardPage() {
     return base.filter(s => s.date.startsWith(currentMonthKey))
   }, [period, sales, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
 
+  // Payments actually received from customers within the selected period, by
+  // the PAYMENT's own date - not the sale's date. This is different from
+  // periodCollected below: a sale made yesterday but paid off today counts
+  // its cash toward TODAY here, but toward YESTERDAY in periodCollected
+  // (which follows the sale's date, matching the Sales page). Same period-
+  // matching logic as filteredSales above, applied to Payment.date instead.
+  const filteredCashInPayments = useMemo(() => {
+    const base = payments.filter(p => p.entityType === "Customer" && p.type === "Received" && p.status === "Completed")
+    if (period === "today") return base.filter(p => p.date === todayStr)
+    if (period === "yesterday") return base.filter(p => p.date === yesterdayStr)
+    if (period === "thisWeek") return base.filter(p => p.date >= thisWeekStart && p.date <= todayStr)
+    if (period === "lastWeek") return base.filter(p => p.date >= lastWeekStartStr && p.date <= lastWeekEndStr)
+    if (period === "month") return base.filter(p => p.date.startsWith(currentMonthKey))
+    if (period === "lastMonth") return base.filter(p => p.date.startsWith(lastMonthKey))
+    if (period === "year") return base.filter(p => p.date.startsWith(currentYearKey))
+    if (period === "range" && dateFrom && dateTo) return base.filter(p => p.date >= dateFrom && p.date <= dateTo)
+    return base.filter(p => p.date.startsWith(currentMonthKey))
+  }, [period, payments, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
+
+  const periodCashIn = useMemo(() => filteredCashInPayments.reduce((s, p) => s + p.amount, 0), [filteredCashInPayments])
+  const cashInByPayment = useMemo(
+    () => filteredCashInPayments
+      .map(p => ({ name: `${p.entityName || "Walk-in"}${p.referenceNumber ? ` · ${p.referenceNumber}` : ""} · ${p.method}`, amount: p.amount, date: p.date }))
+      .sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredCashInPayments]
+  )
+
   const filteredPurchases = useMemo(() => {
     const base = purchases
     if (period === "today") return base.filter(p => p.date === todayStr)
@@ -200,6 +237,47 @@ export default function DashboardPage() {
   const periodRevenue    = useMemo(() => filteredSales.reduce((s, x) => s + x.total, 0), [filteredSales])
   const periodPurchases  = useMemo(() => filteredPurchases.reduce((s, x) => s + x.total, 0), [filteredPurchases])
 
+  // How much of this period's sales revenue has actually been collected vs is
+  // still owed - amountReceived is written by fn_create_sale at checkout and
+  // bumped every time a Collect Payment action runs (ledger/customers,
+  // customers/[id]), so this updates the moment a payment is recorded, no
+  // separate sync step. Same period filter and Sale[] source as periodRevenue
+  // above, and the same math as the Sales page's "Selected Period Sales" card
+  // (app/sales/page.tsx selectedPeriodStats), so both pages always agree.
+  const periodCollected   = useMemo(() => filteredSales.reduce((s, x) => s + x.amountReceived, 0), [filteredSales])
+  const periodOutstanding = useMemo(() => Math.max(0, periodRevenue - periodCollected), [periodRevenue, periodCollected])
+
+  // Per-invoice / per-PO breakdowns for the Sales Revenue and Purchases cards -
+  // built from the exact same filteredSales/filteredPurchases arrays the totals
+  // above sum, so switching the period filter updates the card and its
+  // breakdown dialog together and they can never show different periods.
+  const revenueBySale = useMemo(
+    () => filteredSales
+      .map(s => ({ name: `${s.invoiceNumber} · ${s.customerName || "Walk-in"}`, amount: s.total, date: s.date }))
+      .sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredSales]
+  )
+  const collectedBySale = useMemo(
+    () => filteredSales
+      .filter(s => s.amountReceived > 0)
+      .map(s => ({ name: `${s.invoiceNumber} · ${s.customerName || "Walk-in"}`, amount: s.amountReceived, date: s.date }))
+      .sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredSales]
+  )
+  const outstandingBySale = useMemo(
+    () => filteredSales
+      .filter(s => s.total - s.amountReceived > 0)
+      .map(s => ({ name: `${s.invoiceNumber} · ${s.customerName || "Walk-in"}`, amount: s.total - s.amountReceived, date: s.date }))
+      .sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredSales]
+  )
+  const purchasesByPO = useMemo(
+    () => filteredPurchases
+      .map(p => ({ name: `${p.poNumber} · ${p.supplierName || "Unknown"}`, amount: p.total, date: p.date }))
+      .sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredPurchases]
+  )
+
   const mobileMap    = useMemo(() => new Map(mobiles.map(m => [m.id, m.purchasePrice])), [mobiles])
   const accMap       = useMemo(() => new Map(accessories.map(a => [a.id, a.purchasePrice])), [accessories])
   const usedPhoneMap = useMemo(() => new Map(usedPhones.map(p => [p.id, p.purchase_price + p.refurbishment_cost])), [usedPhones])
@@ -214,6 +292,24 @@ export default function DashboardPage() {
       .filter(p => p.status !== "sold" && p.status !== "returned")
       .reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
     return mobilesCost + accessoriesCost + usedPhonesCost
+  }, [mobiles, accessories, usedPhones])
+
+  // Per-product breakdown for the Inventory Investment card - same three
+  // sources/filters as the total above (a live stock snapshot, not scoped to
+  // the period filter, since "last month's inventory" isn't a meaningful
+  // question for what's on the shelf right now).
+  const inventoryByItem = useMemo(() => {
+    const rows: { name: string; amount: number; date: string }[] = []
+    mobiles.forEach(m => {
+      if (m.stock > 0) rows.push({ name: `${m.brand} ${m.model} (${m.stock} in stock)`, amount: m.purchasePrice * m.stock, date: m.dateAdded })
+    })
+    accessories.forEach(a => {
+      if (a.stock > 0) rows.push({ name: `${a.name} (${a.stock} in stock)`, amount: a.purchasePrice * a.stock, date: a.dateAdded })
+    })
+    usedPhones
+      .filter(p => p.status !== "sold" && p.status !== "returned")
+      .forEach(p => rows.push({ name: `${p.brand} ${p.model} · IMEI ${p.imei_number}`, amount: p.purchase_price + p.refurbishment_cost, date: p.purchased_date }))
+    return rows.sort((a, b) => b.date.localeCompare(a.date))
   }, [mobiles, accessories, usedPhones])
 
   // Three running balances, not period figures - "how much do we currently owe /
@@ -239,14 +335,77 @@ export default function DashboardPage() {
     return [...balances.values()].reduce((s, bal) => s + Math.max(0, bal), 0)
   }, [persons, personTransactions])
 
+  // Per-entity breakdowns for the click-through dialogs - built from the exact
+  // same filters/fields as the three totals above, so the number on the card
+  // and the sum of the breakdown rows always agree.
+  const payableBySupplier = useMemo(() => {
+    const map = new Map<string, { name: string; amount: number; date: string }>()
+    purchases.forEach(p => {
+      if (p.balanceDue <= 0) return
+      const key = p.supplierId || p.supplierName || "unknown"
+      const existing = map.get(key)
+      if (existing) {
+        existing.amount += p.balanceDue
+        if (p.date > existing.date) existing.date = p.date
+      } else {
+        map.set(key, { name: p.supplierName || "Unknown Supplier", amount: p.balanceDue, date: p.date })
+      }
+    })
+    return [...map.values()].sort((a, b) => b.date.localeCompare(a.date))
+  }, [purchases])
+
+  const receivableByCustomer = useMemo(() => {
+    const map = new Map<string, { name: string; amount: number; date: string }>()
+    sales.filter(s => s.status !== "Refunded").forEach(s => {
+      const due = Math.max(0, s.total - s.amountReceived)
+      if (due <= 0) return
+      const key = s.customerId || s.customerName || "unknown"
+      const existing = map.get(key)
+      if (existing) {
+        existing.amount += due
+        if (s.date > existing.date) existing.date = s.date
+      } else {
+        map.set(key, { name: s.customerName || "Walk-in Customer", amount: due, date: s.date })
+      }
+    })
+    return [...map.values()].sort((a, b) => b.date.localeCompare(a.date))
+  }, [sales])
+
+  const receivableByPerson = useMemo(() => {
+    const balances = new Map<string, number>(persons.map(p => [p.id, p.openingBalance]))
+    const lastActivity = new Map<string, string>()
+    for (const tx of personTransactions) {
+      const delta = tx.type === "gave" ? tx.amount : -tx.amount
+      balances.set(tx.personId, (balances.get(tx.personId) ?? 0) + delta)
+      const prev = lastActivity.get(tx.personId)
+      if (!prev || tx.date > prev) lastActivity.set(tx.personId, tx.date)
+    }
+    const nameById = new Map(persons.map(p => [p.id, p.name]))
+    return [...balances.entries()]
+      .filter(([, bal]) => bal > 0)
+      .map(([id, bal]) => ({
+        name: nameById.get(id) ?? "Unknown Person",
+        amount: bal,
+        // Persons with only an opening balance and no transactions yet have no
+        // activity date to sort by - they sink to the bottom rather than
+        // falsely claiming to be "latest".
+        date: lastActivity.get(id) ?? "",
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }, [persons, personTransactions])
+
   // Items whose cost can't be found in the current catalog (deleted/replaced
   // product row, etc.) are excluded from both profit AND the revenue used for
   // the margin %, instead of silently costing 0 - a missing cost is not the
   // same as a free item, and the old behavior inflated margin toward 100%.
-  const { periodProfit, periodProfitRevenue, periodProfitHasGaps } = useMemo(() => {
+  // Also builds the per-sale profit breakdown used by the Gross Profit
+  // dashboard card's click-through dialog, from this exact same loop, so the
+  // card total and the breakdown rows can never drift apart from each other.
+  const { periodProfit, periodProfitRevenue, periodProfitHasGaps, profitBySale } = useMemo(() => {
     let profit = 0
     let revenueCounted = 0
     let hasGaps = false
+    const bySale: { name: string; amount: number; date: string }[] = []
     for (const sale of filteredSales) {
       let saleRevenueCounted = 0
       let itemProfit = 0
@@ -263,16 +422,30 @@ export default function DashboardPage() {
         itemProfit += (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
         saleRevenueCounted += item.unitPrice * item.quantity
       }
-      profit += itemProfit - (sale.discount ?? 0)
+      const saleProfit = itemProfit - (sale.discount ?? 0)
+      profit += saleProfit
       revenueCounted += saleRevenueCounted
+      bySale.push({ name: `${sale.invoiceNumber} · ${sale.customerName || "Walk-in"}`, amount: saleProfit, date: sale.date })
     }
-    return { periodProfit: profit, periodProfitRevenue: revenueCounted, periodProfitHasGaps: hasGaps }
+    bySale.sort((a, b) => b.date.localeCompare(a.date))
+    return { periodProfit: profit, periodProfitRevenue: revenueCounted, periodProfitHasGaps: hasGaps, profitBySale: bySale }
   }, [filteredSales, mobileMap, accMap, usedPhoneMap])
 
   // Net Profit = Gross Profit - operating expenses (rent, salaries, utilities,
   // etc. from the Expenses page) for the same period - what the owner actually
   // kept, as opposed to Gross Profit which only nets out cost of goods sold.
   const periodNetProfit = periodProfit - periodExpensesTotal
+
+  // Net Profit breakdown: same per-sale profit rows as Gross Profit, plus each
+  // period expense shown as a negative row - together they sum to exactly
+  // periodNetProfit, the same subtraction the card itself does.
+  const netProfitBreakdown = useMemo(
+    () => [
+      ...profitBySale,
+      ...filteredExpenses.map(e => ({ name: `${e.title} (expense)`, amount: -e.amount, date: e.date })),
+    ].sort((a, b) => b.date.localeCompare(a.date)),
+    [profitBySale, filteredExpenses]
+  )
 
   const salesSparkData = useMemo(() => {
     const base = (arr: typeof sales) => arr.filter(s => s.status !== "Refunded")
@@ -601,28 +774,28 @@ export default function DashboardPage() {
               label: t("dash.Sales Revenue"), value: formatCurrency(periodRevenue),
               sub: `${filteredSales.length} ${t("dash.transactions")}`,
               icon: ShoppingCart, grad: "from-indigo-500 to-indigo-600",
-              shadow: "shadow-indigo-200/60",
+              shadow: "shadow-indigo-200/60", card: "sales" as const,
             },
             {
               label: t("dash.Purchases"), value: formatCurrency(periodPurchases),
               sub: `${filteredPurchases.length} ${t("dash.orders")}`,
               icon: TrendingUp, grad: "from-violet-500 to-violet-600",
-              shadow: "shadow-violet-200/60",
+              shadow: "shadow-violet-200/60", card: "purchases" as const,
             },
             {
               label: t("dash.Gross Profit"), value: `${periodProfit < 0 ? "-" : ""}${formatCurrency(Math.round(Math.abs(periodProfit)))}`,
               sub: `${periodProfitRevenue > 0 ? Math.round((periodProfit / periodProfitRevenue) * 100) : 0}% ${t("dash.margin")}${periodProfitHasGaps ? " *" : ""}`,
               icon: DollarSign, grad: periodProfit < 0 ? "from-rose-500 to-rose-600" : "from-emerald-500 to-emerald-600",
-              shadow: periodProfit < 0 ? "shadow-rose-200/60" : "shadow-emerald-200/60",
+              shadow: periodProfit < 0 ? "shadow-rose-200/60" : "shadow-emerald-200/60", card: "grossProfit" as const,
             },
             {
               label: t("dash.Net Profit"), value: `${periodNetProfit < 0 ? "-" : ""}${formatCurrency(Math.round(Math.abs(periodNetProfit)))}`,
               sub: `${t("dash.After expenses")} - ${formatCurrency(Math.round(periodExpensesTotal))}`,
               icon: ArrowUpRight, grad: periodNetProfit < 0 ? "from-rose-500 to-rose-600" : "from-cyan-500 to-cyan-600",
-              shadow: periodNetProfit < 0 ? "shadow-rose-200/60" : "shadow-cyan-200/60",
+              shadow: periodNetProfit < 0 ? "shadow-rose-200/60" : "shadow-cyan-200/60", card: "netProfit" as const,
             },
-          ] as const).map(({ label, value, sub, icon: Icon, grad, shadow }) => (
-            <div key={label} className={`relative overflow-hidden rounded-xl bg-linear-to-r ${grad} px-4 py-3.5 shadow-md ${shadow}`}>
+          ] as const).map(({ label, value, sub, icon: Icon, grad, shadow, card }) => (
+            <button key={label} type="button" onClick={() => setBreakdownCard(card)} className={`relative overflow-hidden rounded-xl bg-linear-to-r ${grad} px-4 py-3.5 shadow-md ${shadow} w-full text-left cursor-pointer active:scale-[0.98] transition-transform`}>
               <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-white/10" />
               <div className="relative flex items-center justify-between">
                 <div>
@@ -634,14 +807,14 @@ export default function DashboardPage() {
                   <Icon className="w-5 h-5 text-white" />
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
         {/* â"€â"€ DESKTOP: gradient cards with sparklines â"€â"€ */}
         <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Sales Card */}
-          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 p-4 shadow-md shadow-indigo-200/50">
+          <div role="button" tabIndex={0} onClick={() => setBreakdownCard("sales")} onKeyDown={e => e.key === "Enter" && setBreakdownCard("sales")} className="relative overflow-hidden rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 p-4 shadow-md shadow-indigo-200/50 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all">
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
@@ -673,7 +846,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Purchases Card */}
-          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-violet-500 to-violet-700 p-4 shadow-md shadow-violet-200/50">
+          <div role="button" tabIndex={0} onClick={() => setBreakdownCard("purchases")} onKeyDown={e => e.key === "Enter" && setBreakdownCard("purchases")} className="relative overflow-hidden rounded-xl bg-linear-to-br from-violet-500 to-violet-700 p-4 shadow-md shadow-violet-200/50 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all">
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
@@ -705,7 +878,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Profit Card */}
-          <div className={`relative overflow-hidden rounded-xl bg-linear-to-br p-4 shadow-md ${periodProfit < 0 ? "from-rose-500 to-rose-700 shadow-rose-200/50" : "from-emerald-500 to-emerald-700 shadow-emerald-200/50"}`}>
+          <div role="button" tabIndex={0} onClick={() => setBreakdownCard("grossProfit")} onKeyDown={e => e.key === "Enter" && setBreakdownCard("grossProfit")} className={`relative overflow-hidden rounded-xl bg-linear-to-br p-4 shadow-md cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all ${periodProfit < 0 ? "from-rose-500 to-rose-700 shadow-rose-200/50" : "from-emerald-500 to-emerald-700 shadow-emerald-200/50"}`}>
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
@@ -740,7 +913,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Net Profit Card - Gross Profit minus operating expenses for the period */}
-          <div className={`relative overflow-hidden rounded-xl bg-linear-to-br p-4 shadow-md ${periodNetProfit < 0 ? "from-rose-500 to-rose-700 shadow-rose-200/50" : "from-cyan-500 to-cyan-700 shadow-cyan-200/50"}`}>
+          <div role="button" tabIndex={0} onClick={() => setBreakdownCard("netProfit")} onKeyDown={e => e.key === "Enter" && setBreakdownCard("netProfit")} className={`relative overflow-hidden rounded-xl bg-linear-to-br p-4 shadow-md cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all ${periodNetProfit < 0 ? "from-rose-500 to-rose-700 shadow-rose-200/50" : "from-cyan-500 to-cyan-700 shadow-cyan-200/50"}`}>
             <div className="absolute -right-3 -top-3 w-20 h-20 rounded-full bg-white/10" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
@@ -761,6 +934,45 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* â"€â"€ Collected vs Outstanding - how much of this period's sales revenue
+            actually came in as cash vs is still owed, same period filter as the
+            cards above. Updates the moment a payment is collected (amountReceived
+            is bumped by fn_create_sale and every Collect Payment action), no
+            separate refresh step needed - the source data already moved. Cash In
+            is a different question: how much money physically landed in an
+            account during this period, from any sale regardless of when it
+            happened - a sale from last month paid off today counts toward
+            today's Cash In, but toward last month's Collected. â"€â"€ */}
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button type="button" onClick={() => setBreakdownCard("cashIn")} className="flex items-center gap-3 rounded-xl bg-white border border-emerald-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+              <Wallet className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(periodCashIn))}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Cash received - {periodLabel}</p>
+            </div>
+          </button>
+          <button type="button" onClick={() => setBreakdownCard("collected")} className="flex items-center gap-3 rounded-xl bg-white border border-emerald-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+              <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(periodCollected))}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Collected this period - {periodLabel}</p>
+            </div>
+          </button>
+          <button type="button" onClick={() => setBreakdownCard("outstanding")} className="flex items-center gap-3 rounded-xl bg-white border border-amber-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+            <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+              <ArrowUpRight className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(periodOutstanding))}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Pending this period - {periodLabel}</p>
+            </div>
+          </button>
+        </div>
       </div>
       )}
 
@@ -773,7 +985,7 @@ export default function DashboardPage() {
           with the Financial Overview cards above it â"€â"€ */}
       {canSeeFinancials && (
       <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="flex items-center gap-3 rounded-xl bg-white border border-cyan-100 px-4 py-3 shadow-sm">
+        <button type="button" onClick={() => setBreakdownCard("inventory")} className="flex items-center gap-3 rounded-xl bg-white border border-cyan-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
           <div className="w-9 h-9 rounded-lg bg-cyan-50 flex items-center justify-center shrink-0">
             <Wallet className="w-4 h-4 text-cyan-600" />
           </div>
@@ -781,9 +993,9 @@ export default function DashboardPage() {
             <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalInventoryInvestment))}</p>
             <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Inventory Investment - stock on hand</p>
           </div>
-        </div>
+        </button>
 
-        <div className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm">
+        <button type="button" onClick={() => setBreakdownCard("payable")} className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
           <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
             <ArrowUpRight className="w-4 h-4 text-rose-600" />
           </div>
@@ -791,9 +1003,9 @@ export default function DashboardPage() {
             <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalPayableToSuppliers))}</p>
             <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Payable to Suppliers - we owe</p>
           </div>
-        </div>
+        </button>
 
-        <div className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm">
+        <button type="button" onClick={() => setBreakdownCard("receivableCustomers")} className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
           <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
             <ArrowDownLeft className="w-4 h-4 text-rose-600" />
           </div>
@@ -801,9 +1013,9 @@ export default function DashboardPage() {
             <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalReceivableFromCustomers))}</p>
             <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Receivable from Customers - owed to us</p>
           </div>
-        </div>
+        </button>
 
-        <div className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm">
+        <button type="button" onClick={() => setBreakdownCard("receivablePersons")} className="flex items-center gap-3 rounded-xl bg-white border border-rose-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
           <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
             <ArrowDownLeft className="w-4 h-4 text-rose-600" />
           </div>
@@ -811,7 +1023,7 @@ export default function DashboardPage() {
             <p className="text-xl font-bold text-slate-800 leading-none">{formatCurrency(Math.round(totalReceivableFromPersons))}</p>
             <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Receivable from Persons - owed to us</p>
           </div>
-        </div>
+        </button>
       </div>
       )}
 
@@ -1158,6 +1370,199 @@ export default function DashboardPage() {
         </Card>
 
       </div>
+
+      {breakdownCard && (
+        <BreakdownDialog
+          title={
+            breakdownCard === "payable" ? "Payable to Suppliers"
+            : breakdownCard === "receivableCustomers" ? "Receivable from Customers"
+            : breakdownCard === "receivablePersons" ? "Receivable from Persons"
+            : breakdownCard === "sales" ? "Sales Revenue"
+            : breakdownCard === "purchases" ? "Purchases"
+            : breakdownCard === "grossProfit" ? "Gross Profit"
+            : breakdownCard === "netProfit" ? "Net Profit"
+            : breakdownCard === "collected" ? "Collected This Period"
+            : breakdownCard === "outstanding" ? "Pending This Period"
+            : breakdownCard === "cashIn" ? "Cash Received"
+            : "Inventory Investment"
+          }
+          entityLabel={
+            breakdownCard === "payable" ? "Supplier"
+            : breakdownCard === "receivableCustomers" ? "Customer"
+            : breakdownCard === "receivablePersons" ? "Person"
+            : breakdownCard === "sales" ? "Sale"
+            : breakdownCard === "purchases" ? "Purchase"
+            : breakdownCard === "grossProfit" ? "Sale"
+            : breakdownCard === "netProfit" ? "Entry"
+            : breakdownCard === "collected" ? "Sale"
+            : breakdownCard === "outstanding" ? "Sale"
+            : breakdownCard === "cashIn" ? "Payment"
+            : "Item"
+          }
+          rows={
+            breakdownCard === "payable" ? payableBySupplier
+            : breakdownCard === "receivableCustomers" ? receivableByCustomer
+            : breakdownCard === "receivablePersons" ? receivableByPerson
+            : breakdownCard === "sales" ? revenueBySale
+            : breakdownCard === "purchases" ? purchasesByPO
+            : breakdownCard === "grossProfit" ? profitBySale
+            : breakdownCard === "netProfit" ? netProfitBreakdown
+            : breakdownCard === "collected" ? collectedBySale
+            : breakdownCard === "outstanding" ? outstandingBySale
+            : breakdownCard === "cashIn" ? cashInByPayment
+            : inventoryByItem
+          }
+          total={
+            breakdownCard === "payable" ? totalPayableToSuppliers
+            : breakdownCard === "receivableCustomers" ? totalReceivableFromCustomers
+            : breakdownCard === "receivablePersons" ? totalReceivableFromPersons
+            : breakdownCard === "sales" ? periodRevenue
+            : breakdownCard === "purchases" ? periodPurchases
+            : breakdownCard === "grossProfit" ? periodProfit
+            : breakdownCard === "netProfit" ? periodNetProfit
+            : breakdownCard === "collected" ? periodCollected
+            : breakdownCard === "outstanding" ? periodOutstanding
+            : breakdownCard === "cashIn" ? periodCashIn
+            : totalInventoryInvestment
+          }
+          periodLabel={
+            ["sales", "purchases", "grossProfit", "netProfit", "collected", "outstanding", "cashIn"].includes(breakdownCard) ? periodLabel : undefined
+          }
+          emptyText={
+            breakdownCard === "payable" || breakdownCard === "receivableCustomers" || breakdownCard === "receivablePersons"
+              ? "Nothing outstanding right now."
+              : undefined
+          }
+          onClose={() => setBreakdownCard(null)}
+        />
+      )}
     </PageWrapper>
+  )
+}
+
+// ─── Dashboard breakdown dialog ──────────────────────────────────────────────
+// Shows exactly which rows (suppliers, customers, invoices, POs, sale-profits,
+// expenses...) make up one of the dashboard card totals, so every number on
+// the dashboard can be verified against the individual rows that add up to
+// it. periodLabel, when given, shows which date-range filter (This Month,
+// This Year, custom range, etc.) the rows were pulled under, since several of
+// these cards follow the dashboard's own period selector.
+//
+// Search and pagination only ever affect which rows are DISPLAYED - the
+// header count and the Total footer always reflect the full, unfiltered
+// `rows` array, so the verified number on the dashboard card never changes
+// just because the user searched or paged.
+const BREAKDOWN_PAGE_SIZE = 30
+
+function BreakdownDialog({ title, entityLabel, rows, total, periodLabel, emptyText, onClose }: {
+  title: string
+  entityLabel: string
+  rows: { name: string; amount: number; date?: string }[]
+  total: number
+  periodLabel?: string
+  emptyText?: string
+  onClose: () => void
+}) {
+  const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter(r => r.name.toLowerCase().includes(q))
+  }, [rows, search])
+
+  useEffect(() => { setPage(1) }, [search])
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / BREAKDOWN_PAGE_SIZE))
+  const pageSafe = Math.min(page, totalPages)
+  const paginatedRows = filteredRows.slice((pageSafe - 1) * BREAKDOWN_PAGE_SIZE, pageSafe * BREAKDOWN_PAGE_SIZE)
+
+  if (typeof document === "undefined") return null
+
+  // Portaled straight to document.body - PageWrapper (this page's parent)
+  // wraps its children in a div with the animate-fade-in CSS class, which
+  // runs a transform-based animation. Per the CSS spec, any transformed
+  // ancestor becomes the containing block for position:fixed descendants,
+  // so without the portal this dialog would center inside that scrolled
+  // dashboard content instead of the actual viewport.
+  return createPortal(
+    <>
+      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">{title}</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {rows.length} {entityLabel.toLowerCase()}{rows.length !== 1 ? "s" : ""} · {formatCurrency(Math.round(total))} total
+                {periodLabel && <> · {periodLabel}</>}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {rows.length > 0 && (
+            <div className="px-4 pt-3 pb-2 shrink-0 border-b border-slate-100">
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={`Search ${entityLabel.toLowerCase()}s...`}
+                className="w-full h-8 text-xs rounded-lg border border-slate-200 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+              />
+            </div>
+          )}
+          <div className="overflow-y-auto flex-1 p-3">
+            {rows.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-10">{emptyText ?? "Nothing to show for this period."}</p>
+            ) : filteredRows.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-10">No matches for "{search}".</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {paginatedRows.map((r, idx) => (
+                  <div key={`${r.name}-${idx}`} className="flex items-center justify-between px-3.5 py-3 rounded-lg border border-slate-100 hover:bg-slate-50 hover:border-slate-200 transition-colors">
+                    <div className="min-w-0 pr-3">
+                      <p className="text-sm font-medium text-slate-700 truncate">{r.name}</p>
+                      {r.date && <p className="text-[10px] text-slate-400 mt-0.5">{formatDate(r.date)}</p>}
+                    </div>
+                    <span className={`text-sm font-bold shrink-0 ${r.amount < 0 ? "text-rose-600" : "text-slate-900"}`}>
+                      {r.amount < 0 ? "-" : ""}{formatCurrency(Math.round(Math.abs(r.amount)))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {filteredRows.length > BREAKDOWN_PAGE_SIZE && (
+            <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between shrink-0">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={pageSafe <= 1}
+                className="text-xs font-medium text-slate-500 disabled:text-slate-300 hover:text-indigo-600 disabled:hover:text-slate-300 px-2 py-1"
+              >
+                ← Prev
+              </button>
+              <span className="text-[11px] text-slate-400">Page {pageSafe} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={pageSafe >= totalPages}
+                className="text-xs font-medium text-slate-500 disabled:text-slate-300 hover:text-indigo-600 disabled:hover:text-slate-300 px-2 py-1"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between shrink-0 bg-slate-50 rounded-b-2xl">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total</span>
+            <span className={`text-base font-bold ${total < 0 ? "text-rose-600" : "text-slate-900"}`}>
+              {total < 0 ? "-" : ""}{formatCurrency(Math.round(Math.abs(total)))}
+            </span>
+          </div>
+        </div>
+      </div>
+    </>,
+    document.body
   )
 }

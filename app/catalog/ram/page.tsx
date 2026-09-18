@@ -6,6 +6,8 @@ import { Plus, Pencil, Trash2, Search, Cpu, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,6 +25,7 @@ interface RamItem {
 }
 
 function RamPageInner() {
+  const { user } = useAuth()
   const [list, setList] = useState<RamItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -90,10 +93,24 @@ function RamPageInner() {
         const { error } = await supabase.from("ram_options").update({ name: formName.trim() }).eq("id", editTarget.id)
         if (error) throw error
         toast.success("RAM option updated")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "UPDATE", module: "Products",
+          entityId: editTarget.id, entityName: formName.trim(),
+          description: `Renamed RAM option "${editTarget.name}" to "${formName.trim()}"`,
+          oldValue: JSON.stringify({ name: editTarget.name }), newValue: JSON.stringify({ name: formName.trim() }),
+        }).catch(() => {})
       } else {
-        const { error } = await supabase.from("ram_options").insert({ tenant_id: tenantId, name: formName.trim(), is_system: false })
+        const { data: created, error } = await supabase.from("ram_options").insert({ tenant_id: tenantId, name: formName.trim(), is_system: false }).select("id").single()
         if (error) throw error
         toast.success(`"${formName.trim()}" added`)
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "CREATE", module: "Products",
+          entityId: (created as any)?.id, entityName: formName.trim(),
+          description: `Added RAM option "${formName.trim()}"`,
+          newValue: JSON.stringify({ name: formName.trim() }),
+        }).catch(() => {})
       }
       setDialogOpen(false)
       await fetchAll()
@@ -117,6 +134,13 @@ function RamPageInner() {
       const { error } = await supabase.from("ram_options").delete().eq("id", deleteTarget.id)
       if (error) throw error
       toast.success(`"${deleteTarget.name}" deleted`)
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "DELETE", module: "Products",
+        entityId: deleteTarget.id, entityName: deleteTarget.name,
+        description: `Deleted RAM option "${deleteTarget.name}"`,
+        oldValue: JSON.stringify({ name: deleteTarget.name }),
+      }).catch(() => {})
       setDeleteTarget(null)
       await fetchAll()
     } catch (err) {

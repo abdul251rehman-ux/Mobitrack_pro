@@ -2351,6 +2351,27 @@ function MobilesPageInner() {
           image: imageUrl || undefined,
         })
         toast.success("Mobile phone updated successfully")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "UPDATE",
+          module: "Products",
+          entityId: editingMobile.id,
+          entityName: `${data.brand} ${data.model}`,
+          description: `Edited mobile "${editingMobile.brand} ${editingMobile.model}"`,
+          oldValue: JSON.stringify({
+            brand: editingMobile.brand, model: editingMobile.model, color: editingMobile.color,
+            storage: editingMobile.storage, ram: editingMobile.ram,
+            purchasePrice: editingMobile.purchasePrice, sellingPrice: editingMobile.sellingPrice,
+            stock: editingMobile.stock,
+          }),
+          newValue: JSON.stringify({
+            brand: data.brand, model: data.model, color: data.color, storage: data.storage, ram: data.ram,
+            purchasePrice: data.purchasePrice, sellingPrice: data.sellingPrice, stock: data.stock,
+          }),
+        }).catch(() => {})
       } else {
         await createMobile({
           brand: data.brand,
@@ -2371,6 +2392,20 @@ function MobilesPageInner() {
           dateAdded: format(new Date(), "yyyy-MM-dd"),
         })
         toast.success("Mobile phone added successfully")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "CREATE",
+          module: "Products",
+          entityName: `${data.brand} ${data.model}`,
+          description: `Added mobile "${data.brand} ${data.model}" - ${data.stock} unit(s) at Rs ${data.purchasePrice}`,
+          newValue: JSON.stringify({
+            brand: data.brand, model: data.model, color: data.color, storage: data.storage, ram: data.ram,
+            purchasePrice: data.purchasePrice, sellingPrice: data.sellingPrice, stock: data.stock,
+          }),
+        }).catch(() => {})
       }
       await fetchData()
     } catch (err: unknown) {

@@ -68,6 +68,7 @@ export async function updateExpense(id: string, data: Partial<Expense>): Promise
       .from('expenses')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select()
       .single()
 
@@ -80,10 +81,12 @@ export async function updateExpense(id: string, data: Partial<Expense>): Promise
 
 export async function deleteExpense(id: string): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const { error } = await supabase
       .from('expenses')
       .delete()
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to delete expense: ${error.message}`)
   } catch (err) {

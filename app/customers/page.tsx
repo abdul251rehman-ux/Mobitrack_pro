@@ -179,10 +179,25 @@ function CustomersPageInner() {
         const updated = await updateCustomer(editTarget.id, patch)
         setCustomers((prev) => prev.map((c) => (c.id === editTarget.id ? updated : c)))
         toast.success("Customer updated", { description: `${data.name}'s profile has been updated.` })
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "UPDATE", module: "Customers",
+          entityId: editTarget.id, entityName: data.name,
+          description: `Edited customer "${editTarget.name}"`,
+          oldValue: JSON.stringify({ name: editTarget.name, phone: editTarget.phone, creditLimit: editTarget.creditLimit, openingBalance: editTarget.openingBalance }),
+          newValue: JSON.stringify({ name: data.name, phone: data.phone, creditLimit, openingBalance }),
+        }).catch(() => {})
       } else {
         const created = await createCustomer({ ...patch, totalPurchases: 0, totalSpent: 0, loyaltyTier: "Bronze" })
         setCustomers((prev) => [created, ...prev])
         toast.success("Customer added", { description: `${data.name} has been added to your customer list.` })
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "CREATE", module: "Customers",
+          entityId: created.id, entityName: data.name,
+          description: `Added customer "${data.name}" (${data.phone})`,
+          newValue: JSON.stringify({ name: data.name, phone: data.phone, creditLimit, openingBalance }),
+        }).catch(() => {})
       }
       setDialogOpen(false)
     } catch (err) {

@@ -6,6 +6,8 @@ import { Plus, Pencil, Trash2, Search, Smartphone, Lock, ChevronDown } from "luc
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +30,7 @@ interface Brand { id: string; name: string }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 function ModelsPageInner() {
+  const { user } = useAuth()
   const [models, setModels] = useState<PhoneModel[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
@@ -156,10 +159,25 @@ function ModelsPageInner() {
           if (error) throw error
         }
         toast.success("Model updated")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "UPDATE", module: "Products",
+          entityId: editTarget.id, entityName: `${formBrand.trim()} ${formName.trim()}`,
+          description: `Edited model "${editTarget.brandName} ${editTarget.name}" to "${formBrand.trim()} ${formName.trim()}"`,
+          oldValue: JSON.stringify({ name: editTarget.name, brandName: editTarget.brandName }),
+          newValue: JSON.stringify({ name: formName.trim(), brandName: formBrand.trim() }),
+        }).catch(() => {})
       } else {
-        const { error } = await supabase.from(table).insert({ tenant_id: tenantId, name: formName.trim(), brand_name: formBrand.trim(), is_system: false })
+        const { data: created, error } = await supabase.from(table).insert({ tenant_id: tenantId, name: formName.trim(), brand_name: formBrand.trim(), is_system: false }).select("id").single()
         if (error) throw error
         toast.success(`Model "${formName.trim()}" added`)
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "CREATE", module: "Products",
+          entityId: (created as any)?.id, entityName: `${formBrand.trim()} ${formName.trim()}`,
+          description: `Added model "${formBrand.trim()} ${formName.trim()}"`,
+          newValue: JSON.stringify({ name: formName.trim(), brandName: formBrand.trim() }),
+        }).catch(() => {})
       }
       setDialogOpen(false)
       await fetchAll()
@@ -180,6 +198,13 @@ function ModelsPageInner() {
       const { error } = await supabase.from(table).delete().eq("id", realId)
       if (error) throw error
       toast.success(`"${deleteTarget.name}" deleted`)
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "DELETE", module: "Products",
+        entityId: deleteTarget.id, entityName: `${deleteTarget.brandName} ${deleteTarget.name}`,
+        description: `Deleted model "${deleteTarget.brandName} ${deleteTarget.name}"`,
+        oldValue: JSON.stringify({ name: deleteTarget.name, brandName: deleteTarget.brandName }),
+      }).catch(() => {})
       setDeleteTarget(null)
       await fetchAll()
     } catch (err) {

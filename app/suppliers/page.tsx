@@ -445,6 +445,7 @@ function SuppliersPageInner() {
     try {
       const openingBalance = data.openingBalance ? parseFloat(data.openingBalance) : undefined
       if (id) {
+        const before = supplierList.find((s) => s.id === id)
         const updated = await updateSupplier(id, {
           companyName:   data.companyName,
           contactPerson: data.contactPerson,
@@ -460,6 +461,14 @@ function SuppliersPageInner() {
           prev.map((s) => (s.id === id ? updated : s))
         )
         toast.success(`${data.companyName} updated successfully`)
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "UPDATE", module: "Suppliers",
+          entityId: id, entityName: data.companyName,
+          description: `Edited supplier "${before?.companyName ?? data.companyName}"`,
+          oldValue: before ? JSON.stringify({ companyName: before.companyName, phone: before.phone, openingBalance: before.openingBalance, status: before.status }) : undefined,
+          newValue: JSON.stringify({ companyName: data.companyName, phone: data.phone, openingBalance, status: data.status }),
+        }).catch(() => {})
       } else {
         const created = await createSupplier({
           companyName:        data.companyName,
@@ -477,6 +486,13 @@ function SuppliersPageInner() {
         })
         setSupplierList((prev) => [created, ...prev])
         toast.success(`${data.companyName} added successfully`)
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "CREATE", module: "Suppliers",
+          entityId: created.id, entityName: data.companyName,
+          description: `Added supplier "${data.companyName}" (${data.phone})`,
+          newValue: JSON.stringify({ companyName: data.companyName, phone: data.phone, openingBalance, status: data.status }),
+        }).catch(() => {})
       }
       setFormOpen(false)
       setEditingSupplier(null)

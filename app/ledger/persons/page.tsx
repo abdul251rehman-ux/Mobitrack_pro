@@ -8,6 +8,8 @@ import { getPersons, getPersonTransactions, createPersonTransaction, deletePerso
 import type { Person, PersonTransaction } from "@/lib/api/persons"
 import { getFinanceAccounts } from "@/lib/api/finance"
 import type { FinanceAccount } from "@/lib/api/types"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MoneyInput } from "@/components/ui/money-input"
@@ -38,6 +40,7 @@ const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Easypaisa", "JazzCash", "Cheq
 
 function PersonLedgerPageInner() {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [persons, setPersons] = useState<Person[]>([])
   const [transactions, setTransactions] = useState<PersonTransaction[]>([])
@@ -186,6 +189,18 @@ function PersonLedgerPageInner() {
       setTxForm({ type: "gave", amount: "", date: todayPKT(), method: "Cash", accountId: defaultAcc?.id ?? "", notes: "" })
       setShowAddTx(false)
       toast.success(`${txForm.type === "gave" ? "Gave" : "Took"} ${formatCurrency(amount)} recorded`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Payments",
+        entityId: selectedPersonId,
+        entityName: selectedPerson?.name ?? "",
+        description: `${txForm.type === "gave" ? "Gave" : "Took"} Rs ${amount} ${txForm.type === "gave" ? "to" : "from"} ${selectedPerson?.name ?? "person"} via ${txForm.method}`,
+        newValue: JSON.stringify({ type: txForm.type, amount, method: txForm.method, accountId: txForm.accountId }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save transaction")
     } finally {
@@ -206,6 +221,18 @@ function PersonLedgerPageInner() {
       setTransactions(prev => prev.filter(t => t.id !== txId))
       setDrawerEntry(null)
       toast.success("Transaction deleted")
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Payments",
+        entityId: txId,
+        entityName: selectedPerson?.name ?? tx?.personId ?? "",
+        description: `Deleted ${tx?.type === "gave" ? "Gave" : "Took"} transaction of Rs ${tx?.amount ?? "?"}${selectedPerson?.name ? ` for ${selectedPerson.name}` : ""}`,
+        oldValue: tx ? JSON.stringify({ type: tx.type, amount: tx.amount, accountId: tx.accountId }) : undefined,
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete")
     } finally {

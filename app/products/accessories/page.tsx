@@ -916,9 +916,34 @@ function AccessoriesPageInner() {
       if (editingAccessory) {
         await updateAccessory(editingAccessory.id, catalogData)
         toast.success("Accessory updated successfully")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "UPDATE",
+          module: "Products",
+          entityId: editingAccessory.id,
+          entityName: data.name,
+          description: `Edited accessory "${editingAccessory.name}"`,
+          oldValue: JSON.stringify({ name: editingAccessory.name, brand: editingAccessory.brand, sku: editingAccessory.sku, category: editingAccessory.category }),
+          newValue: JSON.stringify({ name: data.name, brand: data.brand, sku: data.sku, category: data.category }),
+        }).catch(() => {})
       } else {
-        await createAccessory({ ...catalogData, dateAdded: format(new Date(), "yyyy-MM-dd") })
+        const created = await createAccessory({ ...catalogData, dateAdded: format(new Date(), "yyyy-MM-dd") })
         toast.success("Accessory added to catalog")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "CREATE",
+          module: "Products",
+          entityId: (created as any)?.id,
+          entityName: data.name,
+          description: `Added accessory "${data.name}" (SKU ${data.sku}) to catalog`,
+          newValue: JSON.stringify({ name: data.name, brand: data.brand, sku: data.sku, category: data.category }),
+        }).catch(() => {})
       }
       await fetchData()
     } catch (err: unknown) {

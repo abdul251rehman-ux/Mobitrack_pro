@@ -6,7 +6,7 @@ import { Plus, Eye, RotateCcw, Search, Filter, ShoppingCart, TrendingUp, Calenda
 
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
-import { startOfDay, startOfWeek, startOfMonth, isAfter, parseISO } from "date-fns"
+import { startOfDay, startOfWeek, startOfMonth, isAfter, parseISO, format, subDays, subWeeks, subMonths, endOfWeek } from "date-fns"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -57,6 +57,16 @@ const START_OF_WEEK = startOfWeek(TODAY, { weekStartsOn: 1 })
 const START_OF_MONTH = startOfMonth(TODAY)
 const THIS_MONTH_PREFIX = TODAY_STR.substring(0, 7)
 
+// Matches Dashboard's period options exactly - same labels, same date math - so
+// the two pages' numbers for "This Month" etc. are directly cross-checkable.
+type SalesPeriod = "today" | "yesterday" | "thisWeek" | "lastWeek" | "month" | "lastMonth" | "year" | "range"
+const YESTERDAY_STR = format(subDays(TODAY, 1), "yyyy-MM-dd")
+const LAST_WEEK_START_STR = format(startOfWeek(subWeeks(TODAY, 1), { weekStartsOn: 1 }), "yyyy-MM-dd")
+const LAST_WEEK_END_STR = format(endOfWeek(subWeeks(TODAY, 1), { weekStartsOn: 1 }), "yyyy-MM-dd")
+const THIS_WEEK_START_STR = format(START_OF_WEEK, "yyyy-MM-dd")
+const LAST_MONTH_PREFIX = format(subMonths(TODAY, 1), "yyyy-MM")
+const THIS_YEAR_PREFIX = TODAY_STR.substring(0, 4)
+
 function SalesPageInner() {
   const router = useRouter()
   const { t } = useLanguage()
@@ -66,6 +76,12 @@ function SalesPageInner() {
   const [salesList, setSalesList] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [shopInfo, setShopInfo] = useState<ShopInfo>({ shopName: "Mobile Shop", shopAddress: "", shopPhone: "" })
+
+  // â"€â"€ Selected-period stat card - mirrors Dashboard's period selector so the
+  //     two pages' numbers can be directly cross-checked â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  const [statsPeriod, setStatsPeriod] = useState<SalesPeriod>("month")
+  const [statsDateFrom, setStatsDateFrom] = useState("")
+  const [statsDateTo, setStatsDateTo] = useState("")
 
   useEffect(() => {
     async function fetchSales() {
@@ -180,6 +196,28 @@ function SalesPageInner() {
       collectedRevenue,
     }
   }, [salesList])
+
+  // â"€â"€ Selected-period stat - same period options + date math as the Dashboard's
+  //     Financial Overview selector (Refunded sales excluded, matching Dashboard's
+  //     periodRevenue), so switching to "This Month" here should show the exact
+  //     same total as the Dashboard's "This Month" Sales Revenue card â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  const selectedPeriodStats = useMemo(() => {
+    const base = salesList.filter(s => s.status !== "Refunded")
+    let matched: Sale[]
+    if (statsPeriod === "today") matched = base.filter(s => s.date === TODAY_STR)
+    else if (statsPeriod === "yesterday") matched = base.filter(s => s.date === YESTERDAY_STR)
+    else if (statsPeriod === "thisWeek") matched = base.filter(s => s.date >= THIS_WEEK_START_STR && s.date <= TODAY_STR)
+    else if (statsPeriod === "lastWeek") matched = base.filter(s => s.date >= LAST_WEEK_START_STR && s.date <= LAST_WEEK_END_STR)
+    else if (statsPeriod === "month") matched = base.filter(s => s.date.startsWith(THIS_MONTH_PREFIX))
+    else if (statsPeriod === "lastMonth") matched = base.filter(s => s.date.startsWith(LAST_MONTH_PREFIX))
+    else if (statsPeriod === "year") matched = base.filter(s => s.date.startsWith(THIS_YEAR_PREFIX))
+    else if (statsPeriod === "range" && statsDateFrom && statsDateTo) matched = base.filter(s => s.date >= statsDateFrom && s.date <= statsDateTo)
+    else matched = base.filter(s => s.date.startsWith(THIS_MONTH_PREFIX))
+
+    const total = matched.reduce((s, x) => s + x.total, 0)
+    const received = matched.reduce((s, x) => s + x.amountReceived, 0)
+    return { total, count: matched.length, received, outstanding: Math.max(0, total - received) }
+  }, [salesList, statsPeriod, statsDateFrom, statsDateTo])
 
   // â"€â"€ Filtered data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const filtered = useMemo(() => {
@@ -520,6 +558,54 @@ function SalesPageInner() {
           </div>
         }
       />
+
+      {/* Selected Period - mirrors Dashboard's period selector so this number can
+          be cross-checked directly against the Dashboard's Sales Revenue card */}
+      <div className="rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 p-4 shadow-md shadow-indigo-200/50">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <div>
+            <p className="text-indigo-200 text-xs font-medium">Selected Period Sales</p>
+            <p className="text-indigo-100 text-[10px]">Matches Dashboard's period totals</p>
+          </div>
+          <Select value={statsPeriod} onValueChange={(v) => setStatsPeriod(v as SalesPeriod)}>
+            <SelectTrigger className="h-8 w-[150px] text-xs bg-white/15 border-white/20 text-white [&>svg]:text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="yesterday">Yesterday</SelectItem>
+              <SelectItem value="thisWeek">This Week</SelectItem>
+              <SelectItem value="lastWeek">Last Week</SelectItem>
+              <SelectItem value="month">This Month</SelectItem>
+              <SelectItem value="lastMonth">Last Month</SelectItem>
+              <SelectItem value="year">This Year</SelectItem>
+              <SelectItem value="range">Custom Range</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {statsPeriod === "range" && (
+          <div className="flex items-center gap-2 mb-3">
+            <input type="date" value={statsDateFrom} onChange={e => setStatsDateFrom(e.target.value)}
+              className="flex-1 h-8 rounded-lg border border-white/20 bg-white/15 px-2 text-xs text-white placeholder:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-white/40" />
+            <input type="date" value={statsDateTo} onChange={e => setStatsDateTo(e.target.value)}
+              className="flex-1 h-8 rounded-lg border border-white/20 bg-white/15 px-2 text-xs text-white placeholder:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-white/40" />
+          </div>
+        )}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <p className="text-white text-xl font-bold tracking-tight leading-tight">{formatCurrency(selectedPeriodStats.total)}</p>
+            <p className="text-indigo-200 text-[11px] mt-0.5">{selectedPeriodStats.count} transaction{selectedPeriodStats.count !== 1 ? "s" : ""}</p>
+          </div>
+          <div>
+            <p className="text-white text-xl font-bold tracking-tight leading-tight">{formatCurrency(selectedPeriodStats.received)}</p>
+            <p className="text-indigo-200 text-[11px] mt-0.5">Collected</p>
+          </div>
+          <div>
+            <p className="text-white text-xl font-bold tracking-tight leading-tight">{formatCurrency(selectedPeriodStats.outstanding)}</p>
+            <p className="text-indigo-200 text-[11px] mt-0.5">Outstanding</p>
+          </div>
+        </div>
+      </div>
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">

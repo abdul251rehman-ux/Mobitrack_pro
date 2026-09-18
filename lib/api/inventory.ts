@@ -83,6 +83,7 @@ export async function updateImeiStatus(
   saleId?: string
 ): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const updateData: Record<string, unknown> = { status }
     if (saleId !== undefined) updateData.sale_id = saleId
 
@@ -90,6 +91,7 @@ export async function updateImeiStatus(
       .from('imei_records')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to update IMEI status: ${error.message}`)
   } catch (err) {
@@ -149,6 +151,7 @@ export async function updateStockAlertRule(
   data: Partial<Pick<StockAlertRule, 'threshold' | 'enabled'>>
 ): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const updateData: Record<string, unknown> = {}
     if (data.threshold !== undefined) updateData.threshold = data.threshold
     if (data.enabled !== undefined) updateData.enabled = data.enabled
@@ -157,6 +160,7 @@ export async function updateStockAlertRule(
       .from('stock_alert_rules')
       .update(updateData)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to update stock alert rule: ${error.message}`)
   } catch (err) {
@@ -184,10 +188,12 @@ export async function getStockAlertLogs(): Promise<StockAlertLog[]> {
 
 export async function acknowledgeStockAlert(id: string): Promise<void> {
   try {
+    const tenantId = await getTenantId()
     const { error } = await supabase
       .from('stock_alert_logs')
       .update({ acknowledged: true })
       .eq('id', id)
+      .eq('tenant_id', tenantId)
 
     if (error) throw new Error(`Failed to acknowledge stock alert: ${error.message}`)
   } catch (err) {
@@ -271,6 +277,7 @@ export async function updateUsedPhone(
   data: Partial<UsedPhone>
 ): Promise<UsedPhone> {
   try {
+    const tenantId = await getTenantId()
     const updatePayload: Record<string, unknown> = {}
     if (data.brand !== undefined) updatePayload.brand = data.brand
     if (data.model !== undefined) updatePayload.model = data.model
@@ -307,10 +314,31 @@ export async function updateUsedPhone(
       .from('used_phones')
       .update(updatePayload)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select()
       .single()
 
     if (error) throw new Error(`Failed to update used phone: ${error.message}`)
+
+    // Keep the linked purchase_items row (used by the Purchases page and
+    // every investment/cost total) in sync with this phone's own identity
+    // fields. Without this, editing a phone here silently desyncs it from
+    // its purchase record - the purchase keeps showing the old brand/model/
+    // IMEI/cost forever, which is exactly what caused a real Rs 98,000
+    // mismatch between the Purchases and Used Phones pages in production.
+    const itemPatch: Record<string, unknown> = {}
+    if (data.brand !== undefined || data.model !== undefined) {
+      itemPatch.product_name = `${updatePayload.brand ?? (updated as any).brand} ${updatePayload.model ?? (updated as any).model}`.trim()
+    }
+    if (data.imei_number !== undefined) itemPatch.imeis = [(updated as any).imei_number]
+    if (data.purchase_price !== undefined) {
+      itemPatch.unit_cost = (updated as any).purchase_price
+      itemPatch.total = (updated as any).purchase_price
+    }
+    if (Object.keys(itemPatch).length > 0) {
+      await supabase.from('purchase_items').update(itemPatch).eq('product_id', id).eq('tenant_id', tenantId)
+    }
+
     return toUsedPhone(updated as DbUsedPhone)
   } catch (err) {
     throw err instanceof Error ? err : new Error('Failed to update used phone')

@@ -13,7 +13,9 @@ import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { createPurchase } from "@/lib/api/purchases"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import type { Supplier } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 
@@ -1046,7 +1048,13 @@ function PhoneCard({
             <FieldHead label="Qty" />
             <input
               type="number" onWheel={e => e.currentTarget.blur()} min={1} value={row.qty}
-              onChange={e => onChange("qty", e.target.value)}
+              // min={1} only affects the spinner arrows, not direct typing -
+              // strip non-digits so "-5" (parseInt("-5") is truthy, so the
+              // `|| 1` fallback at insert time never caught it) can never
+              // reach state, which would otherwise both shrink accessory
+              // stock on a purchase (should only ever increase it) and make
+              // this line's total negative.
+              onChange={e => onChange("qty", e.target.value.replace(/\D/g, ""))}
               className="w-full h-11 rounded-lg border border-slate-300 px-3 text-base font-bold tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
@@ -1486,6 +1494,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
   onClose: () => void; onCreated?: () => void; editPurchaseId?: string | null
 }) {
   const { language } = useLanguage()
+  const { user } = useAuth()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [accessoryCatalog, setAccessoryCatalog] = useState<CatalogAccessory[]>([])
@@ -2163,7 +2172,12 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
       } // end row
 
       for (const item of accessoryItems) {
-        const buy = parseFloat(item.buyPrice), qty = parseInt(item.qty) || 1
+        // Math.max(1, ...) is a defense-in-depth floor in addition to the
+        // input's own digit-stripping - parseInt("-5") is truthy, so the old
+        // `|| 1` fallback alone never caught a negative value, which both
+        // shrank accessory stock on what should only ever be a stock-increasing
+        // purchase and made this line's total negative.
+        const buy = parseFloat(item.buyPrice), qty = Math.max(1, parseInt(item.qty) || 1)
         const { data: cur } = await supabase.from("accessories").select("stock").eq("id", item.catalogId).single()
         const curStock = cur?.stock ?? 0
         origAccessoryStocks[item.catalogId] = curStock
@@ -2212,6 +2226,11 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
         //   So after trigger: UPDATE stock = stock âˆ' newQty + (newQty âˆ' oldQty) = stock âˆ' oldQty
         //   Which = (currentStock + newQty) âˆ' oldQty = currentStock + (newQty âˆ' oldQty) âœ"
 
+        // Snapshot the purchase header's old totals for the audit trail, before overwriting.
+        const { data: prevPurchase } = await supabase
+          .from("purchases").select("total, amount_paid, payment_status, supplier_name")
+          .eq("id", editPurchaseId).single()
+
         await supabase.from("purchases").update({
           supplier_id: selectedSupplierId,
           supplier_name: selectedSupplier?.companyName ?? "",
@@ -2222,7 +2241,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
 
         // Snapshot old purchase_items before deleting
         const { data: origItems } = await supabase
-          .from("purchase_items").select("product_id, product_type, quantity")
+          .from("purchase_items").select("product_id, product_type, product_name, quantity, unit_cost, imeis")
           .eq("purchase_id", editPurchaseId)
         const oldQtyMap: Record<string, number> = {}
         for (const o of (origItems ?? [])) {
@@ -2299,10 +2318,46 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
         }
 
         purchaseId = editPurchaseId
+
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "UPDATE",
+          module: "Purchases",
+          entityId: editPurchaseId,
+          entityName: editPoNumber ?? poNumber,
+          description: `Edited purchase ${editPoNumber ?? ""} - ${(origItems ?? []).length} item(s) to ${purchaseItems.length} item(s), total Rs ${(prevPurchase as any)?.total ?? "?"} to Rs ${grandTotal}`,
+          oldValue: JSON.stringify({
+            total: (prevPurchase as any)?.total, amountPaid: (prevPurchase as any)?.amount_paid,
+            paymentStatus: (prevPurchase as any)?.payment_status, supplierName: (prevPurchase as any)?.supplier_name,
+            items: (origItems ?? []).map((o: any) => ({ name: o.product_name, qty: o.quantity, cost: o.unit_cost, imeis: o.imeis })),
+          }),
+          newValue: JSON.stringify({
+            total: grandTotal, amountPaid, paymentStatus, supplierName: selectedSupplier?.companyName ?? "",
+            items: purchaseItems.map((pi: any) => ({ name: pi.productName, qty: pi.quantity, cost: pi.unitCost, imeis: pi.imeis })),
+          }),
+        }).catch(() => {})
       } else {
-        // â"€â"€ Create mode: INSERT new purchase â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         const created = await createPurchase({ poNumber, date: today, supplierId: selectedSupplierId, supplierName: selectedSupplier?.companyName ?? "", subtotal, shippingCost: shipping, tax, total: grandTotal, amountPaid, balanceDue, paymentMethod, paymentStatus, deliveryStatus: "Received", dueDate: dueDate || null, notes: purchaseNotes, items: [] } as any, purchaseItems)
         purchaseId = (created as any).id
+
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "PURCHASE",
+          module: "Purchases",
+          entityId: purchaseId ?? undefined,
+          entityName: poNumber,
+          description: `Created purchase ${poNumber} from ${selectedSupplier?.companyName ?? "supplier"} - ${purchaseItems.length} item(s), total Rs ${grandTotal}`,
+          newValue: JSON.stringify({
+            total: grandTotal, amountPaid, paymentStatus,
+            items: purchaseItems.map((pi: any) => ({ name: pi.productName, qty: pi.quantity, cost: pi.unitCost, imeis: pi.imeis })),
+          }),
+        }).catch(() => {})
       }
 
       if (amountPaid > 0) {
@@ -2316,11 +2371,12 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
       for (const se of activeSplits) {
         const amt = parseFloat(se.amount)
         await supabase.from("finance_transactions").insert({ tenant_id: tenantId, date: today, type: "purchase_payment", account_id: se.accountId, amount: amt, reference_type: "Purchase", reference_number: poNumber, description: `Purchase paid - ${poNumber}` })
-        const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", se.accountId).single()
-        if (accRow) {
-          const prevBal = (accRow as any).current_balance
-          await supabase.from("finance_accounts").update({ current_balance: prevBal - amt }).eq("id", se.accountId).eq("current_balance", prevBal)
-        }
+        // Atomic, row-locked debit (supabase/fix_balance_race_condition.sql) -
+        // replaces the old optimistic-concurrency UPDATE ... WHERE current_balance = prevBal,
+        // which silently no-op'd (lost the debit entirely) if a concurrent
+        // writer changed the balance between the read and this write, instead
+        // of retrying or surfacing an error.
+        await adjustAccountBalance(se.accountId, -amt)
       }
       if (activeSplits.length > 0) {
         await supabase.from("purchases").update({ account_id: activeSplits[0].accountId }).eq("po_number", poNumber).eq("tenant_id", tenantId)
@@ -2680,7 +2736,7 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
                           </Field>
                           <Field label="Qty">
                             <input type="number" onWheel={e => e.currentTarget.blur()} min={1} value={item.qty}
-                              onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, qty: e.target.value } : a))}
+                              onChange={e => setAccessoryItems(p => p.map(a => a.uid === item.uid ? { ...a, qty: e.target.value.replace(/\D/g, "") } : a))}
                               className="w-full h-7 rounded-md border border-slate-300 px-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                           </Field>
                         </div>

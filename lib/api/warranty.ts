@@ -144,6 +144,7 @@ export async function createWarrantyClaim(
       .from('warranty_records')
       .update({ status: 'Claimed' })
       .eq('id', warrantyId)
+      .eq('tenant_id', tenantId)
 
     return toWarrantyClaim(created as DbWarrantyClaim)
   } catch (err) {
@@ -289,6 +290,7 @@ export async function updateRepairTicket(
   data: Partial<RepairTicket>
 ): Promise<RepairTicket> {
   try {
+    const tenantId = await getTenantId()
     const updatePayload: Record<string, unknown> = {}
     if (data.status !== undefined) updatePayload.status = data.status
     if (data.diagnosis !== undefined) updatePayload.diagnosis = data.diagnosis
@@ -305,6 +307,7 @@ export async function updateRepairTicket(
       .from('repair_tickets')
       .update(updatePayload)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select()
       .single()
 

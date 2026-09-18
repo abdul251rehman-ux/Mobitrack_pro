@@ -14,6 +14,8 @@ import {
 } from "@/lib/api/persons"
 import { getFinanceAccounts } from "@/lib/api/finance"
 import type { FinanceAccount } from "@/lib/api/types"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
 import { MoneyInput } from "@/components/ui/money-input"
 import { PageLoader } from "@/components/shared/page-loader"
@@ -58,6 +60,7 @@ function StatCard({ label, value, sub, color, Icon }: {
 export default function PersonDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const { user } = useAuth()
 
   const [person, setPerson] = useState<Person | null>(null)
   const [transactions, setTransactions] = useState<PersonTransaction[]>([])
@@ -152,6 +155,13 @@ export default function PersonDetailPage() {
       setTransactions(prev => [...prev, txn].sort((a, b) => a.date.localeCompare(b.date)))
       setDialogType(null)
       toast.success(dialogType === "gave" ? `Gave ${formatCurrency(amt)} recorded` : `Received ${formatCurrency(amt)} recorded`)
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "PAYMENT", module: "Payments",
+        entityId: id, entityName: person?.name ?? "",
+        description: `${dialogType === "gave" ? "Gave" : "Received"} Rs ${amt} ${dialogType === "gave" ? "to" : "from"} ${person?.name ?? "person"} via ${method}`,
+        newValue: JSON.stringify({ type: dialogType, amount: amt, method, accountId }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
     } finally {
@@ -171,6 +181,13 @@ export default function PersonDetailPage() {
       setTransactions(prev => prev.filter(t => t.id !== deleteTarget.id))
       setDeleteTarget(null)
       toast.success("Transaction deleted")
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "DELETE", module: "Payments",
+        entityId: deleteTarget.id, entityName: person?.name ?? "",
+        description: `Deleted ${deleteTarget.type === "gave" ? "Gave" : "Took"} transaction of Rs ${deleteTarget.amount} for ${person?.name ?? "person"}`,
+        oldValue: JSON.stringify({ type: deleteTarget.type, amount: deleteTarget.amount, accountId: deleteTarget.accountId }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete")
     } finally {

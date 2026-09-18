@@ -13,7 +13,7 @@ import { format, parseISO, startOfMonth, startOfYear, isWithinInterval, endOfMon
 import { toast } from "sonner"
 
 import { getExpenses, createExpense, updateExpense, deleteExpense } from "@/lib/api/expenses"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
 import { Expense, ExpenseCategory, BuiltInExpenseCategory, ExpenseType, ExpensePayment } from "@/data/types"
@@ -742,6 +742,14 @@ function ExpensesPageInner() {
         const updated = await updateExpense(editing.id, expenseData)
         setList(prev => prev.map(e => e.id === editing.id ? updated : e))
         toast.success("Expense updated")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "UPDATE", module: "Expenses",
+          entityId: editing.id, entityName: form.title,
+          description: `Edited expense "${editing.title}"`,
+          oldValue: JSON.stringify({ title: editing.title, amount: editing.amount, category: editing.category, status: editing.status }),
+          newValue: JSON.stringify({ title: form.title, amount, category: form.category, status: form.status }),
+        }).catch(() => {})
       } else {
         const { supabase } = await import("@/lib/supabase")
         const { getTenantId } = await import("@/lib/api/helpers")
@@ -760,18 +768,22 @@ function ExpensesPageInner() {
             reference_id: created.id,
             description: `Expense - ${form.title}`,
           })
-          const { data: accRow } = await supabase
-            .from("finance_accounts").select("current_balance").eq("id", form.accountId).single()
-          if (accRow) {
-            const newBal = Math.max(0, (accRow as any).current_balance - amount)
-            await supabase.from("finance_accounts").update({ current_balance: newBal }).eq("id", form.accountId)
-            setFinanceAccounts(prev => prev.map(a => a.id === form.accountId ? { ...a, currentBalance: newBal } : a))
-          }
+          // Atomic, row-locked debit (supabase/fix_balance_race_condition.sql) -
+          // safe against a concurrent payment against the same account racing this one.
+          const newBal = await adjustAccountBalance(form.accountId, -amount, 0)
+          setFinanceAccounts(prev => prev.map(a => a.id === form.accountId ? { ...a, currentBalance: newBal } : a))
           // Tag the expense with the account
           await supabase.from("expenses").update({ account_id: form.accountId }).eq("id", created.id)
         }
 
         toast.success("Expense added")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "CREATE", module: "Expenses",
+          entityId: created.id, entityName: form.title,
+          description: `Added expense "${form.title}" - Rs ${amount} (${form.category})`,
+          newValue: JSON.stringify({ title: form.title, amount, category: form.category, status: form.status }),
+        }).catch(() => {})
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save expense")
