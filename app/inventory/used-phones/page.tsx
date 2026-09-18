@@ -21,6 +21,8 @@ import {
   type UsedPTAStatus,
 } from "@/data/used-phones"
 import { getUsedPhones, createUsedPhone, updateUsedPhone } from "@/lib/api/inventory"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { MASTER_BRANDS, MASTER_BRAND_NAMES, APPLE_MODELS } from "@/data/brands"
 import { SearchableSelect } from "@/components/shared/searchable-select"
 import { StatCard } from "@/components/shared/stat-card"
@@ -31,7 +33,7 @@ import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { getSuppliers, createSupplier } from "@/lib/api/suppliers"
 import { getCustomers, createCustomer } from "@/lib/api/customers"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance, adjustSupplierBalance } from "@/lib/api/finance"
 import type { Supplier, Customer } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
@@ -140,12 +142,10 @@ function PhoneCard({
   phone,
   onView,
   onEdit,
-  onSell,
 }: {
   phone: UsedPhone
   onView: (p: UsedPhone) => void
   onEdit: (p: UsedPhone) => void
-  onSell: (p: UsedPhone) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const profit = phone.selling_price - phone.purchase_price - phone.refurbishment_cost
@@ -202,7 +202,7 @@ function PhoneCard({
         </div>
 
         {/* Actions */}
-        <div className={cn("grid gap-1 pt-1.5 border-t border-slate-100", phone.status === "in_stock" ? "grid-cols-3" : "grid-cols-2")}>
+        <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-slate-100">
           <button
             onClick={() => onView(phone)}
             className="h-7 flex items-center justify-center gap-1 text-[11px] font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
@@ -215,14 +215,6 @@ function PhoneCard({
           >
             <Edit2 className="w-3 h-3" /> Edit
           </button>
-          {phone.status === "in_stock" && (
-            <button
-              onClick={() => onSell(phone)}
-              className="h-7 flex items-center justify-center gap-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"
-            >
-              <CheckCircle2 className="w-3 h-3" /> Sell
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -231,11 +223,10 @@ function PhoneCard({
 
 // --Ã¢"â‚¬ Phone Row (List View) ----------------------------------------------------
 
-function PhoneRow({ phone, onView, onEdit, onSell }: {
+function PhoneRow({ phone, onView, onEdit }: {
   phone: UsedPhone
   onView: (p: UsedPhone) => void
   onEdit: (p: UsedPhone) => void
-  onSell: (p: UsedPhone) => void
 }) {
   const profit = phone.selling_price - phone.purchase_price - phone.refurbishment_cost
   const margin = phone.selling_price > 0 ? ((profit / phone.selling_price) * 100).toFixed(0) : "0"
@@ -289,11 +280,6 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
           <button onClick={() => onEdit(phone)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition-colors" title="Edit">
             <Edit2 className="w-3.5 h-3.5" />
           </button>
-          {phone.status === "in_stock" && (
-            <button onClick={() => onSell(phone)} className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-500 hover:text-emerald-700 transition-colors" title="Mark as Sold">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </td>
     </tr>
@@ -302,11 +288,10 @@ function PhoneRow({ phone, onView, onEdit, onSell }: {
 
 // --Ã¢"â‚¬ Details Slide-Over ------------------------------------------------------Ã¢"â‚¬
 
-function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
+function DetailsSlideOver({ phone, onClose, onEdit }: {
   phone: UsedPhone
   onClose: () => void
   onEdit: (p: UsedPhone) => void
-  onSell: (p: UsedPhone) => void
 }) {
   const totalCost = phone.purchase_price + phone.refurbishment_cost
   const profit = phone.selling_price - totalCost
@@ -541,77 +526,86 @@ function DetailsSlideOver({ phone, onClose, onEdit, onSell }: {
           >
             <Edit2 className="w-4 h-4" /> Edit
           </button>
-          {phone.status === "in_stock" && (
-            <button
-              onClick={() => onSell(phone)}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors"
-            >
-              <CheckCircle2 className="w-4 h-4" /> Mark as Sold
-            </button>
-          )}
         </div>
       </div>
     </>
   )
 }
 
-// --Ã¢"â‚¬ Mark as Sold Dialog ------------------------------------------------------
+// -- Invested Breakdown ------------------------------------------------------
 
-function MarkAsSoldDialog({ phone, onClose, onSold }: {
-  phone: UsedPhone
-  onClose: () => void
-  onSold: (id: string, customerName: string, price: number) => void
-}) {
-  const [customerName, setCustomerName] = useState("")
-  const [finalPrice, setFinalPrice] = useState(phone.selling_price.toString())
+function InvestedBreakdownDialog({ phones, onClose }: { phones: UsedPhone[]; onClose: () => void }) {
+  const [tab, setTab] = useState<"all" | "current">("current")
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const price = Number(finalPrice)
-    if (!price || price <= 0) { toast.error("Enter a valid sale price"); return }
-    onSold(phone.id, customerName || "Walk-In Customer", price)
-  }
+  const inStock = phones.filter(p => p.status !== "sold" && p.status !== "returned")
+  const list = tab === "all" ? phones : inStock
+  const total = list.reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
 
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-          <div className="p-6 border-b border-slate-100">
-            <h2 className="text-lg font-bold text-slate-900">Mark as Sold</h2>
-            <p className="text-sm text-slate-500 mt-0.5">{phone.brand} {phone.model}{phone.condition_grade ? `  ·  Grade ${phone.condition_grade}` : ""}</p>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85dvh] flex flex-col">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Invested</h2>
+              <p className="text-sm text-slate-500 mt-0.5">Purchase + refurbishment cost breakdown</p>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name (optional)</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                placeholder="Walk-In Customer"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+
+          <div className="flex gap-1.5 px-5 pt-3 shrink-0">
+            <button
+              onClick={() => setTab("current")}
+              className={cn("flex-1 py-2 rounded-xl text-sm font-semibold transition-colors",
+                tab === "current" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
+            >
+              Current Stock ({inStock.length})
+            </button>
+            <button
+              onClick={() => setTab("all")}
+              className={cn("flex-1 py-2 rounded-xl text-sm font-semibold transition-colors",
+                tab === "all" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
+            >
+              All-Time ({phones.length})
+            </button>
+          </div>
+
+          <div className="px-5 pt-4 pb-2 shrink-0">
+            <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
+                {tab === "current" ? "Current stock total" : "All-time total"}
+              </span>
+              <span className="text-lg font-extrabold text-indigo-900 tabular-nums">{formatCurrency(total)}</span>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Final Sale Price (Rs)</label>
-              <MoneyInput
-                value={finalPrice}
-                onChange={v => setFinalPrice(v)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                min={1}
-                required
-              />
-              <p className="text-xs text-slate-400 mt-1">Listed price: {formatCurrency(phone.selling_price)}</p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors">
-                Cancel
-              </button>
-              <button type="submit" className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors">
-                Confirm Sale
-              </button>
-            </div>
-          </form>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-1.5">
+            {list.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">No phones in this list</p>
+            ) : (
+              list
+                .slice()
+                .sort((a, b) => (b.purchase_price + b.refurbishment_cost) - (a.purchase_price + a.refurbishment_cost))
+                .map(p => {
+                  const cost = p.purchase_price + p.refurbishment_cost
+                  return (
+                    <div key={p.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{p.brand} {p.model}</p>
+                        <p className="text-xs text-slate-400">
+                          {p.status === "sold" ? "Sold" : p.status === "returned" ? "Returned" : "In Stock"}
+                          {p.refurbishment_cost > 0 ? `  ·  Refurb ${formatCurrency(p.refurbishment_cost)}` : ""}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-slate-700 tabular-nums shrink-0 ml-3">{formatCurrency(cost)}</span>
+                    </div>
+                  )
+                })
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -1036,6 +1030,7 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
   onDeleteRam: (v: string) => Promise<void>
 }) {
   const { language } = useLanguage()
+  const { user: bulkAuthUser } = useAuth()
   const [supplierId, setSupplierId] = useState("")
   const [supplierErr, setSupplierErr] = useState(false)
   const [splits, setSplits] = useState<SplitEntry[]>([])
@@ -1440,24 +1435,17 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
             reference_type: "Purchase", reference_number: poNumber,
             description: `Used phones purchase ${poNumber} - ${purchaseSourceLabel}`,
           })
-          const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", se.accountId).single()
-          if (accRow) {
-            await supabase.from("finance_accounts").update({
-              current_balance: (accRow as any).current_balance - amt,
-            }).eq("id", se.accountId)
-          }
+          // Atomic, row-locked debit (supabase/fix_balance_race_condition.sql) -
+          // safe against a concurrent payment against the same account racing this one.
+          await adjustAccountBalance(se.accountId, -amt)
         }
       }
       // Update supplier outstanding balance if partial/unpaid - only
       // applies to real supplier purchases; walk-in/trade-in must be
       // paid in full (enforced in validate()), so balanceDue is always 0 there.
       if (sourceType === "purchased" && balanceDue > 0 && resolvedSupplierId) {
-        const { data: supRow } = await supabase.from("suppliers").select("outstanding_balance").eq("id", resolvedSupplierId).single()
-        if (supRow) {
-          await supabase.from("suppliers").update({
-            outstanding_balance: ((supRow as any).outstanding_balance ?? 0) + balanceDue,
-          }).eq("id", resolvedSupplierId)
-        }
+        // Atomic, row-locked update (supabase/fix_balance_race_condition.sql).
+        await adjustSupplierBalance(resolvedSupplierId, balanceDue)
       }
 
       const saved = (inserted as any[]).map(row => ({
@@ -1491,6 +1479,18 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       } as UsedPhone))
 
       toast.success(`${saved.length} phone${saved.length !== 1 ? "s" : ""} added - ${poNumber}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: bulkAuthUser?.id ?? "system",
+        userName: bulkAuthUser?.name ?? "Unknown",
+        userRole: bulkAuthUser?.role ?? "Admin",
+        action: "PURCHASE",
+        module: "Inventory",
+        entityId: (purchaseRecord as any)?.id,
+        entityName: poNumber,
+        description: `Bulk-added ${saved.length} used phone(s) via purchase ${poNumber} from ${purchaseSourceLabel} - total Rs ${grandTotal}`,
+        newValue: JSON.stringify({ poNumber, count: saved.length, total: grandTotal, paid, source: purchaseSourceLabel }),
+      }).catch(() => {})
       onSaved(saved)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to save - no phones were added")
@@ -3062,6 +3062,7 @@ function AddEditDialog({ editPhone, onClose, onSave, brands, colors, storageOpti
 // --Ã¢"â‚¬ Main Page ----------------------------------------------------------------
 
 function UsedPhonesPageInner() {
+  const { user } = useAuth()
   const [phones, setPhones] = useState<UsedPhone[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]             = useState("")
@@ -3085,7 +3086,7 @@ function UsedPhonesPageInner() {
   const [showBulkDialog, setShowBulkDialog] = useState(false)
   const [editPhone, setEditPhone]         = useState<UsedPhone | null>(null)
   const [showCalculator, setShowCalculator] = useState(false)
-  const [sellPhone, setSellPhone]         = useState<UsedPhone | null>(null)
+  const [showInvestedBreakdown, setShowInvestedBreakdown] = useState(false)
 
   // -- Dynamic dropdown data ------------------------------------------------Ã¢"â‚¬
   const [brands, setBrands] = useState<string[]>([])
@@ -3293,14 +3294,22 @@ function UsedPhonesPageInner() {
 
   // -- Stats ------------------------------------------------------------------
   const stats = useMemo(() => {
+    // All-time spend across every phone ever bought (sold + in-stock) - "how much
+    // have we put into this business, ever". Not the same as what's on the shelf
+    // right now, since sold phones' cost has already turned into revenue.
     const totalInvested = phones.reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
+    // Cost tied up in stock currently on hand - "how much cash is sitting unsold
+    // right now". Matches the Dashboard's Inventory Investment card's scope.
+    const currentInvested = phones
+      .filter(p => p.status !== "sold" && p.status !== "returned")
+      .reduce((s, p) => s + p.purchase_price + p.refurbishment_cost, 0)
     const revenueSold   = phones.filter(p => p.status === "sold").reduce((s, p) => s + p.selling_price, 0)
     const gradeCount    = (["A+","A","B+","B","C","D"] as ConditionGrade[]).reduce((acc, g) => {
       acc[g] = phones.filter(p => p.condition_grade === g).length
       return acc
     }, {} as Record<ConditionGrade, number>)
     const profitSold    = phones.filter(p => p.status === "sold").reduce((s, p) => s + p.selling_price - p.purchase_price - p.refurbishment_cost, 0)
-    return { total: phones.length, totalInvested, revenueSold, gradeCount, profitSold }
+    return { total: phones.length, totalInvested, currentInvested, revenueSold, gradeCount, profitSold }
   }, [phones])
 
   // -- Filtered --------------------------------------------------------------Ã¢"â‚¬
@@ -3325,7 +3334,6 @@ function UsedPhonesPageInner() {
   // -- Handlers --------------------------------------------------------------Ã¢"â‚¬
   const handleView = (p: UsedPhone) => { setSelectedPhone(p); setShowDetails(true) }
   const handleEdit = (p: UsedPhone) => { setEditPhone(p); setShowAddDialog(true); setShowDetails(false) }
-  const handleSell = (p: UsedPhone) => { setSellPhone(p); setShowDetails(false) }
 
   const handleSave = async (data: Partial<UsedPhone> & { _paymentSplits?: SplitEntry[] }) => {
     const { _paymentSplits, ...phoneData } = data
@@ -3335,6 +3343,29 @@ function UsedPhonesPageInner() {
         const updated = await updateUsedPhone(editPhone.id, phoneData)
         setPhones(prev => prev.map(p => p.id === editPhone.id ? updated : p))
         toast.success("Phone updated successfully")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "UPDATE",
+          module: "Inventory",
+          entityId: editPhone.id,
+          entityName: `${updated.brand} ${updated.model} (IMEI ${updated.imei_number})`,
+          description: `Edited used phone "${editPhone.brand} ${editPhone.model}" (IMEI ${editPhone.imei_number})`,
+          oldValue: JSON.stringify({
+            brand: editPhone.brand, model: editPhone.model, imei_number: editPhone.imei_number,
+            color: editPhone.color, storage: editPhone.storage, purchase_price: editPhone.purchase_price,
+            refurbishment_cost: editPhone.refurbishment_cost, selling_price: editPhone.selling_price,
+            status: editPhone.status,
+          }),
+          newValue: JSON.stringify({
+            brand: updated.brand, model: updated.model, imei_number: updated.imei_number,
+            color: updated.color, storage: updated.storage, purchase_price: updated.purchase_price,
+            refurbishment_cost: updated.refurbishment_cost, selling_price: updated.selling_price,
+            status: updated.status,
+          }),
+        }).catch(() => {})
       } else {
         const created = await createUsedPhone({
           brand: phoneData.brand ?? "",
@@ -3446,24 +3477,17 @@ function UsedPhonesPageInner() {
                 reference_type: "Purchase", reference_number: poNumber,
                 description: `Used phone purchase ${poNumber} - ${sourceLabel}`,
               })
-              const { data: accRow } = await supabase.from("finance_accounts").select("current_balance").eq("id", se.accountId).single()
-              if (accRow) {
-                await supabase.from("finance_accounts").update({
-                  current_balance: (accRow as any).current_balance - amt,
-                }).eq("id", se.accountId)
-              }
+              // Atomic, row-locked debit (supabase/fix_balance_race_condition.sql) -
+              // safe against a concurrent payment against the same account racing this one.
+              await adjustAccountBalance(se.accountId, -amt)
             }
             // Refresh finance accounts list so balances stay current
             getFinanceAccounts().then(setFinanceAccounts).catch(() => {})
           }
-          // Update supplier outstanding balance if partial/unpaid - supplier purchases only
+          // Update supplier outstanding balance if partial/unpaid - supplier
+          // purchases only. Atomic, row-locked (supabase/fix_balance_race_condition.sql).
           if (sourceType === "purchased" && balanceDue > 0 && supplierId) {
-            const { data: supRow } = await supabase.from("suppliers").select("outstanding_balance").eq("id", supplierId).single()
-            if (supRow) {
-              await supabase.from("suppliers").update({
-                outstanding_balance: ((supRow as any).outstanding_balance ?? 0) + balanceDue,
-              }).eq("id", supplierId)
-            }
+            await adjustSupplierBalance(supplierId, balanceDue)
           }
         } catch (purchaseRecordErr) {
           toast.error(`Phone saved but purchase record failed: ${purchaseRecordErr instanceof Error ? purchaseRecordErr.message : "Unknown error"}`)
@@ -3471,6 +3495,22 @@ function UsedPhonesPageInner() {
 
         setPhones(prev => [created, ...prev])
         toast.success("Phone added successfully")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "CREATE",
+          module: "Inventory",
+          entityId: created.id,
+          entityName: `${created.brand} ${created.model} (IMEI ${created.imei_number})`,
+          description: `Added used phone "${created.brand} ${created.model}" (IMEI ${created.imei_number}) at cost Rs ${created.purchase_price}`,
+          newValue: JSON.stringify({
+            brand: created.brand, model: created.model, imei_number: created.imei_number,
+            purchase_price: created.purchase_price, refurbishment_cost: created.refurbishment_cost,
+            source_type: created.source_type,
+          }),
+        }).catch(() => {})
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to save phone")
@@ -3478,22 +3518,6 @@ function UsedPhonesPageInner() {
     }
     setShowAddDialog(false)
     setEditPhone(null)
-  }
-
-  const handleSoldConfirm = async (id: string, customerName: string, price: number) => {
-    try {
-      const updated = await updateUsedPhone(id, {
-        status: "sold",
-        selling_price: price,
-        sold_date: todayPKT(),
-        source_customer_name: customerName,
-      })
-      setPhones(prev => prev.map(p => p.id === id ? updated : p))
-      toast.success("Phone marked as sold!")
-    } catch {
-      toast.error("Failed to mark as sold")
-    }
-    setSellPhone(null)
   }
 
   const handleBulkSaved = (saved: UsedPhone[]) => {
@@ -3586,13 +3610,16 @@ function UsedPhonesPageInner() {
           iconBg="bg-indigo-100"
           subtext={`${phones.filter(p => p.status === "in_stock").length} in stock`}
         />
-        <StatCard
-          title="Invested"
-          value={formatCurrency(stats.totalInvested)}
-          icon={DollarSign}
-          iconBg="bg-slate-100"
-          subtext="purchase + refurb"
-        />
+        <button onClick={() => setShowInvestedBreakdown(true)} className="text-left cursor-pointer">
+          <StatCard
+            title="Invested (All-Time)"
+            value={formatCurrency(stats.totalInvested)}
+            icon={DollarSign}
+            iconBg="bg-slate-100"
+            subtext={`${formatCurrency(stats.currentInvested)} in current stock`}
+            className="hover:border-indigo-300 hover:shadow-md transition-all"
+          />
+        </button>
         <StatCard
           title="Revenue"
           value={formatCurrency(stats.revenueSold)}
@@ -3779,7 +3806,7 @@ function UsedPhonesPageInner() {
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {paginated.map(phone => (
-            <PhoneCard key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} onSell={handleSell} />
+            <PhoneCard key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} />
           ))}
         </div>
       ) : (
@@ -3787,7 +3814,7 @@ function UsedPhonesPageInner() {
           {/* List view needs table width - phones always get cards regardless of the saved view mode */}
           <div className="sm:hidden grid grid-cols-2 gap-3">
             {paginated.map(phone => (
-              <PhoneCard key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} onSell={handleSell} />
+              <PhoneCard key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} />
             ))}
           </div>
           <div className="hidden sm:block bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -3807,7 +3834,7 @@ function UsedPhonesPageInner() {
               </thead>
               <tbody>
                 {paginated.map(phone => (
-                  <PhoneRow key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} onSell={handleSell} />
+                  <PhoneRow key={phone.id} phone={phone} onView={handleView} onEdit={handleEdit} />
                 ))}
               </tbody>
             </table>
@@ -3863,7 +3890,6 @@ function UsedPhonesPageInner() {
           phone={selectedPhone}
           onClose={() => setShowDetails(false)}
           onEdit={(p) => { handleEdit(p); setShowDetails(false) }}
-          onSell={(p) => { handleSell(p); setShowDetails(false) }}
         />
       )}
       {showAddDialog && (
@@ -3885,13 +3911,7 @@ function UsedPhonesPageInner() {
         />
       )}
       {showCalculator && <TradeInCalculatorDialog onClose={() => setShowCalculator(false)} brands={brands} />}
-      {sellPhone && (
-        <MarkAsSoldDialog
-          phone={sellPhone}
-          onClose={() => setSellPhone(null)}
-          onSold={handleSoldConfirm}
-        />
-      )}
+      {showInvestedBreakdown && <InvestedBreakdownDialog phones={phones} onClose={() => setShowInvestedBreakdown(false)} />}
     </div>
   )
 }

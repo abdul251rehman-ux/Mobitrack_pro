@@ -197,9 +197,35 @@ export async function createProfile(data: {
   role: string
   password: string
   status: "Active" | "Inactive"
+  actorId?: string
 }): Promise<Profile> {
   try {
     const tenantId = await getTenantId()
+    const hashed = await hashPassword(data.password)
+
+    if (data.role === 'Admin') {
+      // Creating a new Admin account must go through create_admin_profile(),
+      // which verifies server-side (immune to connection pooling, since
+      // it's all one DB call) that the actor is really an existing, active
+      // Admin. Settings > Users "Add" has no client-side "only Admin grants
+      // Admin" guard at all, so this RPC is the only thing stopping it - a
+      // DB trigger rejects any plain profiles INSERT that sets role='Admin'
+      // without this RPC having run first in the same transaction.
+      const { data: row, error } = await supabase.rpc('create_admin_profile', {
+        p_actor_id: data.actorId,
+        p_id: crypto.randomUUID(),
+        p_tenant_id: tenantId,
+        p_name: data.name,
+        p_email: data.email.toLowerCase().trim(),
+        p_phone: '',
+        p_password: hashed,
+        p_status: data.status,
+        p_permissions: null,
+      }).single()
+      if (error) throw new Error(`Failed to create user: ${error.message}`)
+      return toProfile(row as DbProfile)
+    }
+
     const { data: row, error } = await supabase
       .from('profiles')
       .insert({
@@ -207,7 +233,7 @@ export async function createProfile(data: {
         name: data.name,
         email: data.email.toLowerCase().trim(),
         role: data.role,
-        password: await hashPassword(data.password),
+        password: hashed,
         status: data.status,
       })
       .select('*')
@@ -226,9 +252,28 @@ export async function updateProfileFull(id: string, data: {
   role: string
   password?: string
   status: "Active" | "Inactive"
+  actorId?: string
+  previousRole?: string
 }): Promise<void> {
   try {
     const tenantId = await getTenantId()
+
+    // Raising someone to Admin must go through grant_admin_role(), which
+    // verifies server-side (immune to connection pooling) that the actor is
+    // really an existing, active Admin - this Settings > Users path has no
+    // client-side "only Admin can grant Admin" guard at all (unlike
+    // app/staff/page.tsx), so this RPC is the only thing stopping a
+    // role:'Admin' payload sent through here. A DB trigger rejects any plain
+    // profiles UPDATE that raises role to 'Admin' without this RPC having
+    // run first in the same transaction.
+    if (data.role === 'Admin' && data.previousRole !== 'Admin') {
+      const { error: grantErr } = await supabase.rpc('grant_admin_role', {
+        p_target_id: id,
+        p_actor_id: data.actorId,
+      })
+      if (grantErr) throw new Error(`Failed to grant Admin role: ${grantErr.message}`)
+    }
+
     const payload: Record<string, unknown> = {
       name: data.name,
       email: data.email.toLowerCase().trim(),

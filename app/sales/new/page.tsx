@@ -22,6 +22,8 @@ import type { FinanceAccount } from "@/lib/api/types"
 import type { UsedPhone } from "@/data/used-phones"
 import { formatCurrency, cn, todayPKT } from "@/lib/utils"
 import { useLanguage } from "@/context/language-context"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { Button } from "@/components/ui/button"
@@ -419,6 +421,7 @@ function ReviewSaleModal({
 export default function NewSalePage() {
   const router = useRouter()
   const { t } = useLanguage()
+  const { user } = useAuth()
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [imeiResults, setImeiResults] = useState<ProductResult[]>([])
@@ -517,6 +520,13 @@ export default function NewSalePage() {
       setSelectedCustomerId(created.id); setCustomerMode("existing"); setCustomerSearch(created.name)
       setShowNewCustomer(false); setNewName(""); setNewPhone(""); setNewCnic(""); setNewAddress(""); setNewCreditLimit("")
       toast.success(`"${created.name}" ${t("sale.Customer saved")}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "CREATE", module: "Customers",
+        entityId: created.id, entityName: created.name,
+        description: `Added customer "${created.name}" (${created.phone}) during sale`,
+        newValue: JSON.stringify({ name: created.name, phone: created.phone }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("sale.Failed to create customer"))
     }
@@ -673,6 +683,21 @@ export default function NewSalePage() {
 
       toast.success(`${t("sale.Invoice")} ${createdSaleRecord.invoiceNumber} ${t("sale.completed")}`, { description: `${cartItems.length} item(s) - ${formatCurrency(grandTotal)}`, duration: 4000 })
       setCompletedSale(createdSaleRecord)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "SALE",
+        module: "Sales",
+        entityId: createdSaleRecord.id,
+        entityName: createdSaleRecord.invoiceNumber,
+        description: `Created sale ${createdSaleRecord.invoiceNumber} for ${custName} - ${cartItems.length} item(s), Rs ${grandTotal}`,
+        newValue: JSON.stringify({
+          total: grandTotal, discount, tax, customer: custName,
+          items: cartItems.map(i => ({ name: i.productName, qty: i.quantity, price: i.unitPrice, imei: i.imei ?? null })),
+        }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("sale.Failed to create sale"))
       setSubmitting(false)

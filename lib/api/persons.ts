@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { getTenantId } from './helpers'
+import { adjustAccountBalance } from './finance'
 
 export interface Person {
   id: string
@@ -146,23 +147,10 @@ export async function createPersonTransaction(
 
   // 2. Finance double-entry — only when an account is selected
   if (t.accountId) {
-    // Read fresh balance from DB (never use stale React state)
-    const { data: acc, error: accReadErr } = await supabase
-      .from('finance_accounts')
-      .select('current_balance')
-      .eq('id', t.accountId)
-      .single()
-    if (accReadErr || !acc) throw new Error('Could not read account balance — transaction aborted')
-
+    // Atomic, row-locked balance update (supabase/fix_balance_race_condition.sql) -
+    // safe against a concurrent payment against the same account racing this one.
     const delta = t.type === 'gave' ? -t.amount : t.amount
-    const newBalance = (acc as { current_balance: number }).current_balance + delta
-
-    // Update balance
-    const { error: balErr } = await supabase
-      .from('finance_accounts')
-      .update({ current_balance: newBalance })
-      .eq('id', t.accountId)
-    if (balErr) throw new Error(`Failed to update account balance: ${balErr.message}`)
+    await adjustAccountBalance(t.accountId, delta)
 
     // Audit row in finance_transactions — reference_id holds the FK, reference_number holds the human label
     const { error: ftErr } = await supabase.from('finance_transactions').insert({
@@ -199,21 +187,13 @@ export async function deletePersonTransaction(
 ): Promise<void> {
   const tenantId = await getTenantId()
 
-  // Reverse the account balance before deleting
+  // Reverse the account balance before deleting. Atomic, row-locked
+  // (supabase/fix_balance_race_condition.sql) - safe against a concurrent
+  // payment against the same account racing this one.
   if (opts?.reverseAccountId && opts?.reverseAmount && opts?.reverseType) {
-    const { data: acc } = await supabase
-      .from('finance_accounts')
-      .select('current_balance')
-      .eq('id', opts.reverseAccountId)
-      .single()
-    if (acc) {
-      // Reverse: gave was a debit (negative), so reversal is positive; took was credit, reversal is negative
-      const reverseDelta = opts.reverseType === 'gave' ? opts.reverseAmount : -opts.reverseAmount
-      const newBalance = (acc as { current_balance: number }).current_balance + reverseDelta
-      await supabase.from('finance_accounts')
-        .update({ current_balance: newBalance })
-        .eq('id', opts.reverseAccountId)
-    }
+    // Reverse: gave was a debit (negative), so reversal is positive; took was credit, reversal is negative
+    const reverseDelta = opts.reverseType === 'gave' ? opts.reverseAmount : -opts.reverseAmount
+    await adjustAccountBalance(opts.reverseAccountId, reverseDelta)
     // Remove the finance_transactions audit row too
     await supabase.from('finance_transactions')
       .delete()

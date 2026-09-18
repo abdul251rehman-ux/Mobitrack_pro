@@ -7,6 +7,8 @@ import { Plus, Pencil, Trash2, Users, Phone, StickyNote, Wallet, Check, ChevronR
 import { toast } from "sonner"
 import { getPersons, getPersonTransactions, createPerson, updatePerson, deletePerson } from "@/lib/api/persons"
 import type { Person } from "@/lib/api/persons"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -29,6 +31,7 @@ const EMPTY: Omit<Person, "id" | "tenantId" | "createdAt"> = {
 
 function PersonsPageInner() {
   const router = useRouter()
+  const { user } = useAuth()
   const [persons, setPersons] = useState<Person[]>([])
   const [balances, setBalances] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -93,11 +96,27 @@ function PersonsPageInner() {
     setSaving(true)
     try {
       if (editingId) {
+        const before = persons.find(p => p.id === editingId)
         await updatePerson(editingId, form)
         toast.success("Person updated")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "UPDATE", module: "Customers",
+          entityId: editingId, entityName: form.name,
+          description: `Edited person "${before?.name ?? form.name}"`,
+          oldValue: before ? JSON.stringify({ name: before.name, phone: before.phone, openingBalance: before.openingBalance, status: before.status }) : undefined,
+          newValue: JSON.stringify({ name: form.name, phone: form.phone, openingBalance: form.openingBalance, status: form.status }),
+        }).catch(() => {})
       } else {
-        await createPerson(form)
+        const created = await createPerson(form)
         toast.success("Person added")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "CREATE", module: "Customers",
+          entityId: (created as any)?.id, entityName: form.name,
+          description: `Added person "${form.name}"${form.openingBalance ? ` with opening balance Rs ${form.openingBalance}` : ""}`,
+          newValue: JSON.stringify({ name: form.name, phone: form.phone, openingBalance: form.openingBalance, status: form.status }),
+        }).catch(() => {})
       }
       await load()
       closeForm()
@@ -115,6 +134,13 @@ function PersonsPageInner() {
       await deletePerson(deleteTarget.id)
       setPersons(p => p.filter(x => x.id !== deleteTarget.id))
       toast.success("Person deleted")
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "DELETE", module: "Customers",
+        entityId: deleteTarget.id, entityName: deleteTarget.name,
+        description: `Deleted person "${deleteTarget.name}" and all their transactions`,
+        oldValue: JSON.stringify({ name: deleteTarget.name, phone: deleteTarget.phone, openingBalance: deleteTarget.openingBalance }),
+      }).catch(() => {})
       setDeleteTarget(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete")

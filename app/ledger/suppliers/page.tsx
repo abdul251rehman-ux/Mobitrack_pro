@@ -7,9 +7,11 @@ import { toast } from "sonner"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
 import { getPayments } from "@/lib/api/payments"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { getRebateEntries } from "@/lib/api/rebate"
 import type { RebateEntry } from "@/lib/api/rebate"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import type { Supplier, Purchase, Payment } from "@/data/types"
@@ -54,6 +56,7 @@ const PAGE_SIZE = 15
 
 function SupplierLedgerPageInner() {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
@@ -66,7 +69,7 @@ function SupplierLedgerPageInner() {
       const [sup, pur, pay, accs, reb] = await Promise.all([getSuppliers(), getPurchases(), getPayments(), getFinanceAccounts(), getRebateEntries()])
       setSuppliers(sup)
       setPurchases(pur)
-      setSupplierPayments(pay.filter((p) => p.entityType === "Supplier" && p.type === "Paid"))
+      setSupplierPayments(pay.filter((p) => p.entityType === "Supplier" && (p.type === "Paid" || p.type === "Received")))
       setAccounts(accs)
       setRebates(reb.filter(r => r.status === "posted"))
     } catch (err) {
@@ -131,21 +134,10 @@ function SupplierLedgerPageInner() {
       })
       if (payErr) throw new Error(payErr.message)
 
-      // 2. Read FRESH balance from DB (never use stale React state)
-      const { data: accRow, error: accReadErr } = await supabase
-        .from("finance_accounts")
-        .select("current_balance")
-        .eq("id", payAccountId)
-        .single()
-      if (accReadErr || !accRow) throw new Error("Could not read account balance")
-      const freshBalance = (accRow as any).current_balance as number
-      const newBalance = Math.max(0, freshBalance - amount)
-
-      const { error: accErr } = await supabase
-        .from("finance_accounts")
-        .update({ current_balance: newBalance })
-        .eq("id", payAccountId)
-      if (accErr) throw new Error(accErr.message)
+      // 2. Atomic, row-locked debit (supabase/fix_balance_race_condition.sql) -
+      //    safe against a concurrent payment against the same account racing
+      //    this one; floored at 0, matching the old Math.max(0, ...) clamp.
+      await adjustAccountBalance(payAccountId, -amount, 0)
 
       // 3. Write finance_transactions audit row so Finance page shows it
       const { error: ftErr } = await supabase.from("finance_transactions").insert({
@@ -161,6 +153,18 @@ function SupplierLedgerPageInner() {
       if (ftErr) throw new Error(`Finance audit failed: ${ftErr.message}`)
 
       toast.success(`Payment of ${formatCurrency(amount)} recorded to ${selectedSupplier?.companyName}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Payments",
+        entityId: selectedSupplierId,
+        entityName: selectedSupplier?.companyName ?? "",
+        description: `Paid Rs ${amount} to supplier ${selectedSupplier?.companyName ?? ""} via ${payMethod}`,
+        newValue: JSON.stringify({ amount, method: payMethod, accountId: payAccountId, refNum }),
+      }).catch(() => {})
       setPayDialogOpen(false)
       setLoading(true)
       await loadAll()
@@ -168,6 +172,99 @@ function SupplierLedgerPageInner() {
       toast.error(err instanceof Error ? err.message : "Failed to record payment")
     } finally {
       setPaying(false)
+    }
+  }
+
+  // ── Received from Supplier dialog (them → us: refund, credit, rebate not posted through Rebate) ──
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
+  const [receiveAmount, setReceiveAmount] = useState("")
+  const [receiveAccountId, setReceiveAccountId] = useState("")
+  const [receiveDate, setReceiveDate] = useState(todayPKT())
+  const [receiveNotes, setReceiveNotes] = useState("")
+  const [receiving, setReceiving] = useState(false)
+
+  function openReceiveDialog() {
+    if (!selectedSupplierId) { toast.error("Select a supplier first"); return }
+    setReceiveAmount("")
+    setReceiveAccountId(accounts[0]?.id ?? "")
+    setReceiveDate(todayPKT())
+    setReceiveNotes("")
+    setReceiveDialogOpen(true)
+  }
+
+  async function handleReceiveFromSupplier() {
+    if (receiving) return
+    if (!selectedSupplierId || !receiveAmount || parseFloat(receiveAmount) <= 0) {
+      toast.error("Enter a valid amount"); return
+    }
+    if (!receiveAccountId) { toast.error("Select a deposit account"); return }
+    setReceiving(true)
+    try {
+      const tenantId = await getTenantId()
+      const amount = parseFloat(receiveAmount)
+      const selectedAccount = accounts.find(a => a.id === receiveAccountId)
+      const method = selectedAccount?.type === "bank" ? "Bank Transfer"
+        : selectedAccount?.type === "mobile_wallet" ? "Mobile Wallet"
+        : "Cash"
+      const refNum = "REC-SUP-" + Date.now().toString().slice(-8)
+
+      // 1. Insert payment record
+      const { error: payErr } = await supabase.from("payments").insert({
+        tenant_id: tenantId,
+        entity_type: "Supplier",
+        entity_id: selectedSupplierId,
+        entity_name: selectedSupplier?.companyName ?? "",
+        type: "Received",
+        amount,
+        method,
+        account_id: receiveAccountId,
+        reference_number: refNum,
+        date: receiveDate,
+        notes: receiveNotes.trim() || null,
+        status: "Completed",
+      })
+      if (payErr) throw new Error(payErr.message)
+
+      // 2. Atomic, row-locked credit (supabase/fix_balance_race_condition.sql) -
+      //    safe against a concurrent payment against the same account racing
+      //    this one. Money coming in, so no floor needed (unlike paying out).
+      await adjustAccountBalance(receiveAccountId, amount)
+
+      // 3. Write finance_transactions audit row so Finance page shows it. Uses
+      //    its own inflow type (not supplier_payment, which the Finance page
+      //    always treats as an outflow) since money is coming IN here.
+      const { error: ftErr } = await supabase.from("finance_transactions").insert({
+        tenant_id: tenantId,
+        date: receiveDate,
+        type: "supplier_refund",
+        account_id: receiveAccountId,
+        amount,
+        reference_type: "Purchase",
+        reference_number: refNum,
+        description: `Payment received from ${selectedSupplier?.companyName ?? "Supplier"}${receiveNotes ? ` — ${receiveNotes}` : ""}`,
+      })
+      if (ftErr) throw new Error(`Finance audit failed: ${ftErr.message}`)
+
+      toast.success(`${formatCurrency(amount)} received from ${selectedSupplier?.companyName}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Payments",
+        entityId: selectedSupplierId,
+        entityName: selectedSupplier?.companyName ?? "",
+        description: `Received Rs ${amount} from supplier ${selectedSupplier?.companyName ?? ""} via ${method}`,
+        newValue: JSON.stringify({ amount, method, accountId: receiveAccountId, refNum }),
+      }).catch(() => {})
+      setReceiveDialogOpen(false)
+      setLoading(true)
+      await loadAll()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record payment")
+    } finally {
+      setReceiving(false)
     }
   }
 
@@ -205,13 +302,15 @@ function SupplierLedgerPageInner() {
       ? supplierPayments.filter((sp) => sp.entityId === selectedSupplierId)
       : supplierPayments
 
-    // Every payment against a PO (same-day or later) is folded into that purchase's row rather than
-    // shown as its own line - the row then shows just what's paid so far (Dr) and what's still short (Cr),
-    // not the full gross purchase value. Only payments with no matching PO keep their own row.
+    // Every payment WE MADE against a PO (same-day or later) is folded into that purchase's row rather
+    // than shown as its own line - the row then shows just what's paid so far (Dr) and what's still
+    // short (Cr), not the full gross purchase value. Only payments with no matching PO keep their own
+    // row. Received-from-supplier payments are excluded here - they're money flowing the other way
+    // (a refund/credit), never a paydown toward what we owe on a specific PO.
     const downPaymentIds = new Set<string>()
     filteredPurchases.forEach((p) => {
       filteredPayments.forEach((sp) => {
-        if (sp.referenceNumber === p.poNumber && !downPaymentIds.has(sp.id)) downPaymentIds.add(sp.id)
+        if (sp.type === "Paid" && sp.referenceNumber === p.poNumber && !downPaymentIds.has(sp.id)) downPaymentIds.add(sp.id)
       })
     })
 
@@ -244,12 +343,15 @@ function SupplierLedgerPageInner() {
         .replace(/^(Payment for|Outstanding for)\s+PO-[\w-]+\s*/i, "")
         .replace(/^\(|\)$/g, "")
         .trim()
+      const isReceived = sp.type === "Received"
       raw.push({
         id: sp.id, date: sp.date,
         reference: sp.referenceNumber || sp.id.slice(0, 8),
-        description: `Payment to Supplier${notes ? `  ·  ${notes}` : ""}  ·  ${sp.method}`,
-        debit: sp.amount, credit: 0,
-        grossCredit: 0, grossDebit: sp.amount,
+        description: `${isReceived ? "Payment Received from Supplier" : "Payment to Supplier"}${notes ? `  ·  ${notes}` : ""}  ·  ${sp.method}`,
+        // Received = supplier gave us money (refund/credit) - increases what they owe us, opposite
+        // of a normal payment to them, which reduces our balance owed.
+        debit: isReceived ? 0 : sp.amount, credit: isReceived ? sp.amount : 0,
+        grossCredit: isReceived ? sp.amount : 0, grossDebit: isReceived ? 0 : sp.amount,
         type: "payment", supplierName: sp.entityName, recency: -idx,
       })
     })
@@ -455,6 +557,9 @@ function SupplierLedgerPageInner() {
           <div className="flex gap-1.5">
             <Button onClick={openPayDialog} size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
               <Banknote className="w-3.5 h-3.5" />{t("ledger.supplier.Pay Supplier")}
+            </Button>
+            <Button onClick={openReceiveDialog} size="sm" className="gap-1.5 bg-rose-600 hover:bg-rose-700">
+              <Banknote className="w-3.5 h-3.5" />Received from Supplier
             </Button>
             <button onClick={handleExportPDF} className="flex items-center gap-1.5 h-8 px-3 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">
               <FileText className="w-3.5 h-3.5" />{t("ledger.supplier.PDF")}
@@ -812,6 +917,61 @@ function SupplierLedgerPageInner() {
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPayDialogOpen(false)}>{t("ledger.supplier.Cancel")}</Button>
             <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={handlePaySupplier} disabled={paying}>
               {paying ? t("ledger.supplier.Recording") : t("ledger.supplier.Record Payment")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Received from Supplier Dialog */}
+      <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
+        <DialogContent className="w-[96vw] max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-rose-600" />
+              Received from Supplier
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Receiving from</span>
+              <span className="text-xs font-bold text-slate-800">{selectedSupplier?.companyName}</span>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t("ledger.supplier.Amount")}<span className="text-rose-500">*</span></Label>
+              <MoneyInput
+                min={1} placeholder="0"
+                value={receiveAmount}
+                onChange={v => setReceiveAmount(v)}
+                className="h-8 text-sm font-semibold"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t("ledger.supplier.Date")}</Label>
+              <Input type="date" value={receiveDate} onChange={e => setReceiveDate(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Deposit Account <span className="text-rose-500">*</span></Label>
+              <Select value={receiveAccountId} onValueChange={setReceiveAccountId}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t("ledger.supplier.Select account")} /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} - {formatCurrency(a.currentBalance)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t("ledger.supplier.Notes optional")}</Label>
+              <Input placeholder={t("ledger.supplier.Notes placeholder")} value={receiveNotes} onChange={e => setReceiveNotes(e.target.value)} className="h-8 text-xs" />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setReceiveDialogOpen(false)}>{t("ledger.supplier.Cancel")}</Button>
+            <Button size="sm" className="h-8 text-xs bg-rose-600 hover:bg-rose-700" onClick={handleReceiveFromSupplier} disabled={receiving}>
+              {receiving ? t("ledger.supplier.Recording") : "Record Payment"}
             </Button>
           </DialogFooter>
         </DialogContent>

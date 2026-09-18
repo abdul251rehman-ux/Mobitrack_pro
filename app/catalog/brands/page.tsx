@@ -8,6 +8,8 @@ import { toast } from "sonner"
 
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 
 interface Brand {
   id: string
@@ -53,6 +55,7 @@ function StatusChip({ status }: { status: Brand["status"] }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 function BrandsPageInner() {
+  const { user } = useAuth()
   const [list, setList] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -167,14 +170,39 @@ function BrandsPageInner() {
           .eq("id", editTarget.id)
         if (error) throw error
         toast.success("Brand updated successfully")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "UPDATE",
+          module: "Products",
+          entityId: editTarget.id,
+          entityName: formName.trim(),
+          description: `Edited brand "${editTarget.name}"`,
+          oldValue: JSON.stringify({ name: editTarget.name, country: editTarget.country, status: editTarget.status }),
+          newValue: JSON.stringify({ name: formName.trim(), country: formCountry.trim(), status: formStatus }),
+        }).catch(() => {})
       } else {
-        const { error } = await supabase.from("brands").insert({
+        const { data: created, error } = await supabase.from("brands").insert({
           tenant_id: await getTenantId(),
           name: formName.trim(), country: formCountry.trim(), logo_initials: initials,
           mobile_count: 0, accessory_count: 0, status: formStatus, description: formDesc.trim(),
-        })
+        }).select("id").single()
         if (error) throw error
         toast.success("Brand added successfully")
+        createAuditLog({
+          timestamp: new Date().toISOString(),
+          userId: user?.id ?? "system",
+          userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin",
+          action: "CREATE",
+          module: "Products",
+          entityId: (created as any)?.id,
+          entityName: formName.trim(),
+          description: `Added brand "${formName.trim()}" (${formCountry.trim()})`,
+          newValue: JSON.stringify({ name: formName.trim(), country: formCountry.trim(), status: formStatus }),
+        }).catch(() => {})
       }
       setDialogOpen(false)
       await fetchBrands()
@@ -193,6 +221,18 @@ function BrandsPageInner() {
       const { error } = await supabase.from("brands").delete().eq("id", deleteTarget.id)
       if (error) throw error
       toast.success(`"${deleteTarget.name}" deleted`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "DELETE",
+        module: "Products",
+        entityId: deleteTarget.id,
+        entityName: deleteTarget.name,
+        description: `Deleted brand "${deleteTarget.name}"`,
+        oldValue: JSON.stringify({ name: deleteTarget.name, country: deleteTarget.country, status: deleteTarget.status }),
+      }).catch(() => {})
       setDeleteTarget(null)
       await fetchBrands()
     } catch (err: unknown) {

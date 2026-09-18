@@ -16,7 +16,9 @@ import { toast } from "sonner"
 import { getCustomerById } from "@/lib/api/customers"
 import { getSales } from "@/lib/api/sales"
 import { getPayments } from "@/lib/api/payments"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { Customer, Sale, Payment } from "@/data/types"
@@ -106,6 +108,7 @@ function ChartTooltip({ active, payload, label }: any) {
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
+  const { user } = useAuth()
 
   const [customer, setCustomer]             = useState<Customer | null | undefined>(undefined)
   const [customerSales, setCustomerSales]   = useState<Sale[]>([])
@@ -217,18 +220,26 @@ export default function CustomerDetailPage() {
         reference_type: "Sale",
         description: `Payment received from ${customer.name}`,
       })
-      const { data: accRow } = await supabase.from("finance_accounts")
-        .select("current_balance").eq("id", payAccountId).single()
-      if (accRow) {
-        await supabase.from("finance_accounts")
-          .update({ current_balance: (accRow as any).current_balance + amount })
-          .eq("id", payAccountId)
-        setFinanceAccounts(prev => prev.map(a =>
-          a.id === payAccountId ? { ...a, currentBalance: a.currentBalance + amount } : a
-        ))
-      }
+      // Atomic, row-locked balance update (supabase/fix_balance_race_condition.sql) -
+      // safe against a concurrent payment against the same account racing this one.
+      const newAccBalance = await adjustAccountBalance(payAccountId, amount)
+      setFinanceAccounts(prev => prev.map(a =>
+        a.id === payAccountId ? { ...a, currentBalance: newAccBalance } : a
+      ))
 
       toast.success(`Payment of ${formatCurrency(amount)} received!`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Payments",
+        entityId: customer.id,
+        entityName: customer.name,
+        description: `Received Rs ${amount} from ${customer.name}${payInvoice ? ` against invoice ${payInvoice}` : ""} via ${payMethod}`,
+        newValue: JSON.stringify({ amount, method: payMethod, accountId: payAccountId, invoice: payInvoice || null }),
+      }).catch(() => {})
       setPayDialogOpen(false)
       setPayAmount(""); setPayMethod("Cash"); setPayInvoice(""); setPayNotes("")
       await fetchData()

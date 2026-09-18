@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { getTenantId } from './helpers'
+import { adjustSupplierBalance } from './finance'
 
 export type RebateType = 'rebate' | 'rate_diff'
 export type RebateStatus = 'draft' | 'posted'
@@ -159,14 +160,12 @@ export async function deleteRebateEntry(id: string): Promise<void> {
 export async function postRebateEntry(entry: RebateEntry): Promise<void> {
   const tenantId = await getTenantId()
 
-  // 1. Update supplier outstanding balance
+  // 1. Update supplier outstanding balance. Atomic, row-locked, tenant-scoped
+  // (supabase/fix_balance_race_condition.sql) - the old code read/wrote
+  // suppliers.outstanding_balance with no tenant_id filter at all, relying
+  // solely on RLS, and without a lock against a concurrent writer.
   // (rebate is tracked in rebate_entries; supplier ledger reads it directly — no payments row needed)
-  const { data: sup } = await supabase.from('suppliers').select('outstanding_balance').eq('id', entry.supplierId).single()
-  if (sup) {
-    await supabase.from('suppliers').update({
-      outstanding_balance: (sup.outstanding_balance ?? 0) - entry.total
-    }).eq('id', entry.supplierId)
-  }
+  await adjustSupplierBalance(entry.supplierId, -entry.total)
 
   // 2. For rate_diff: optionally update buy price on unsold IMEI records
   if (entry.type === 'rate_diff' && entry.updateStockPrice && entry.newBuyPrice > 0) {

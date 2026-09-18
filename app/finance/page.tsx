@@ -13,7 +13,7 @@ import { toast } from "sonner"
 import {
   getFinanceAccounts, createFinanceAccount, updateFinanceAccount,
   ensureDefaultCashAccount, getFinanceTransactions,
-  createDeposit, createWithdrawal, createTransfer,
+  createDeposit, createWithdrawal, createTransfer, adjustAccountBalance,
 } from "@/lib/api/finance"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
@@ -29,6 +29,8 @@ import type { Payment, Customer, Supplier, Sale, Purchase } from "@/data/types"
 import { formatCurrency, formatDate, cn, todayPKT } from "@/lib/utils"
 import { generateReportPDF } from "@/lib/pdf/report"
 import { getTenant } from "@/lib/api/settings"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 
 import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
@@ -82,6 +84,8 @@ const TX_META: Record<string, { label: string; color: string; bg: string; border
   person_took:        { label: "Took from Person", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
   customer_payment:   { label: "Customer Payment", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
   supplier_payment:   { label: "Supplier Payment", color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
+  customer_refund:    { label: "Gave to Customer", color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",    icon: <ArrowUpRight className="h-3 w-3" />  },
+  supplier_refund:    { label: "Received from Supplier", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDownLeft className="h-3 w-3" /> },
 }
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Card", "Cheque"]
@@ -94,12 +98,13 @@ const WALLET_NAMES = ["JazzCash", "EasyPaisa", "NayaPay", "SadaPay", "UPaisa", "
 const TODAY = todayPKT()
 
 function isInflow(type: string) {
-  return ["deposit", "transfer_in", "sale_receipt", "opening_balance", "person_took", "customer_payment"].includes(type)
+  return ["deposit", "transfer_in", "sale_receipt", "opening_balance", "person_took", "customer_payment", "supplier_refund"].includes(type)
 }
 
 // â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function FinancePageInner() {
+  const { user } = useAuth()
   // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([])
@@ -295,6 +300,18 @@ function FinancePageInner() {
       setAccounts(prev => [...prev, created])
       setModal(null)
       toast.success(`Account "${created.name}" created`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "CREATE",
+        module: "Settings",
+        entityId: created.id,
+        entityName: created.name,
+        description: `Created finance account "${created.name}" (${created.type}) with opening balance Rs ${ob}`,
+        newValue: JSON.stringify({ name: created.name, type: created.type, openingBalance: ob }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create account")
     } finally {
@@ -316,6 +333,19 @@ function FinancePageInner() {
       setAccounts(prev => prev.map(a => a.id === updated.id ? updated : a))
       setModal(null)
       toast.success("Account updated")
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "UPDATE",
+        module: "Settings",
+        entityId: selectedAccount.id,
+        entityName: updated.name,
+        description: `Edited finance account "${selectedAccount.name}"`,
+        oldValue: JSON.stringify({ name: selectedAccount.name, accountTitle: selectedAccount.accountTitle, bankName: selectedAccount.bankName, accountNumber: selectedAccount.accountNumber }),
+        newValue: JSON.stringify({ name: updated.name, accountTitle: updated.accountTitle, bankName: updated.bankName, accountNumber: updated.accountNumber }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update account")
     } finally {
@@ -340,6 +370,18 @@ function FinancePageInner() {
       setAccounts(prev => prev.map(a => a.id === selectedAccount.id ? { ...a, currentBalance: a.currentBalance + amount } : a))
       setModal(null)
       toast.success(`Deposited ${formatCurrency(amount)} into ${selectedAccount.name}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "UPDATE",
+        module: "Payments",
+        entityId: selectedAccount.id,
+        entityName: selectedAccount.name,
+        description: `Deposited Rs ${amount} into ${selectedAccount.name}${txForm.description ? ` - ${txForm.description}` : ""}`,
+        newValue: JSON.stringify({ amount, description: txForm.description, notes: txForm.notes }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Deposit failed")
     } finally {
@@ -365,6 +407,18 @@ function FinancePageInner() {
       setAccounts(prev => prev.map(a => a.id === selectedAccount.id ? { ...a, currentBalance: a.currentBalance - amount } : a))
       setModal(null)
       toast.success(`Withdrew ${formatCurrency(amount)} from ${selectedAccount.name}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "UPDATE",
+        module: "Payments",
+        entityId: selectedAccount.id,
+        entityName: selectedAccount.name,
+        description: `Withdrew Rs ${amount} from ${selectedAccount.name}${txForm.description ? ` - ${txForm.description}` : ""}`,
+        newValue: JSON.stringify({ amount, description: txForm.description, notes: txForm.notes }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Withdrawal failed")
     } finally {
@@ -395,6 +449,18 @@ function FinancePageInner() {
       }))
       setModal(null)
       toast.success(`Transferred ${formatCurrency(amount)} successfully`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "UPDATE",
+        module: "Payments",
+        entityId: transferForm.fromId,
+        entityName: `${accounts.find(a => a.id === transferForm.fromId)?.name ?? ""} -> ${accounts.find(a => a.id === transferForm.toId)?.name ?? ""}`,
+        description: `Transferred Rs ${amount} from ${accounts.find(a => a.id === transferForm.fromId)?.name ?? ""} to ${accounts.find(a => a.id === transferForm.toId)?.name ?? ""}`,
+        newValue: JSON.stringify({ amount, fromId: transferForm.fromId, toId: transferForm.toId, notes: transferForm.notes }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Transfer failed")
     } finally {
@@ -429,34 +495,46 @@ function FinancePageInner() {
         createdAt: new Date().toISOString(),
       })
 
-      // Finance transaction: customer payment â†' money IN, supplier payment â†' money OUT
+      // Finance transaction: customer payment → money IN, supplier payment → money OUT.
+      // The balance adjustment runs on its own (atomic, row-locked RPC - see
+      // supabase/fix_balance_race_condition.sql) rather than inside the
+      // Promise.all below, since running a read-then-write balance update in
+      // parallel with other writes was exactly the race the old code had.
       const txType = payForm.type === "Received" ? "customer_payment" : "supplier_payment"
-      const { data: accRow } = await supabase
-        .from("finance_accounts").select("current_balance").eq("id", payForm.accountId).single()
-      if (accRow) {
-        const current = (accRow as any).current_balance
-        const newBal = payForm.type === "Received" ? current + amount : Math.max(0, current - amount)
-        await Promise.all([
-          supabase.from("finance_transactions").insert({
-            tenant_id: await getTenantId(),
-            date: TODAY,
-            type: txType,
-            account_id: payForm.accountId,
-            amount,
-            reference_type: payForm.type === "Received" ? "Sale" : "Purchase",
-            reference_number: payForm.referenceNumber || undefined,
-            description: `${payForm.type === "Received" ? "Collected from" : "Paid to"} ${entityName}`,
-            notes: payForm.notes || null,
-          }),
-          supabase.from("finance_accounts").update({ current_balance: newBal }).eq("id", payForm.accountId),
-          supabase.from("payments").update({ account_id: payForm.accountId }).eq("id", (created as any).id),
-        ])
-        setAccounts(prev => prev.map(a => a.id === payForm.accountId ? { ...a, currentBalance: newBal } : a))
-      }
+      const delta = payForm.type === "Received" ? amount : -amount
+      const minBalance = payForm.type === "Received" ? undefined : 0
+      const newBal = await adjustAccountBalance(payForm.accountId, delta, minBalance)
+      await Promise.all([
+        supabase.from("finance_transactions").insert({
+          tenant_id: await getTenantId(),
+          date: TODAY,
+          type: txType,
+          account_id: payForm.accountId,
+          amount,
+          reference_type: payForm.type === "Received" ? "Sale" : "Purchase",
+          reference_number: payForm.referenceNumber || undefined,
+          description: `${payForm.type === "Received" ? "Collected from" : "Paid to"} ${entityName}`,
+          notes: payForm.notes || null,
+        }),
+        supabase.from("payments").update({ account_id: payForm.accountId }).eq("id", (created as any).id),
+      ])
+      setAccounts(prev => prev.map(a => a.id === payForm.accountId ? { ...a, currentBalance: newBal } : a))
 
       setPayments(prev => [created, ...prev])
       setModal(null)
       toast.success(`${formatCurrency(amount)} ${payForm.type === "Received" ? "collected" : "paid"} - account updated`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Payments",
+        entityId: payForm.entityId,
+        entityName,
+        description: `${payForm.type === "Received" ? "Collected" : "Paid"} Rs ${amount} ${payForm.type === "Received" ? "from" : "to"} ${entityName} via ${payForm.method}`,
+        newValue: JSON.stringify({ amount, type: payForm.type, method: payForm.method, referenceNumber: payForm.referenceNumber || null }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to record payment")
     } finally {

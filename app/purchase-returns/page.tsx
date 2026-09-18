@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { useSearchParams } from "next/navigation"
 import { getPurchases } from "@/lib/api/purchases"
 import { getSuppliers } from "@/lib/api/suppliers"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance, adjustSupplierBalance } from "@/lib/api/finance"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
@@ -578,21 +578,13 @@ function PurchaseReturnsPageInner() {
       // â"€â"€ Step 4: Financial effects by resolution â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
       if (newResolution === "Refund") {
-        // FIX 1: Supplier pays YOU â†' account balance INCREASES
-        const { data: accRow } = await supabase
-          .from("finance_accounts")
-          .select("current_balance")
-          .eq("id", newAccountId)
-          .single()
-
-        if (accRow) {
-          const oldBal = (accRow as any).current_balance as number
-          const newBal = oldBal + newTotal
-          await supabase.from("finance_accounts").update({ current_balance: newBal }).eq("id", newAccountId)
-          rollback.push(async () => {
-            await supabase.from("finance_accounts").update({ current_balance: oldBal }).eq("id", newAccountId)
-          })
-        }
+        // FIX 1: Supplier pays YOU → account balance INCREASES.
+        // Atomic, row-locked credit (supabase/fix_balance_race_condition.sql) -
+        // safe against a concurrent payment against the same account racing this one.
+        await adjustAccountBalance(newAccountId, newTotal)
+        rollback.push(async () => {
+          await adjustAccountBalance(newAccountId, -newTotal).catch(() => {})
+        })
 
         await supabase.from("finance_transactions").insert({
           tenant_id:   tenantId,
@@ -620,27 +612,17 @@ function PurchaseReturnsPageInner() {
           notes:            `Refund received for ${returnNumber}`,
         })
 
-        // Reduce supplier outstanding balance if they owed us money
-        const { data: supRow } = await supabase
-          .from("suppliers").select("outstanding_balance").eq("id", newSupplierId).single()
-        if (supRow && (supRow as any).outstanding_balance > 0) {
-          await supabase
-            .from("suppliers")
-            .update({ outstanding_balance: Math.max(0, (supRow as any).outstanding_balance - newTotal) })
-            .eq("id", newSupplierId)
-        }
+        // Reduce supplier outstanding balance if they owed us money. Atomic,
+        // row-locked, tenant-scoped (supabase/fix_balance_race_condition.sql) -
+        // the old code read/wrote suppliers.outstanding_balance with no
+        // tenant_id filter at all, relying solely on RLS.
+        await adjustSupplierBalance(newSupplierId, -newTotal, 0)
       }
 
       if (newResolution === "Credit Note") {
-        // No cash - credit reduces what we owe; can go negative (they owe us)
-        const { data: supRow } = await supabase
-          .from("suppliers").select("outstanding_balance").eq("id", newSupplierId).single()
-        if (supRow) {
-          await supabase
-            .from("suppliers")
-            .update({ outstanding_balance: (supRow as any).outstanding_balance - newTotal })
-            .eq("id", newSupplierId)
-        }
+        // No cash - credit reduces what we owe; can go negative (they owe us),
+        // so no floor here.
+        await adjustSupplierBalance(newSupplierId, -newTotal)
 
         await supabase.from("payments").insert({
           tenant_id: tenantId, date: today, type: "Credit Note",
@@ -652,15 +634,9 @@ function PurchaseReturnsPageInner() {
       }
 
       if (newResolution === "Ledger Credit") {
-        // No cash - recorded in ledger for future settlement
-        const { data: supRow } = await supabase
-          .from("suppliers").select("outstanding_balance").eq("id", newSupplierId).single()
-        if (supRow) {
-          await supabase
-            .from("suppliers")
-            .update({ outstanding_balance: (supRow as any).outstanding_balance - newTotal })
-            .eq("id", newSupplierId)
-        }
+        // No cash - recorded in ledger for future settlement; can go
+        // negative (they owe us), so no floor here.
+        await adjustSupplierBalance(newSupplierId, -newTotal)
 
         await supabase.from("payments").insert({
           tenant_id: tenantId, date: today, type: "Ledger Credit",
@@ -683,6 +659,21 @@ function PurchaseReturnsPageInner() {
         description: `${newResolution} - ${formatCurrency(newTotal)} - ${newSupplierName}`,
         duration: 5000,
       })
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "REFUND",
+        module: "Returns",
+        entityId: (pr as any)?.id,
+        entityName: returnNumber,
+        description: `Created purchase return ${returnNumber} to ${newSupplierName} - ${newResolution}, Rs ${newTotal}, ${selectedLines.length} item(s)`,
+        newValue: JSON.stringify({
+          resolution: newResolution, total: newTotal, supplier: newSupplierName,
+          items: selectedLines.map(l => ({ name: l.productName, qty: l.returnQty })),
+        }),
+      }).catch(() => {})
       setShowCreate(false)
       resetForm()
 

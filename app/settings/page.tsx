@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { getTenant, updateTenant, getTenantSettings, updateTenantSettings, getProfiles, createProfile, updateProfileFull } from "@/lib/api/settings"
 import { changeOwnPassword } from "@/lib/api/helpers"
+import { createAuditLog } from "@/lib/api/audit"
 
 // â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 type UserRole   = "Admin" | "Manager" | "Cashier"
@@ -173,6 +174,12 @@ function SettingsPageInner() {
     try {
       await changeOwnPassword(data.currentPassword, data.newPassword)
       toast.success("Password changed successfully")
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: currentUser?.id ?? "system", userName: currentUser?.name ?? "Unknown",
+        userRole: currentUser?.role ?? "Admin", action: "SETTINGS_CHANGE", module: "Auth",
+        entityId: currentUser?.id, entityName: currentUser?.name ?? "",
+        description: `${currentUser?.name ?? "User"} changed their own password`,
+      }).catch(() => {})
       changePasswordForm.reset()
       setShowCurrentPw(false)
       setShowNewPw(false)
@@ -214,6 +221,13 @@ function SettingsPageInner() {
     try {
       await updateTenant({ name: data.shopName, address: data.address, city: finalCity, phone: data.phone, email: data.email, currency: data.currency, logo: logoPreview ?? "" })
       toast.success("Shop profile saved successfully")
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: currentUser?.id ?? "system", userName: currentUser?.name ?? "Unknown",
+        userRole: currentUser?.role ?? "Admin", action: "SETTINGS_CHANGE", module: "Settings",
+        entityName: data.shopName,
+        description: `Updated shop profile - ${data.shopName}, ${finalCity}`,
+        newValue: JSON.stringify({ shopName: data.shopName, address: data.address, city: finalCity, phone: data.phone, email: data.email }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save shop profile")
     } finally { setSaving(false) }
@@ -224,6 +238,13 @@ function SettingsPageInner() {
     try {
       await updateTenantSettings({ taxEnabled, taxRate: data.taxRate })
       toast.success(`Tax settings saved - ${data.taxName} at ${data.taxRate}%`)
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: currentUser?.id ?? "system", userName: currentUser?.name ?? "Unknown",
+        userRole: currentUser?.role ?? "Admin", action: "SETTINGS_CHANGE", module: "Settings",
+        entityName: data.taxName,
+        description: `Updated tax settings - ${data.taxName} at ${data.taxRate}%, ${taxEnabled ? "enabled" : "disabled"}`,
+        newValue: JSON.stringify({ taxName: data.taxName, taxRate: data.taxRate, taxEnabled }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save tax settings")
     } finally { setSaving(false) }
@@ -234,6 +255,13 @@ function SettingsPageInner() {
     try {
       await updateTenantSettings({ invoicePrefix: data.prefix, receiptFooter: data.footerText })
       toast.success("Invoice settings saved successfully")
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: currentUser?.id ?? "system", userName: currentUser?.name ?? "Unknown",
+        userRole: currentUser?.role ?? "Admin", action: "SETTINGS_CHANGE", module: "Settings",
+        entityName: data.prefix,
+        description: `Updated invoice settings - prefix "${data.prefix}"`,
+        newValue: JSON.stringify({ prefix: data.prefix, footerText: data.footerText }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save invoice settings")
     } finally { setSaving(false) }
@@ -263,16 +291,32 @@ function SettingsPageInner() {
         await updateProfileFull(editUser.id, {
           name: data.name, email: data.email, role: data.role,
           password: data.password || undefined, status,
+          actorId: currentUser?.id, previousRole: editUser.role,
         })
         setUsers(prev => prev.map(u => u.id === editUser.id
           ? { ...u, name: data.name, email: data.email, role: data.role, status }
           : u))
         toast.success(`${data.name} updated`)
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: currentUser?.id ?? "system", userName: currentUser?.name ?? "Unknown",
+          userRole: currentUser?.role ?? "Admin", action: "UPDATE", module: "Settings",
+          entityId: editUser.id, entityName: data.name,
+          description: `Edited staff user "${editUser.name}"${data.password ? " (password reset)" : ""}`,
+          oldValue: JSON.stringify({ name: editUser.name, email: editUser.email, role: editUser.role, status: editUser.status }),
+          newValue: JSON.stringify({ name: data.name, email: data.email, role: data.role, status, passwordChanged: !!data.password }),
+        }).catch(() => {})
       } else {
         if (!data.password) { toast.error("Password is required for new users"); setSavingUser(false); return }
-        const created = await createProfile({ name: data.name, email: data.email, role: data.role, password: data.password, status })
+        const created = await createProfile({ name: data.name, email: data.email, role: data.role, password: data.password, status, actorId: currentUser?.id })
         setUsers(prev => [{ id: created.id, name: data.name, email: data.email, role: data.role as UserRole, status, lastLogin: "Never" }, ...prev])
         toast.success(`${data.name} added - they can now log in`)
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: currentUser?.id ?? "system", userName: currentUser?.name ?? "Unknown",
+          userRole: currentUser?.role ?? "Admin", action: "CREATE", module: "Settings",
+          entityId: created.id, entityName: data.name,
+          description: `Added staff user "${data.name}" (${data.email}) with role ${data.role}`,
+          newValue: JSON.stringify({ name: data.name, email: data.email, role: data.role, status }),
+        }).catch(() => {})
       }
       setUserDialogOpen(false)
     } catch (err) {
@@ -289,9 +333,17 @@ function SettingsPageInner() {
       await updateProfileFull(toggleTarget.id, {
         name: toggleTarget.name, email: toggleTarget.email,
         role: toggleTarget.role, status: next,
+        actorId: currentUser?.id, previousRole: toggleTarget.role,
       })
       setUsers(prev => prev.map(u => u.id === toggleTarget.id ? { ...u, status: next } : u))
       toast.success(`${toggleTarget.name} is now ${next.toLowerCase()}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: currentUser?.id ?? "system", userName: currentUser?.name ?? "Unknown",
+        userRole: currentUser?.role ?? "Admin", action: "UPDATE", module: "Settings",
+        entityId: toggleTarget.id, entityName: toggleTarget.name,
+        description: `${next === "Active" ? "Activated" : "Deactivated"} staff user "${toggleTarget.name}"`,
+        oldValue: JSON.stringify({ status: toggleTarget.status }), newValue: JSON.stringify({ status: next }),
+      }).catch(() => {})
     } catch {
       toast.error("Failed to update status")
     } finally {

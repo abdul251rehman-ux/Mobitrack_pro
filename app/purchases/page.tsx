@@ -10,6 +10,8 @@ import { useRouter } from "next/navigation"
 
 import { getPurchases, updatePurchaseStatus } from "@/lib/api/purchases"
 import { getSuppliers } from "@/lib/api/suppliers"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { Purchase, PurchaseItem, Supplier } from "@/data/types"
 import { DataTable } from "@/components/shared/data-table"
 import { PageWrapper } from "@/components/layout/page-wrapper"
@@ -367,6 +369,7 @@ function PurchaseViewDialog({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 function PurchasesPageInner() {
   const router = useRouter()
+  const { user } = useAuth()
 
   // ── Data state ──────────────────────────────────────────────────────────
   const [purchases, setPurchases] = useState<Purchase[]>([])
@@ -504,6 +507,19 @@ function PurchasesPageInner() {
         p.id === markPaidTarget.id ? { ...p, paymentStatus: "Paid", amountPaid: p.total, balanceDue: 0 } : p
       ))
       toast.success(`${markPaidTarget.poNumber} marked as Paid`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Purchases",
+        entityId: markPaidTarget.id,
+        entityName: markPaidTarget.poNumber,
+        description: `Marked purchase ${markPaidTarget.poNumber} as fully Paid (Rs ${markPaidTarget.total})`,
+        oldValue: JSON.stringify({ paymentStatus: markPaidTarget.paymentStatus, amountPaid: markPaidTarget.amountPaid, balanceDue: markPaidTarget.balanceDue }),
+        newValue: JSON.stringify({ paymentStatus: "Paid", amountPaid: markPaidTarget.total, balanceDue: 0 }),
+      }).catch(() => {})
       setMarkPaidTarget(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update payment status")

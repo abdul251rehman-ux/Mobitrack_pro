@@ -623,20 +623,44 @@ function AddStaffDialog({ open, onClose, onAdded, actor, canGrantAdmin }: {
       const finalPerms = isAdminRole ? null : permissions
       // "Custom" is a UI label only — store as "Cashier" in DB to satisfy the CHECK constraint
       const dbRole = selectedRole === "Custom" ? "Cashier" : selectedRole
+      const hashedPassword = await hashPassword(data.password)
 
-      const { data: created, error } = await supabase.from("profiles").insert({
-        id: crypto.randomUUID(),
-        tenant_id: tenantId,
-        name: data.name.trim(),
-        email: data.email.toLowerCase().trim(),
-        phone: data.phone.trim(),
-        role: dbRole,
-        password: await hashPassword(data.password),
-        status: "Active",
-        permissions: finalPerms,
-      }).select().single()
-
-      if (error) throw error
+      let created: any
+      if (dbRole === "Admin") {
+        // Creating a new Admin account must go through create_admin_profile(),
+        // which verifies server-side (immune to connection pooling, since
+        // it's all one DB call) that the actor is really an existing, active
+        // Admin - canGrantAdmin above is client-side UX only. A DB trigger
+        // rejects any plain profiles INSERT that sets role='Admin' without
+        // this RPC having run first in the same transaction.
+        const { data: rpcResult, error: rpcErr } = await supabase.rpc("create_admin_profile", {
+          p_actor_id: actor?.id,
+          p_id: crypto.randomUUID(),
+          p_tenant_id: tenantId,
+          p_name: data.name.trim(),
+          p_email: data.email.toLowerCase().trim(),
+          p_phone: data.phone.trim(),
+          p_password: hashedPassword,
+          p_status: "Active",
+          p_permissions: finalPerms,
+        }).single()
+        if (rpcErr) throw rpcErr
+        created = rpcResult
+      } else {
+        const { data: insertResult, error } = await supabase.from("profiles").insert({
+          id: crypto.randomUUID(),
+          tenant_id: tenantId,
+          name: data.name.trim(),
+          email: data.email.toLowerCase().trim(),
+          phone: data.phone.trim(),
+          role: dbRole,
+          password: hashedPassword,
+          status: "Active",
+          permissions: finalPerms,
+        }).select().single()
+        if (error) throw error
+        created = insertResult
+      }
       toast.success(`${data.name} added`)
       await createAuditLog({
         timestamp: new Date().toISOString(),
@@ -825,6 +849,22 @@ function EditStaffDialog({ member, onClose, onUpdated, actor, canGrantAdmin, isS
       const isAdminRole = effectiveRole === "Admin"
       const finalPerms = isAdminRole ? null : (isSelf ? member.permissions ?? permissions : permissions)
       const dbRole = effectiveRole === "Custom" ? "Cashier" : effectiveRole
+
+      // Raising someone to Admin must go through grant_admin_role(), which
+      // verifies server-side (inside the same DB call, so it's immune to
+      // Supabase's connection pooling dropping a session variable) that the
+      // actor is really an existing, active Admin - the isSelf/canGrantAdmin
+      // checks above are client-side UX only and were never a real barrier
+      // to a tampered request. A DB trigger rejects any plain profiles
+      // UPDATE that tries to set role='Admin' without this RPC having run
+      // first in the same transaction.
+      if (dbRole === "Admin" && member.role !== "Admin") {
+        const { error: grantErr } = await supabase.rpc("grant_admin_role", {
+          p_target_id: member.id,
+          p_actor_id: actor?.id,
+        })
+        if (grantErr) throw grantErr
+      }
 
       const update: any = {
         name: data.name.trim(),

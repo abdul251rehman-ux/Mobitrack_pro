@@ -13,7 +13,9 @@ import { getTenantId } from "@/lib/api/helpers"
 import { getCustomers } from "@/lib/api/customers"
 import { getSales } from "@/lib/api/sales"
 import { getPayments } from "@/lib/api/payments"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import type { Customer, Sale, Payment } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
 import { formatCurrency, formatDate, todayPKT, cn } from "@/lib/utils"
@@ -44,11 +46,13 @@ type LedgerEntry = {
   paymentId?: string
 }
 
-/** IDs of payments folded into their sale's row (same day, same invoice) - excluded from the flat payment list */
+/** IDs of payments folded into their sale's row (same day, same invoice) - excluded from the flat payment list.
+ *  Only Received payments can be a down-payment toward a sale - a Paid (Gave Payment) row referencing the
+ *  same invoice/date is money flowing the other way and must never be folded in here. */
 function computeDownPaymentIds(sales: import("@/data/types").Sale[], payments: import("@/data/types").Payment[]): Set<string> {
   const ids = new Set<string>()
   sales.forEach(s => {
-    const match = payments.find(p => p.referenceNumber === s.invoiceNumber && p.date === s.date && p.status === "Completed" && !ids.has(p.id))
+    const match = payments.find(p => p.type === "Received" && p.referenceNumber === s.invoiceNumber && p.date === s.date && p.status === "Completed" && !ids.has(p.id))
     if (match) ids.add(match.id)
   })
   return ids
@@ -319,6 +323,7 @@ function EntryDetailModal({
 
 function CustomerLedgerPageInner() {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const [loading, setLoading]     = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales]         = useState<Sale[]>([])
@@ -331,7 +336,7 @@ function CustomerLedgerPageInner() {
         const [c, s, p, fa] = await Promise.all([getCustomers(), getSales(), getPayments(), getFinanceAccounts()])
         setCustomers(c)
         setSales(s)
-        setCustomerPayments(p.filter(pay => pay.entityType === "Customer" && pay.type === "Received"))
+        setCustomerPayments(p.filter(pay => pay.entityType === "Customer" && (pay.type === "Received" || pay.type === "Paid")))
         setFinanceAccounts(fa)
       } catch {
         toast.error("Failed to load ledger data")
@@ -391,28 +396,112 @@ function CustomerLedgerPageInner() {
         reference_type: "Sale",
         description: `Payment collected from ${selectedCustomer.name}`,
       })
-      const { data: accRow } = await supabase.from("finance_accounts")
-        .select("current_balance").eq("id", collectAccountId).single()
-      if (accRow) {
-        await supabase.from("finance_accounts")
-          .update({ current_balance: (accRow as any).current_balance + amount })
-          .eq("id", collectAccountId)
-        setFinanceAccounts(prev => prev.map(a =>
-          a.id === collectAccountId ? { ...a, currentBalance: a.currentBalance + amount } : a
-        ))
-      }
+      // Atomic, row-locked balance update (supabase/fix_balance_race_condition.sql) -
+      // safe against a concurrent payment against the same account racing this one.
+      const newBalance = await adjustAccountBalance(collectAccountId, amount)
+      setFinanceAccounts(prev => prev.map(a =>
+        a.id === collectAccountId ? { ...a, currentBalance: newBalance } : a
+      ))
 
       // Refresh payments
       const fresh = await getPayments()
-      setCustomerPayments(fresh.filter(pay => pay.entityType === "Customer" && pay.type === "Received"))
+      setCustomerPayments(fresh.filter(pay => pay.entityType === "Customer" && (pay.type === "Received" || pay.type === "Paid")))
 
       toast.success(`${formatCurrency(amount)} collected from ${selectedCustomer.name}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Payments",
+        entityId: selectedCustomer.id,
+        entityName: selectedCustomer.name,
+        description: `Collected Rs ${amount} from ${selectedCustomer.name} via ${collectMethod}`,
+        newValue: JSON.stringify({ amount, method: collectMethod, accountId: collectAccountId }),
+      }).catch(() => {})
       setCollectOpen(false)
       setPage(1)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to record payment")
     } finally {
       setCollecting(false)
+    }
+  }
+
+  // ── Gave Payment dialog (us → customer: advance, cashback, refund not tied to a sale) ──
+  const [giveOpen, setGiveOpen]         = useState(false)
+  const [giveAmount, setGiveAmount]     = useState("")
+  const [giveMethod, setGiveMethod]     = useState("Cash")
+  const [giveAccountId, setGiveAccountId] = useState("")
+  const [giving, setGiving]             = useState(false)
+
+  function openGiveDialog() {
+    const defaultAcc = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]
+    setGiveAccountId(defaultAcc?.id ?? "")
+    setGiveAmount("")
+    setGiveMethod("Cash")
+    setGiveOpen(true)
+  }
+
+  async function handleGivePayment() {
+    if (!selectedCustomer || giving) return
+    const amount = parseFloat(giveAmount)
+    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
+    if (!giveAccountId)         { toast.error("Select a finance account"); return }
+    setGiving(true)
+    try {
+      const tenantId = await getTenantId()
+      const today    = todayPKT()
+
+      await supabase.from("payments").insert({
+        tenant_id: tenantId, date: today, type: "Paid",
+        entity_type: "Customer", entity_id: selectedCustomer.id,
+        entity_name: selectedCustomer.name,
+        reference_type: "Advance", amount, method: giveMethod, status: "Completed",
+        notes: `Payment given to ${selectedCustomer.name}`,
+      })
+
+      // Finance transaction — money leaves the account. Uses its own outflow
+      // type (not sale_receipt) so Finance page totals/badges don't treat this
+      // as money coming in; amount stays positive like every other transaction row.
+      await supabase.from("finance_transactions").insert({
+        tenant_id: tenantId, date: today, type: "customer_refund",
+        account_id: giveAccountId, amount,
+        reference_type: "Sale",
+        description: `Payment given to ${selectedCustomer.name}`,
+      })
+      // Atomic, row-locked balance update - safe against a concurrent payment
+      // against the same account racing this one. No floor here, matching
+      // this flow's original behavior (it never checked for insufficient balance).
+      const newBalance = await adjustAccountBalance(giveAccountId, -amount)
+      setFinanceAccounts(prev => prev.map(a =>
+        a.id === giveAccountId ? { ...a, currentBalance: newBalance } : a
+      ))
+
+      // Refresh payments
+      const fresh = await getPayments()
+      setCustomerPayments(fresh.filter(pay => pay.entityType === "Customer" && (pay.type === "Received" || pay.type === "Paid")))
+
+      toast.success(`${formatCurrency(amount)} given to ${selectedCustomer.name}`)
+      createAuditLog({
+        timestamp: new Date().toISOString(),
+        userId: user?.id ?? "system",
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin",
+        action: "PAYMENT",
+        module: "Payments",
+        entityId: selectedCustomer.id,
+        entityName: selectedCustomer.name,
+        description: `Gave Rs ${amount} to ${selectedCustomer.name} via ${giveMethod}`,
+        newValue: JSON.stringify({ amount, method: giveMethod, accountId: giveAccountId }),
+      }).catch(() => {})
+      setGiveOpen(false)
+      setPage(1)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to record payment")
+    } finally {
+      setGiving(false)
     }
   }
 
@@ -431,11 +520,13 @@ function CustomerLedgerPageInner() {
     customers.forEach(c => {
       const custSales    = sales.filter(s => s.customerId === c.id && s.status !== "Refunded")
       const totalBilled  = custSales.reduce((s, sl) => s + sl.total, 0)
-      // Only Completed payments count as actual money received
-      const totalPaid    = customerPayments
-        .filter(p => p.entityId === c.id && p.status === "Completed")
-        .reduce((s, p) => s + p.amount, 0)
-      map.set(c.id, totalBilled - totalPaid)
+      // Only Completed payments count as actual money moved. Received (they paid us)
+      // reduces what they owe; Paid (we gave them money - advance/cashback) increases
+      // it, same direction as a sale, so it's added to totalBilled instead of totalPaid.
+      const custPayments = customerPayments.filter(p => p.entityId === c.id && p.status === "Completed")
+      const totalReceived = custPayments.filter(p => p.type === "Received").reduce((s, p) => s + p.amount, 0)
+      const totalGiven     = custPayments.filter(p => p.type === "Paid").reduce((s, p) => s + p.amount, 0)
+      map.set(c.id, totalBilled + totalGiven - totalReceived)
     })
     return map
   }, [customers, sales, customerPayments])
@@ -493,13 +584,19 @@ function CustomerLedgerPageInner() {
     // Down-payments folded into their sale row above are excluded here to avoid double-counting.
     customerPayments
       .filter(p => custIds.has(p.entityId) && p.status === "Completed" && !downPaymentIds.has(p.id))
-      .forEach(p => raw.push({
-        id: p.id, date: p.date,
-        reference: p.referenceNumber || p.id.slice(0, 8),
-        description: `Payment Received  ·  ${p.method}`,
-        debit: 0, credit: p.amount, type: "payment", customerName: p.entityName,
-        paymentId: p.id,
-      }))
+      .forEach(p => {
+        const isGave = p.type === "Paid"
+        raw.push({
+          id: p.id, date: p.date,
+          reference: p.referenceNumber || p.id.slice(0, 8),
+          description: isGave ? `Payment Given  ·  ${p.method}` : `Payment Received  ·  ${p.method}`,
+          // Gave = we handed the customer money (advance/refund not tied to a sale) - increases what
+          // they owe us, same polarity as a sale. Received = they paid us - reduces what they owe.
+          debit: isGave ? p.amount : 0, credit: isGave ? 0 : p.amount,
+          type: "payment", customerName: p.entityName,
+          paymentId: p.id,
+        })
+      })
 
     // Ascending by date so running balance is computed correctly (oldest → newest)
     // Same-date: sales (debits) before payments (credits)
@@ -693,6 +790,14 @@ function CustomerLedgerPageInner() {
                 className="flex items-center gap-1.5 h-8 px-3 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors"
               >
                 <PlusCircle className="w-3.5 h-3.5" /> {t("ledger.customer.Collect Payment")}
+              </button>
+            )}
+            {selectedCustomerId && (
+              <button
+                onClick={openGiveDialog}
+                className="flex items-center gap-1.5 h-8 px-3 text-xs rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-colors"
+              >
+                <PlusCircle className="w-3.5 h-3.5" /> Gave Payment
               </button>
             )}
             <button
@@ -1114,6 +1219,108 @@ function CustomerLedgerPageInner() {
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
             >
               {collecting ? t("ledger.customer.Saving") : `${t("ledger.customer.Collect")} ${parseFloat(collectAmount) > 0 ? formatCurrency(parseFloat(collectAmount)) : ""}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Gave Payment dialog ──────────────────────────────────────────────── */}
+      <Dialog open={giveOpen} onOpenChange={v => { if (!v) setGiveOpen(false) }}>
+        <DialogContent className="w-[96vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900">Gave Payment</DialogTitle>
+            <DialogDescription className="text-slate-500 text-sm">
+              {selectedCustomer?.name} — record money given to this customer (advance, cashback, refund)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            {/* Running balance banner */}
+            {(() => {
+              const netDue = customerBalanceMap.get(selectedCustomerId) ?? 0
+              const amt    = parseFloat(giveAmount) || 0
+              // Giving money increases what the customer owes (same direction as a sale)
+              const after  = netDue + amt
+              return (
+                <div className={cn(
+                  "rounded-xl px-4 py-3.5 border",
+                  netDue > 0 ? "bg-rose-50 border-rose-200" : netDue < 0 ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                        {netDue > 0 ? t("ledger.customer.Running Balance Due") : netDue < 0 ? t("ledger.customer.Advance on Account") : t("ledger.customer.Settled")}
+                      </p>
+                      <p className={cn("text-2xl font-extrabold tabular-nums", netDue > 0 ? "text-rose-700" : netDue < 0 ? "text-emerald-700" : "text-slate-400")}>
+                        {formatCurrency(Math.abs(netDue))}
+                      </p>
+                    </div>
+                    {amt > 0 && (
+                      <div className="text-right">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">After Payment</p>
+                        <p className={cn("text-lg font-bold tabular-nums", after > 0 ? "text-rose-600" : after < 0 ? "text-emerald-600" : "text-emerald-600")}>
+                          {formatCurrency(Math.abs(after))}
+                          <span className="text-xs font-medium ml-1">{after > 0 ? t("ledger.customer.Dr") : after <= 0 ? t("ledger.customer.Cr Settled") : ""}</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Amount */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                Amount Given
+              </label>
+              <MoneyInput
+                min="1" placeholder={t("ledger.customer.Enter amount")}
+                value={giveAmount}
+                onChange={v => setGiveAmount(v)}
+                className="text-sm"
+                autoFocus
+              />
+            </div>
+
+            {/* Payment method */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                {t("ledger.customer.Payment Method Field")}
+              </label>
+              <Select value={giveMethod} onValueChange={setGiveMethod}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["Cash", "Bank Transfer", "JazzCash", "EasyPaisa", "Other"].map(m => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Finance account */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                Pay From Account
+              </label>
+              <Select value={giveAccountId} onValueChange={setGiveAccountId}>
+                <SelectTrigger className="text-sm"><SelectValue placeholder={t("ledger.customer.Select account")} /></SelectTrigger>
+                <SelectContent>
+                  {financeAccounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} — {formatCurrency(a.currentBalance)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              onClick={handleGivePayment}
+              disabled={giving || !giveAmount || parseFloat(giveAmount) <= 0 || !giveAccountId}
+              className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+            >
+              {giving ? t("ledger.customer.Saving") : `Give ${parseFloat(giveAmount) > 0 ? formatCurrency(parseFloat(giveAmount)) : ""}`}
             </Button>
           </div>
         </DialogContent>

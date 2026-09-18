@@ -19,6 +19,8 @@ import {
 import type { ModelSupplierStock } from "@/lib/api/rebate"
 import type { RebateEntry, RebateType, RebateStatus, CreateRebateInput } from "@/lib/api/rebate"
 import type { Supplier } from "@/data/types"
+import { createAuditLog } from "@/lib/api/audit"
+import { useAuth } from "@/context/auth-context"
 import { formatCurrency, cn } from "@/lib/utils"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageLoader } from "@/components/shared/page-loader"
@@ -76,6 +78,7 @@ function emptyForm(type: RebateType = "rebate"): FormState {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 function RebatePageInner() {
+  const { user } = useAuth()
   const [entries, setEntries] = useState<RebateEntry[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [accessoryNames, setAccessoryNames] = useState<string[]>([])
@@ -307,6 +310,14 @@ function RebatePageInner() {
         const updated = await updateRebateEntry(editEntry.id, input)
         setEntries(prev => prev.map(e => e.id === updated.id ? updated : e))
         toast.success("Entry updated")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "UPDATE", module: "Suppliers",
+          entityId: editEntry.id, entityName: `${input.supplierName} - ${input.model}`,
+          description: `Edited rebate entry for ${input.supplierName} (${input.model}) - Rs ${total}`,
+          oldValue: JSON.stringify({ units: editEntry.units, total: editEntry.total, status: editEntry.status }),
+          newValue: JSON.stringify({ units: input.units, total, status }),
+        }).catch(() => {})
       } else {
         const created = await createRebateEntry(input)
         // If saving as posted, run the post logic too
@@ -318,6 +329,13 @@ function RebatePageInner() {
           setEntries(prev => [created, ...prev])
         }
         toast.success(status === "posted" ? "Posted to supplier ledger" : "Saved as draft")
+        createAuditLog({
+          timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+          userRole: user?.role ?? "Admin", action: "CREATE", module: "Suppliers",
+          entityId: created.id, entityName: `${input.supplierName} - ${input.model}`,
+          description: `Created ${status === "posted" ? "and posted " : ""}rebate entry for ${input.supplierName} (${input.model}) - Rs ${total}`,
+          newValue: JSON.stringify({ type: input.type, units: input.units, total, status }),
+        }).catch(() => {})
       }
       closeForm()
     } catch (err) {
@@ -335,6 +353,13 @@ function RebatePageInner() {
       const refreshed = await getRebateEntries()
       setEntries(refreshed)
       toast.success("Posted to supplier ledger — balance updated")
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "PAYMENT", module: "Suppliers",
+        entityId: entry.id, entityName: `${entry.supplierName} - ${entry.model}`,
+        description: `Posted rebate credit of Rs ${entry.total} for ${entry.supplierName} (${entry.model}) to supplier ledger`,
+        newValue: JSON.stringify({ total: entry.total, model: entry.model }),
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Post failed")
     } finally {
@@ -344,11 +369,19 @@ function RebatePageInner() {
 
   async function handleDelete(id: string) {
     if (deleting === id || posting === id) return
+    const target = entries.find(e => e.id === id)
     setDeleting(id)
     try {
       await deleteRebateEntry(id)
       setEntries(prev => prev.filter(e => e.id !== id))
       toast.success("Deleted")
+      createAuditLog({
+        timestamp: new Date().toISOString(), userId: user?.id ?? "system", userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "Admin", action: "DELETE", module: "Suppliers",
+        entityId: id, entityName: target ? `${target.supplierName} - ${target.model}` : "",
+        description: `Deleted rebate entry${target ? ` for ${target.supplierName} (${target.model}) - Rs ${target.total}` : ""}`,
+        oldValue: target ? JSON.stringify({ units: target.units, total: target.total, status: target.status }) : undefined,
+      }).catch(() => {})
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed")
     } finally {

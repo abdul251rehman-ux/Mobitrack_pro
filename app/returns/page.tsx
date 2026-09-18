@@ -13,7 +13,7 @@ import { getReturns, createReturn, updateReturnStatus } from "@/lib/api/returns"
 import { getSales } from "@/lib/api/sales"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
-import { getFinanceAccounts } from "@/lib/api/finance"
+import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import type { Sale } from "@/data/types"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
@@ -399,13 +399,9 @@ function ReturnsPageInner() {
           description: `Refund - ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
           notes: newReturn.notes ?? null,
         })
-        const { data: accRow } = await supabase
-          .from("finance_accounts").select("current_balance").eq("id", newAccountId).single()
-        if (accRow) {
-          await supabase.from("finance_accounts")
-            .update({ current_balance: (accRow as any).current_balance - refundAmount })
-            .eq("id", newAccountId)
-        }
+        // Atomic, row-locked debit (supabase/fix_balance_race_condition.sql) -
+        // safe against a concurrent payment against the same account racing this one.
+        await adjustAccountBalance(newAccountId, -refundAmount)
         // tag return with account
         await supabase.from("returns")
           .update({ account_id: newAccountId, refund_type: "cash" })
@@ -469,23 +465,34 @@ function ReturnsPageInner() {
     try {
       const tenantId = await getTenantId()
 
-      // Reverse cash refund that was issued when the return was created
-      const { data: retRow } = await supabase
+      // Flip status to Rejected FIRST, guarded on still being Pending - this
+      // UPDATE is atomic in Postgres, so if two staff members click Reject on
+      // the same return at nearly the same time, only one of these two
+      // requests can match a row (status='Pending'); the other gets 0 rows
+      // back and skips the reversal below entirely, instead of both of them
+      // reading "still Pending" and both crediting the account back.
+      const { data: statusRows, error: statusErr } = await supabase
         .from("returns")
-        .select("refund_type, account_id, refund_amount")
+        .update({ status: "Rejected", resolved_at: new Date().toISOString() })
         .eq("id", id)
-        .single()
+        .eq("tenant_id", tenantId)
+        .eq("status", "Pending")
+        .select("refund_type, account_id, refund_amount")
+      if (statusErr) throw new Error(statusErr.message)
 
-      if (retRow && (retRow as any).refund_type === "cash" && (retRow as any).account_id && (retRow as any).refund_amount > 0) {
-        const accId = (retRow as any).account_id
-        const amount = (retRow as any).refund_amount
-        const { data: accRow } = await supabase
-          .from("finance_accounts").select("current_balance").eq("id", accId).single()
-        if (accRow) {
-          await supabase.from("finance_accounts")
-            .update({ current_balance: (accRow as any).current_balance + amount })
-            .eq("id", accId)
-        }
+      const retRow = statusRows?.[0]
+      if (!retRow) {
+        // Already resolved by someone else (or never existed) - nothing more to do.
+        setProcessingId(null)
+        return
+      }
+
+      // Reverse cash refund that was issued when the return was created
+      if (retRow.refund_type === "cash" && retRow.account_id && retRow.refund_amount > 0) {
+        const accId = retRow.account_id as string
+        const amount = retRow.refund_amount as number
+        // Atomic, row-locked credit (supabase/fix_balance_race_condition.sql).
+        await adjustAccountBalance(accId, amount)
         // Record the reversal transaction
         await supabase.from("finance_transactions").insert({
           tenant_id: tenantId,
@@ -498,8 +505,6 @@ function ReturnsPageInner() {
           description: `Return rejected - refund reversed`,
         })
       }
-
-      await updateReturnStatus(id, "Rejected")
       const ret = returnsList.find(r => r.id === id)
       setReturnsList((prev) =>
         prev.map((r) =>
