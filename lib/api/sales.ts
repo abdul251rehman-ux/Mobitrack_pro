@@ -139,6 +139,31 @@ export async function settleCustomerPayment(customerId: string, amount: number):
   if (error) throw new Error(`Failed to settle customer payment: ${error.message}`)
 }
 
+// Atomic, row-locked reserve/release of sale_items.returned_qty (see
+// supabase/add_return_item_tracking.sql) - used by app/returns/page.tsx so
+// two returns (or a return and a reject) touching the same sale_items row
+// at nearly the same time can't clobber each other's read-then-write,
+// mirroring adjust_account_balance/adjust_supplier_balance.
+export async function reserveReturnQty(saleItemId: string, qty: number): Promise<void> {
+  const tenantId = await getTenantId()
+  const { error } = await supabase.rpc('reserve_return_qty', {
+    p_sale_item_id: saleItemId,
+    p_tenant_id: tenantId,
+    p_qty: qty,
+  })
+  if (error) throw new Error(`Failed to reserve returned quantity: ${error.message}`)
+}
+
+export async function releaseReturnQty(saleItemId: string, qty: number): Promise<void> {
+  const tenantId = await getTenantId()
+  const { error } = await supabase.rpc('release_return_qty', {
+    p_sale_item_id: saleItemId,
+    p_tenant_id: tenantId,
+    p_qty: qty,
+  })
+  if (error) throw new Error(`Failed to release returned quantity: ${error.message}`)
+}
+
 export async function updateSaleStatus(id: string, status: string): Promise<void> {
   try {
     const tenantId = await getTenantId()
