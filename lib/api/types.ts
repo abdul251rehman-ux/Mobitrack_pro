@@ -233,6 +233,7 @@ export interface DbSaleItem {
   discount: number
   line_total: number
   imei: string | null
+  returned_qty?: number
 }
 
 export interface DbPurchase {
@@ -406,9 +407,9 @@ export interface DbReturn {
   tenant_id: string
   return_number: string
   date: string
-  sale_id: string
+  sale_id: string | null
   invoice_number: string
-  customer_id: string
+  customer_id: string | null
   customer_name: string
   customer_phone: string
   reason: string
@@ -428,6 +429,7 @@ export interface DbReturnItem {
   id: string
   tenant_id: string
   return_id: string
+  sale_item_id?: string | null
   product_id: string
   product_name: string
   product_type: string
@@ -866,6 +868,7 @@ export function toSale(db: DbSale, items: DbSaleItem[]): Sale {
 
 export function toSaleItem(db: DbSaleItem): SaleItem {
   return {
+    id: db.id,
     productId: db.product_id,
     productName: db.product_name,
     productType: db.product_type as SaleItem['productType'],
@@ -874,6 +877,7 @@ export function toSaleItem(db: DbSaleItem): SaleItem {
     discount: db.discount,
     lineTotal: db.line_total,
     imei: db.imei ?? undefined,
+    returnedQty: db.returned_qty ?? 0,
   }
 }
 
@@ -1154,9 +1158,9 @@ export function toReturn(db: DbReturn, items: DbReturnItem[]): Return {
     id: db.id,
     returnNumber: db.return_number,
     date: db.date,
-    saleId: db.sale_id,
+    saleId: db.sale_id ?? undefined,
     invoiceNumber: db.invoice_number,
-    customerId: db.customer_id,
+    customerId: db.customer_id ?? undefined,
     customerName: db.customer_name,
     customerPhone: db.customer_phone,
     items: items.map(toReturnItem),
@@ -1176,6 +1180,7 @@ export function toReturn(db: DbReturn, items: DbReturnItem[]): Return {
 
 export function toReturnItem(db: DbReturnItem): ReturnItem {
   return {
+    saleItemId: db.sale_item_id ?? undefined,
     productId: db.product_id,
     productName: db.product_name,
     productType: db.product_type as ReturnItem['productType'],

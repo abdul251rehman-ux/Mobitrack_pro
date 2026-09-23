@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner"
 
 import { getReturns, createReturn, updateReturnStatus } from "@/lib/api/returns"
-import { getSales } from "@/lib/api/sales"
+import { getSales, reserveReturnQty, releaseReturnQty } from "@/lib/api/sales"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
@@ -19,7 +19,7 @@ import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { Return, ReturnStatus, ReturnReason, ReturnItem } from "@/data/types"
 import type { FinanceAccount } from "@/lib/api/types"
-import { formatCurrency, formatDate, todayPKT } from "@/lib/utils"
+import { formatCurrency, formatDate, todayPKT, cn } from "@/lib/utils"
 import { PageHeader } from "@/components/shared/page-header"
 import { PermissionGate } from "@/components/shared/permission-gate"
 import { StatCard } from "@/components/shared/stat-card"
@@ -96,13 +96,17 @@ const REASON_COLORS: Record<ReturnReason, string> = {
 // â"€â"€â"€ New-item template â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 interface NewReturnItem {
+  saleItemId?: string     // sale_items.id - for returned_qty update; undefined for manual entry (no matched sale)
   productId: string      // real product id from sale_items, used for inventory restock
   productName: string
   productType: "Mobile" | "Accessory" | "UsedPhone"
   quantity: number
+  maxQty: number          // originalQty - alreadyReturned - what's actually returnable; Infinity for manual entry
+  originalQty: number
   unitPrice: number
   condition: ReturnItem["condition"]
   imei: string
+  selected: boolean
 }
 
 const EMPTY_ITEM: NewReturnItem = {
@@ -110,9 +114,12 @@ const EMPTY_ITEM: NewReturnItem = {
   productName: "",
   productType: "Mobile",
   quantity: 1,
+  maxQty: Infinity,
+  originalQty: 1,
   unitPrice: 0,
   condition: "Good",
   imei: "",
+  selected: true,
 }
 
 // â"€â"€â"€ Page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -157,20 +164,11 @@ function ReturnsPageInner() {
       // Auto-lookup after state settles
       setTimeout(() => {
         const match = salesList.find(s => s.invoiceNumber?.toLowerCase() === autoInvoice.toLowerCase())
+        setMatchedSale(match ?? null)
         if (match) {
           setNewCustomerName(match.customerName)
           setNewCustomerPhone(match.customerPhone)
-          if (match.items?.length > 0) {
-            setNewItems(match.items.map(si => ({
-              productId: si.productId ?? "",
-              productName: si.productName,
-              productType: si.productType as "Mobile" | "Accessory" | "UsedPhone",
-              quantity: si.quantity,
-              unitPrice: si.unitPrice,
-              condition: "Good" as ReturnItem["condition"],
-              imei: si.imei ?? "",
-            })))
-          }
+          setNewItems(buildReturnableItems(match))
         }
       }, 0)
     }
@@ -200,6 +198,10 @@ function ReturnsPageInner() {
   const [newRestock, setNewRestock] = useState(true)
   const [newNotes, setNewNotes] = useState("")
   const [newItems, setNewItems] = useState<NewReturnItem[]>([{ ...EMPTY_ITEM }])
+  // The real sale this return is against, resolved by lookupInvoice() - used
+  // instead of a fabricated placeholder id, so the return is actually linked
+  // to real sale/customer records (see handleCreateReturn).
+  const [matchedSale, setMatchedSale] = useState<Sale | null>(null)
 
   // â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const stats = useMemo(() => {
@@ -245,6 +247,7 @@ function ReturnsPageInner() {
     setNewInvoice("")
     setNewCustomerName("")
     setNewCustomerPhone("")
+    setMatchedSale(null)
     setNewReason("Defective")
     setNewRefundType("cash")
     setNewRefundMethod("Cash")
@@ -255,27 +258,48 @@ function ReturnsPageInner() {
     setNewItems([{ ...EMPTY_ITEM }])
   }
 
+  // Builds selectable, capped return lines from the matched sale's own
+  // items - maxQty = quantity - returnedQty (how many of this line haven't
+  // already been returned across past Sale Returns), mirroring
+  // app/purchase-returns/page.tsx's buildLineItems. Fully-returned lines
+  // are excluded entirely (nothing left to return).
+  function buildReturnableItems(sale: Sale): NewReturnItem[] {
+    return (sale.items ?? [])
+      .map((si) => {
+        const alreadyReturned = si.returnedQty ?? 0
+        const maxQty = Math.max(0, si.quantity - alreadyReturned)
+        return {
+          saleItemId: si.id,
+          productId: si.productId ?? "",
+          productName: si.productName,
+          productType: si.productType as "Mobile" | "Accessory" | "UsedPhone",
+          quantity: Math.min(1, maxQty),
+          maxQty,
+          originalQty: si.quantity,
+          unitPrice: si.unitPrice,
+          condition: "Good" as ReturnItem["condition"],
+          imei: si.imei ?? "",
+          selected: false,
+        }
+      })
+      .filter((it) => it.maxQty > 0)
+  }
+
   function lookupInvoice() {
     const match = salesList.find(
       (s) => s.invoiceNumber?.toLowerCase() === newInvoice.trim().toLowerCase()
     )
+    setMatchedSale(match ?? null)
     if (match) {
       setNewCustomerName(match.customerName)
       setNewCustomerPhone(match.customerPhone)
-      // Pre-populate items from the original sale
-      if (match.items && match.items.length > 0) {
-        setNewItems(
-          match.items.map((si) => ({
-            productId: si.productId ?? "",
-            productName: si.productName,
-            productType: si.productType as "Mobile" | "Accessory" | "UsedPhone",
-            quantity: si.quantity,
-            unitPrice: si.unitPrice,
-            condition: "Good" as ReturnItem["condition"],
-            imei: si.imei ?? "",
-          }))
-        )
-        toast.success(`Invoice found - ${match.items.length} item(s) pre-filled from sale`)
+      const returnable = buildReturnableItems(match)
+      if (returnable.length > 0) {
+        setNewItems(returnable)
+        toast.success(`Invoice found - ${returnable.length} returnable item(s) - select what's being returned`)
+      } else if (match.items && match.items.length > 0) {
+        setNewItems([])
+        toast.warning("Invoice found - every item on this sale has already been fully returned")
       } else {
         toast.success("Invoice found - customer info populated")
       }
@@ -285,7 +309,9 @@ function ReturnsPageInner() {
   }
 
   function calcRefundTotal(): number {
-    return newItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+    return newItems
+      .filter((item) => item.selected)
+      .reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
   }
 
   function updateItem(index: number, patch: Partial<NewReturnItem>) {
@@ -314,9 +340,24 @@ function ReturnsPageInner() {
       toast.error("Customer name is required")
       return
     }
-    if (newItems.length === 0 || newItems.some((it) => !it.productName.trim())) {
-      toast.error("Please add at least one item with a product name")
+    const selectedItems = newItems.filter((it) => it.selected)
+    if (selectedItems.length === 0 || selectedItems.some((it) => !it.productName.trim())) {
+      toast.error("Please select at least one item to return")
       return
+    }
+    // Blocks over-returning: can't return more than what's still returnable
+    // on this line (quantity - already returned) - the same guard Purchase
+    // Return has, now applied here so the same double-return/over-return gap
+    // can't happen on the sales side either.
+    for (const it of selectedItems) {
+      if (it.quantity > it.maxQty) {
+        toast.error(`${it.productName}: max returnable is ${it.maxQty} (already returned: ${it.originalQty - it.maxQty})`)
+        return
+      }
+      if (it.quantity <= 0) {
+        toast.error(`${it.productName}: return quantity must be at least 1`)
+        return
+      }
     }
 
     setCreating(true)
@@ -324,7 +365,8 @@ function ReturnsPageInner() {
 
     const refundAmount = calcRefundTotal()
 
-    const items: ReturnItem[] = newItems.map((it) => ({
+    const items: ReturnItem[] = selectedItems.map((it) => ({
+      saleItemId: it.saleItemId,
       productId: it.productId || `ret-${Date.now()}`,
       productName: it.productName,
       // DB return_items CHECK only allows Mobile/Accessory - map UsedPhone â†' Mobile
@@ -336,19 +378,29 @@ function ReturnsPageInner() {
       condition: it.condition,
     }))
 
-    // Generate return number from DB count to avoid clashes
+    // Atomic, row-locked reservation (supabase/fix_return_number_race.sql) -
+    // replaces the old `SELECT count(*)` + compute-locally approach, which
+    // could race two close-together return creations into the same number
+    // (the same bug class fixed for purchases.po_number this session).
     const tenantId = await getTenantId()
-    const { count } = await supabase.from("returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId)
-    const nextNum = (count ?? returnsList.length) + 1
     const dateTag = todayPKT().replace(/-/g, "").slice(0, 8)
+    const { data: reservedReturnNumber, error: rnErr } = await supabase.rpc('reserve_return_number', { p_tenant_id: tenantId, p_date_tag: dateTag })
+    if (rnErr) throw new Error(`Failed to reserve return number: ${rnErr.message}`)
 
+    // Link to the REAL sale/customer resolved by lookupInvoice() - a
+    // fabricated placeholder id here (the old `sale-lookup-...`/
+    // `cust-new-...` strings) fails the DB's UUID columns outright,
+    // confirmed live: every return creation was hard-failing with
+    // "invalid input syntax for type uuid". If no invoice matched (manual
+    // entry, e.g. a very old sale not in the loaded list), both are left
+    // undefined rather than a fake value - the DB columns are nullable.
     const newReturn: Return = {
-      id: `ret-${String(nextNum).padStart(3, "0")}`,
-      returnNumber: `RET-${dateTag}-${String(nextNum).padStart(4, "0")}`,
+      id: `ret-${Date.now()}`,
+      returnNumber: reservedReturnNumber as string,
       date: todayPKT(),
-      saleId: `sale-lookup-${newInvoice}`,
+      saleId: matchedSale?.id,
       invoiceNumber: newInvoice,
-      customerId: `cust-new-${Date.now()}`,
+      customerId: matchedSale?.customerId || undefined,
       customerName: newCustomerName,
       customerPhone: newCustomerPhone,
       items,
@@ -386,9 +438,57 @@ function ReturnsPageInner() {
         items,
       )
 
+      // Reserve the returned quantity immediately (not deferred to
+      // Approve/Complete) - this is the actual source of truth preventing a
+      // second return from being created against the same units while this
+      // one is still Pending review, mirroring Purchase Return's
+      // returned_qty update (app/purchase-returns/page.tsx). Uses the
+      // atomic, row-locked reserve_return_qty RPC (supabase/
+      // add_return_item_tracking.sql) rather than a client read-then-write,
+      // which would otherwise race against another return (or a reject)
+      // touching the same sale_items row at nearly the same time. Only
+      // applies to lines that came from a real matched sale - manual-entry
+      // lines (no saleItemId) have nothing to reserve against.
+      for (const it of selectedItems) {
+        if (!it.saleItemId) continue
+        await reserveReturnQty(it.saleItemId, it.quantity)
+      }
+
+      // If every item on the matched sale has now been fully returned, flip
+      // it to Refunded - keeps Dashboard revenue/profit/receivable
+      // calculations consistent (a fully-returned sale should no longer
+      // count as real revenue), the same reasoning Purchase Return's
+      // balance_due=0 -> payment_status='Paid' update follows. A genuinely
+      // partial return (some items/qty still not returned) leaves the sale
+      // untouched - it's still a real, active sale for the rest.
+      //
+      // Re-reads sale_items fresh rather than trusting `matchedSale.items`
+      // (a snapshot loaded once when the dialog opened) - the reserve calls
+      // just above already committed the real returned_qty values, so this
+      // read reflects every return against this sale up to this exact
+      // moment, not a possibly-stale one from dialog-open time.
+      if (matchedSale) {
+        const { data: freshSaleItems } = await supabase
+          .from("sale_items")
+          .select("quantity, returned_qty")
+          .eq("sale_id", matchedSale.id)
+          .eq("tenant_id", tenantId)
+        const stillOutstanding = (freshSaleItems ?? []).some(
+          (si: any) => (si.returned_qty ?? 0) < si.quantity
+        )
+        if (!stillOutstanding) {
+          const { error: refundStatusErr } = await supabase
+            .from("sales")
+            .update({ status: "Refunded" })
+            .eq("id", matchedSale.id)
+            .eq("tenant_id", tenantId)
+          if (refundStatusErr) throw new Error(`Failed to mark sale as refunded: ${refundStatusErr.message}`)
+        }
+      }
+
       // Finance: record cash refund as money OUT of the account
       if (newRefundType === "cash" && newAccountId && refundAmount > 0) {
-        await supabase.from("finance_transactions").insert({
+        const { error: refundFtErr } = await supabase.from("finance_transactions").insert({
           tenant_id: tenantId,
           date: newReturn.date,
           type: "sale_refund",
@@ -399,17 +499,78 @@ function ReturnsPageInner() {
           description: `Refund - ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
           notes: newReturn.notes ?? null,
         })
+        if (refundFtErr) throw new Error(`Finance audit failed: ${refundFtErr.message}`)
+
         // Atomic, row-locked debit (supabase/fix_balance_race_condition.sql) -
         // safe against a concurrent payment against the same account racing this one.
         await adjustAccountBalance(newAccountId, -refundAmount)
-        // tag return with account
-        await supabase.from("returns")
+
+        // Record this refund as a "Paid" customer payment (money we gave
+        // them - same direction as "Gave Payment" in the Customer Ledger)
+        // so it's actually visible in the one place the shop owner looks up
+        // a customer's balance - without this, cash correctly left the
+        // account but the customer's own Ledger never learned about it,
+        // confirmed as a real gap in this feature (no `payments` insert
+        // existed anywhere in this file before this fix). Only recorded
+        // against a real customer when lookupInvoice() found one - a
+        // manually-entered return with no matching sale has no customer
+        // record to attribute it to.
+        if (matchedSale?.customerId) {
+          const { error: refundPayErr } = await supabase.from("payments").insert({
+            tenant_id: tenantId,
+            date: newReturn.date,
+            type: "Paid",
+            entity_type: "Customer",
+            entity_id: matchedSale.customerId,
+            entity_name: newReturn.customerName,
+            reference_type: "Return",
+            reference_number: newReturn.returnNumber,
+            reference_id: (created as any).id,
+            amount: refundAmount,
+            method: newRefundMethod,
+            status: "Completed",
+            notes: `Refund for return ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
+          })
+          if (refundPayErr) throw new Error(`Failed to record refund payment: ${refundPayErr.message}`)
+        }
+
+        // tag return with account - checked, since a silent failure here
+        // would leave refund_type/account_id unset, which would silently
+        // break rejectReturn's reversal (its `refund_type === "cash"` check
+        // would never match, leaking the cash reversal).
+        const { error: tagErr } = await supabase.from("returns")
           .update({ account_id: newAccountId, refund_type: "cash" })
           .eq("id", (created as any).id)
+        if (tagErr) throw new Error(`Failed to tag return with refund account: ${tagErr.message}`)
       } else if (newRefundType === "store_credit") {
-        await supabase.from("returns")
+        // No cash moves, but the customer's balance still changes (a
+        // credit toward future purchases) - same "Paid" direction/effect as
+        // a cash refund, just not through a finance account. Same
+        // reasoning as the cash branch above for why this needs a
+        // `payments` row to be visible in the Customer Ledger.
+        if (matchedSale?.customerId) {
+          const { error: creditErr } = await supabase.from("payments").insert({
+            tenant_id: tenantId,
+            date: newReturn.date,
+            type: "Paid",
+            entity_type: "Customer",
+            entity_id: matchedSale.customerId,
+            entity_name: newReturn.customerName,
+            reference_type: "Return",
+            reference_number: newReturn.returnNumber,
+            reference_id: (created as any).id,
+            amount: refundAmount,
+            method: "Store Credit",
+            status: "Completed",
+            notes: `Store credit for return ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
+          })
+          if (creditErr) throw new Error(`Failed to record store credit: ${creditErr.message}`)
+        }
+
+        const { error: tagErr } = await supabase.from("returns")
           .update({ refund_type: "store_credit" })
           .eq("id", (created as any).id)
+        if (tagErr) throw new Error(`Failed to tag return as store credit: ${tagErr.message}`)
       }
 
       setReturnsList((prev) => [created, ...prev])
@@ -477,7 +638,7 @@ function ReturnsPageInner() {
         .eq("id", id)
         .eq("tenant_id", tenantId)
         .eq("status", "Pending")
-        .select("refund_type, account_id, refund_amount")
+        .select("refund_type, account_id, refund_amount, sale_id, customer_id, customer_name, return_number")
       if (statusErr) throw new Error(statusErr.message)
 
       const retRow = statusRows?.[0]
@@ -505,7 +666,61 @@ function ReturnsPageInner() {
           description: `Return rejected - refund reversed`,
         })
       }
+
+      // Re-read return_items fresh from the DB rather than trusting the
+      // local returnsList (loaded once at page mount, never invalidated) -
+      // if this return was created in a different tab/session since this
+      // page loaded, the in-memory copy would be missing entirely and this
+      // whole reversal would silently no-op while still reporting success.
+      const { data: freshReturnItems } = await supabase
+        .from("return_items")
+        .select("sale_item_id, quantity")
+        .eq("return_id", id)
+        .eq("tenant_id", tenantId)
+
+      for (const item of freshReturnItems ?? []) {
+        if (!(item as any).sale_item_id) continue
+        // Atomic, row-locked (supabase/add_return_item_tracking.sql) -
+        // replaces a read-then-write that could lose an update if this
+        // races another reject or a new return on the same sale_items row.
+        await releaseReturnQty((item as any).sale_item_id, (item as any).quantity)
+      }
+
+      // If this return had flipped the sale to Refunded, revert it back
+      // to Completed - the items are no longer considered returned.
+      if (retRow.sale_id) {
+        await supabase
+          .from("sales")
+          .update({ status: "Completed" })
+          .eq("id", retRow.sale_id)
+          .eq("tenant_id", tenantId)
+          .eq("status", "Refunded")
+      }
+
+      // Reverse the "Paid" customer payment recorded when this return
+      // was created (cash refund or store credit) via a compensating
+      // "Received" entry, rather than deleting the original row - keeps
+      // the Customer Ledger's full history intact and auditable.
+      if (retRow.customer_id && retRow.refund_amount > 0) {
+        await supabase.from("payments").insert({
+          tenant_id: tenantId,
+          date: todayPKT(),
+          type: "Received",
+          entity_type: "Customer",
+          entity_id: retRow.customer_id,
+          entity_name: retRow.customer_name,
+          reference_type: "Return",
+          reference_number: `${retRow.return_number}-REJECTED`,
+          reference_id: id,
+          amount: retRow.refund_amount,
+          method: retRow.refund_type === "store_credit" ? "Store Credit" : "Cash",
+          status: "Completed",
+          notes: `Return ${retRow.return_number} rejected - reversing its refund`,
+        })
+      }
+
       const ret = returnsList.find(r => r.id === id)
+
       setReturnsList((prev) =>
         prev.map((r) =>
           r.id === id
@@ -513,7 +728,7 @@ function ReturnsPageInner() {
             : r
         )
       )
-      toast.success("Return rejected - cash refund reversed")
+      toast.success("Return rejected - refund and reserved quantity reversed")
       if (ret) logReturnStatusChange(ret, "Rejected", "REJECT")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to reject return")
@@ -895,7 +1110,7 @@ function ReturnsPageInner() {
                 <Input
                   placeholder="e.g. INV-2025-0002"
                   value={newInvoice}
-                  onChange={(e) => setNewInvoice(e.target.value)}
+                  onChange={(e) => { setNewInvoice(e.target.value); setMatchedSale(null) }}
                 />
                 <Button variant="outline" onClick={lookupInvoice} className="shrink-0">
                   <Search className="w-4 h-4 mr-1.5" />
@@ -943,22 +1158,45 @@ function ReturnsPageInner() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">Items to Return</Label>
-                <Button variant="outline" size="sm" onClick={addItem}>
-                  <Plus className="w-3.5 h-3.5 mr-1" />
-                  Add Item
-                </Button>
+                {!matchedSale && (
+                  <Button variant="outline" size="sm" onClick={addItem}>
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Add Item
+                  </Button>
+                )}
               </div>
+              {matchedSale && newItems.length === 0 && (
+                <p className="text-xs text-slate-400 px-1">Every item on this sale has already been fully returned.</p>
+              )}
+              {matchedSale && newItems.length > 0 && (
+                <p className="text-xs text-slate-400 px-1">Select which items are being returned - quantity is capped at what hasn't already been returned.</p>
+              )}
 
               {newItems.map((item, idx) => (
-                <Card key={idx} className="border border-slate-200">
+                <Card key={idx} className={cn("border", item.selected ? "border-indigo-300 bg-indigo-50/30" : "border-slate-200")}>
                   <CardContent className="p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500">Item {idx + 1}</span>
-                      {newItems.length > 1 && (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {matchedSale && (
+                          <Checkbox
+                            checked={item.selected}
+                            onCheckedChange={(checked) => updateItem(idx, { selected: checked === true })}
+                          />
+                        )}
+                        <span className="text-xs font-semibold text-slate-500 truncate">
+                          {matchedSale ? item.productName : `Item ${idx + 1}`}
+                        </span>
+                        {matchedSale && (
+                          <Badge variant="secondary" className="bg-slate-100 text-slate-500 text-[10px] shrink-0">
+                            {item.originalQty - item.maxQty}/{item.originalQty} already returned
+                          </Badge>
+                        )}
+                      </div>
+                      {!matchedSale && newItems.length > 1 && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 w-6 p-0 text-slate-400 hover:text-rose-500"
+                          className="h-6 w-6 p-0 text-slate-400 hover:text-rose-500 shrink-0"
                           onClick={() => removeItem(idx)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -966,37 +1204,46 @@ function ReturnsPageInner() {
                       )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {!matchedSale && (
+                        <>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Product Name</Label>
+                            <Input
+                              value={item.productName}
+                              onChange={(e) => updateItem(idx, { productName: e.target.value })}
+                              placeholder="Product name"
+                              className="h-9"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Product Type</Label>
+                            <Select
+                              value={item.productType}
+                              onValueChange={(v) => updateItem(idx, { productType: v as "Mobile" | "Accessory" })}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Mobile">Mobile</SelectItem>
+                                <SelectItem value="Accessory">Accessory</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
                       <div className="space-y-1">
-                        <Label className="text-xs">Product Name</Label>
-                        <Input
-                          value={item.productName}
-                          onChange={(e) => updateItem(idx, { productName: e.target.value })}
-                          placeholder="Product name"
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Product Type</Label>
-                        <Select
-                          value={item.productType}
-                          onValueChange={(v) => updateItem(idx, { productType: v as "Mobile" | "Accessory" })}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Mobile">Mobile</SelectItem>
-                            <SelectItem value="Accessory">Accessory</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Quantity</Label>
+                        <Label className="text-xs">Quantity {matchedSale && `(max ${item.maxQty})`}</Label>
                         <Input
                           type="number" onWheel={e => e.currentTarget.blur()}
                           min={1}
+                          max={matchedSale ? item.maxQty : undefined}
+                          disabled={matchedSale ? !item.selected : false}
                           value={item.quantity}
-                          onChange={(e) => updateItem(idx, { quantity: Math.max(1, Number(e.target.value)) })}
+                          onChange={(e) => {
+                            const v = Math.max(1, Number(e.target.value))
+                            updateItem(idx, { quantity: matchedSale ? Math.min(v, item.maxQty) : v })
+                          }}
                           className="h-9"
                         />
                       </div>
@@ -1004,6 +1251,7 @@ function ReturnsPageInner() {
                         <Label className="text-xs">Unit Price (â‚¨)</Label>
                         <MoneyInput
                           min={0}
+                          disabled={matchedSale ? !item.selected : false}
                           value={item.unitPrice}
                           onChange={(v) => updateItem(idx, { unitPrice: Math.max(0, Number(v)) })}
                           className="h-9"
@@ -1015,7 +1263,7 @@ function ReturnsPageInner() {
                           value={item.condition}
                           onValueChange={(v) => updateItem(idx, { condition: v as ReturnItem["condition"] })}
                         >
-                          <SelectTrigger className="h-9">
+                          <SelectTrigger className="h-9" disabled={matchedSale ? !item.selected : false}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1025,15 +1273,23 @@ function ReturnsPageInner() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">IMEI (optional)</Label>
-                        <Input
-                          value={item.imei}
-                          onChange={(e) => updateItem(idx, { imei: e.target.value })}
-                          placeholder="15-digit IMEI"
-                          className="h-9"
-                        />
-                      </div>
+                      {!matchedSale && (
+                        <div className="space-y-1">
+                          <Label className="text-xs">IMEI (optional)</Label>
+                          <Input
+                            value={item.imei}
+                            onChange={(e) => updateItem(idx, { imei: e.target.value })}
+                            placeholder="15-digit IMEI"
+                            className="h-9"
+                          />
+                        </div>
+                      )}
+                      {matchedSale && item.imei && (
+                        <div className="space-y-1">
+                          <Label className="text-xs">IMEI</Label>
+                          <p className="h-9 flex items-center text-xs text-slate-500 font-mono">{item.imei}</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

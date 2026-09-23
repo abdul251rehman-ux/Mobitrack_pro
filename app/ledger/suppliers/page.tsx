@@ -6,7 +6,7 @@ import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, F
 import { toast } from "sonner"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getPurchases, settleSupplierPayment } from "@/lib/api/purchases"
-import { computePaidPerPurchase } from "@/lib/api/payment-sync"
+import { computePaidPerPurchase, computeNetPaidBySupplier } from "@/lib/api/payment-sync"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { getRebateEntries } from "@/lib/api/rebate"
@@ -308,6 +308,32 @@ function SupplierLedgerPageInner() {
     return suppliers.filter(s => withPurchases.has(s.id))
   }, [suppliers, purchases])
 
+  // "All Suppliers" combined closing balance = the SUM of each supplier's
+  // own closing balance, not the last chronological row of the combined
+  // timeline below. The combined timeline necessarily interleaves every
+  // supplier's purchases and payments by date - once payments folded into
+  // one supplier's PO (and hence excluded from the row list) coincide with
+  // another supplier's payment landing later in the same sequence, the
+  // running total stops meaning anything for any single supplier. Confirmed
+  // live: this showed Rs 6,353,500 while the true combined payable (sum of
+  // every individual supplier's own screen) is Rs 119,000. Reuses
+  // computeNetPaidBySupplier (also used by the Dashboard and
+  // app/suppliers/page.tsx) so this can never drift from those again.
+  const allSuppliersClosingBalance = useMemo(() => {
+    const netPaidMap = computeNetPaidBySupplier(supplierPayments)
+    const owedMap = new Map<string, number>()
+    purchases.forEach(p => {
+      if (!p.supplierId) return
+      owedMap.set(p.supplierId, (owedMap.get(p.supplierId) ?? 0) + p.total)
+    })
+    let total = 0
+    owedMap.forEach((owed, supplierId) => {
+      const supplierOpening = suppliers.find(s => s.id === supplierId)?.openingBalance ?? 0
+      total += supplierOpening + owed - (netPaidMap.get(supplierId) ?? 0)
+    })
+    return total
+  }, [purchases, supplierPayments, suppliers])
+
   const allEntries = useMemo<LedgerEntry[]>(() => {
     const raw: Omit<LedgerEntry, "balance">[] = []
 
@@ -464,7 +490,12 @@ function SupplierLedgerPageInner() {
     + filtered.filter(e => e.type === "opening").reduce((s, e) => s + e.grossDebit, 0)
   const totalRebateCredit = txEntries.filter(e => e.type === "rebate").reduce((s, e) => s + e.debit, 0)
   const totalCredit = filtered.reduce((s, e) => s + e.grossCredit, 0)
-  const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
+  // Single supplier: the running balance's own last row is correct (every
+  // row in that timeline belongs to the same supplier). "All Suppliers":
+  // see allSuppliersClosingBalance above for why the last row can't be used.
+  const closingBalance = selectedSupplierId
+    ? (filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance)
+    : allSuppliersClosingBalance
 
   const displayEntries = [...filtered].reverse()
   const totalPages = Math.ceil(displayEntries.length / PAGE_SIZE)

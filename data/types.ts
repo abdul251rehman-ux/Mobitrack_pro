@@ -71,6 +71,7 @@ export interface Customer {
 }
 
 export interface SaleItem {
+  id?: string;
   productId: string;
   productName: string;
   productType: "Mobile" | "Accessory" | "UsedPhone";
@@ -79,6 +80,9 @@ export interface SaleItem {
   discount: number;
   lineTotal: number;
   imei?: string;
+  /** How many units of this line have already been returned across all past
+   *  Sale Returns - caps how many more can be returned. */
+  returnedQty?: number;
 }
 
 export interface Sale {
@@ -283,6 +287,10 @@ export type ReturnReason =
 export type ReturnStatus = "Pending" | "Approved" | "Rejected" | "Completed" | "Exchanged"
 
 export interface ReturnItem {
+  /** sale_items.id this line returned against - undefined for a manual-entry
+   *  return with no matched sale. Used to un-reserve returned_qty if this
+   *  return is later rejected. */
+  saleItemId?: string
   productId: string
   productName: string
   productType: "Mobile" | "Accessory" | "UsedPhone"
@@ -297,9 +305,14 @@ export interface Return {
   id: string
   returnNumber: string
   date: string
-  saleId: string
+  /** Undefined when the invoice wasn't found in the loaded sales list (e.g.
+   *  manual entry for a very old sale) - never a fabricated placeholder,
+   *  since the DB column is a real UUID foreign key. */
+  saleId?: string
   invoiceNumber: string
-  customerId: string
+  /** Same reasoning as saleId - undefined, not a fabricated placeholder,
+   *  when no matching sale/customer was found. */
+  customerId?: string
   customerName: string
   customerPhone: string
   items: ReturnItem[]
