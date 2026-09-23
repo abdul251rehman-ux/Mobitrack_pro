@@ -14,6 +14,8 @@ import {
 
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
+import { getPayments } from "@/lib/api/payments"
+import { computeNetPaidBySupplier } from "@/lib/api/payment-sync"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
 import { Supplier, Purchase } from "@/data/types"
@@ -351,26 +353,32 @@ function SuppliersPageInner() {
     async function fetchData() {
       try {
         setLoading(true)
-        const [data, allPurchases] = await Promise.all([
+        const [data, allPurchases, allPayments] = await Promise.all([
           getSuppliers(),
           getPurchases(),
+          getPayments(),
         ])
 
-        // Calculate real totalPurchases and outstandingBalance from purchases data
-        const purchasesBySupplier = new Map<string, { total: number; balance: number }>()
+        // outstandingBalance computed live from `payments` (Paid minus
+        // Received), not from purchases.balanceDue - that cached field can
+        // drift from what was actually paid (see
+        // supabase/fix_purchase_payment_sync.sql). Matches the Dashboard
+        // and Supplier Ledger, which use the same approach (see
+        // lib/api/payment-sync.ts).
+        const paidBySupplier = computeNetPaidBySupplier(allPayments)
+
+        const purchasesBySupplier = new Map<string, number>()
         allPurchases.forEach((p) => {
-          const existing = purchasesBySupplier.get(p.supplierId) || { total: 0, balance: 0 }
-          existing.total += p.total
-          existing.balance += p.balanceDue
-          purchasesBySupplier.set(p.supplierId, existing)
+          purchasesBySupplier.set(p.supplierId, (purchasesBySupplier.get(p.supplierId) ?? 0) + p.total)
         })
 
         const enriched = data.map((s) => {
-          const stats = purchasesBySupplier.get(s.id)
+          const totalPurchases = purchasesBySupplier.get(s.id) ?? 0
+          const paid = paidBySupplier.get(s.id) ?? 0
           return {
             ...s,
-            totalPurchases: stats?.total ?? 0,
-            outstandingBalance: stats?.balance ?? 0,
+            totalPurchases,
+            outstandingBalance: Math.max(0, totalPurchases - paid),
           }
         })
 

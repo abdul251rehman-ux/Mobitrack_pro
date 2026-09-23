@@ -2079,8 +2079,25 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
       const tenantId = await getTenantId()
       const today = todayPKT()
       const dateTag = today.replace(/-/g, "")
-      const { count: poCount } = await supabase.from("purchases").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId)
-      const poNumber = `PO-${dateTag}-${String((poCount ?? 0) + 1).padStart(3, "0")}`
+      // Atomic, row-locked reservation (supabase/fix_po_number_race.sql) -
+      // replaces the old `SELECT count(*)` + compute-locally approach, which
+      // raced two close-together purchase creations into computing the same
+      // or an inconsistent PO number (confirmed live: a payment referencing
+      // a PO number that was never actually assigned to any purchase). The
+      // purchases_tenant_po_number_unique constraint is the hard backstop -
+      // if a collision still somehow makes it through, the insert below
+      // fails loudly instead of silently creating a duplicate. Only reserved
+      // for a genuinely new purchase - an edit keeps its existing PO number
+      // (the update below never writes po_number), so reserving here too
+      // would burn a real sequence number on every edit for nothing,
+      // leaving permanent unexplained gaps in the PO-YYYYMMDD-NNN sequence.
+      let poNumber: string | undefined = editPoNumber ?? undefined
+      if (editMode && !poNumber) throw new Error("Purchase data still loading — please try again")
+      if (!editMode) {
+        const { data, error: poErr } = await supabase.rpc('reserve_po_number', { p_tenant_id: tenantId, p_date_tag: dateTag })
+        if (poErr) throw new Error(`Failed to reserve PO number: ${poErr.message}`)
+        poNumber = data
+      }
       const purchaseItems: any[] = []
 
       for (const row of mobileRows) {
@@ -2364,7 +2381,14 @@ export function NewPurchaseSheet({ onClose, onCreated, editPurchaseId }: {
         const payNotes = overpaidAmt > 0
           ? `Payment for ${poNumber} (includes PKR ${overpaidAmt.toLocaleString()} advance)`
           : `Payment for ${poNumber}`
-        await supabase.from("payments").insert({ tenant_id: tenantId, date: today, type: "Paid", entity_type: "Supplier", entity_id: selectedSupplierId, entity_name: selectedSupplier?.companyName ?? "", reference_type: "Purchase", reference_number: poNumber, amount: amountPaid, method: paymentMethod, status: "Completed", notes: payNotes })
+        // reference_id links this payment to the exact purchase row (not just
+        // its PO number string) - the Supplier Ledger folds a purchase's own
+        // down payment into that purchase's row using this id, which can
+        // never drift the way PO-number string matching could (confirmed
+        // live: a payment referencing a PO number that was never actually
+        // assigned to any purchase, due to the old count()-based race this
+        // reservation now replaces).
+        await supabase.from("payments").insert({ tenant_id: tenantId, date: today, type: "Paid", entity_type: "Supplier", entity_id: selectedSupplierId, entity_name: selectedSupplier?.companyName ?? "", reference_type: "Purchase", reference_number: poNumber, reference_id: purchaseId, amount: amountPaid, method: paymentMethod, status: "Completed", notes: payNotes })
       }
 
       const activeSplits = splits.filter(e => parseFloat(e.amount) > 0)

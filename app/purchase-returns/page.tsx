@@ -321,6 +321,7 @@ function PurchaseReturnsPageInner() {
   const [selectedPurchaseId,   setSelectedPurchaseId]   = useState("")
   const [newSupplierId,        setNewSupplierId]        = useState("")
   const [newSupplierName,      setNewSupplierName]      = useState("")
+  const [newCustomerId,        setNewCustomerId]        = useState("")
   const [newResolution,        setNewResolution]        = useState<Resolution>("Refund")
   const [newAccountId,         setNewAccountId]         = useState("")
   const [newNotes,             setNewNotes]             = useState("")
@@ -350,8 +351,19 @@ function PurchaseReturnsPageInner() {
     setShowPurchaseDropdown(false)
     setNewSupplierId(purchase.supplierId)
     setNewSupplierName(purchase.supplierName)
+    setNewCustomerId(purchase.customerId ?? "")
     setLineItems([])
     setLoadingLineItems(true)
+    // Credit Note/Ledger Credit only make sense against an ongoing supplier
+    // ledger relationship - a walk-in or customer-trade-in purchase (no
+    // supplierId, e.g. a used-phone buyback) has no such relationship to
+    // apply a credit against, and there's no supplier row for
+    // adjustSupplierBalance to update. Reset off of either if the newly
+    // selected purchase has no real supplier and the previous selection had
+    // one of them picked.
+    if (!purchase.supplierId && (newResolution === "Credit Note" || newResolution === "Ledger Credit")) {
+      setNewResolution("Refund")
+    }
     try {
       setLineItems(await buildLineItems(purchase))
     } catch (err) {
@@ -360,6 +372,15 @@ function PurchaseReturnsPageInner() {
       setLoadingLineItems(false)
     }
   }
+
+  // Only Refund/Replacement make sense for a walk-in purchase - see the
+  // comment in selectPurchase above.
+  const availableResolutions = useMemo(
+    () => newSupplierId
+      ? (Object.keys(RESOLUTION_CONFIG) as Resolution[])
+      : (["Refund", "Replacement"] as Resolution[]),
+    [newSupplierId]
+  )
 
   function updateLine(idx: number, field: keyof ReturnLineItem, value: unknown) {
     setLineItems(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l))
@@ -379,6 +400,7 @@ function PurchaseReturnsPageInner() {
     setShowPurchaseDropdown(false)
     setNewSupplierId("")
     setNewSupplierName("")
+    setNewCustomerId("")
     setNewResolution("Refund")
     const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]
     if (def) setNewAccountId(def.id)
@@ -586,23 +608,31 @@ function PurchaseReturnsPageInner() {
           await adjustAccountBalance(newAccountId, -newTotal).catch(() => {})
         })
 
-        await supabase.from("finance_transactions").insert({
-          tenant_id:   tenantId,
-          date:        today,
-          type:        "purchase_return_refund",
-          category:    "Purchase Return",
-          description: `Refund received - ${returnNumber} from ${newSupplierName}`,
-          amount:      newTotal,
-          account_id:  newAccountId,
-          reference:   returnNumber,
+        const { error: refundFtErr } = await supabase.from("finance_transactions").insert({
+          tenant_id:        tenantId,
+          date:             today,
+          type:             "purchase_return_refund",
+          reference_type:   "Purchase Return",
+          description:      `Refund received - ${returnNumber} from ${newSupplierName}`,
+          amount:           newTotal,
+          account_id:       newAccountId,
+          reference_number: returnNumber,
         })
+        if (refundFtErr) throw new Error(`Finance audit failed: ${refundFtErr.message}`)
 
-        await supabase.from("payments").insert({
+        // A used-phone trade-in bought from an existing registered customer
+        // (as opposed to a real ledger supplier, or an anonymous walk-in
+        // seller) refunds THAT customer, recorded against their own
+        // Customer Ledger - not as a nonexistent "Supplier" - so it's
+        // visible in the one place the shop owner actually looks up that
+        // person's balance (see supabase/add_customer_id_to_purchases.sql).
+        const isCustomerTradeIn = !newSupplierId && !!newCustomerId
+        const { error: refundPayErr } = await supabase.from("payments").insert({
           tenant_id:        tenantId,
           date:             today,
           type:             "Received",
-          entity_type:      "Supplier",
-          entity_id:        newSupplierId,
+          entity_type:      isCustomerTradeIn ? "Customer" : "Supplier",
+          entity_id:        isCustomerTradeIn ? newCustomerId : newSupplierId,
           entity_name:      newSupplierName,
           reference_type:   "Purchase Return",
           reference_number: returnNumber,
@@ -611,40 +641,57 @@ function PurchaseReturnsPageInner() {
           status:           "Completed",
           notes:            `Refund received for ${returnNumber}`,
         })
+        if (refundPayErr) throw new Error(`Failed to record refund payment: ${refundPayErr.message}`)
 
         // Reduce supplier outstanding balance if they owed us money. Atomic,
         // row-locked, tenant-scoped (supabase/fix_balance_race_condition.sql) -
         // the old code read/wrote suppliers.outstanding_balance with no
-        // tenant_id filter at all, relying solely on RLS.
-        await adjustSupplierBalance(newSupplierId, -newTotal, 0)
+        // tenant_id filter at all, relying solely on RLS. Skipped for a
+        // walk-in or customer-trade-in purchase (no supplierId) - there's
+        // no supplier row to adjust, and calling this with an empty id
+        // would raise "Supplier not found" and roll back the refund that
+        // already correctly landed in the account and `payments`. The
+        // customer-trade-in case is instead reflected via the payments row
+        // above, which the Customer Ledger picks up directly.
+        if (newSupplierId) {
+          await adjustSupplierBalance(newSupplierId, -newTotal, 0)
+        }
       }
 
-      if (newResolution === "Credit Note") {
+      if (newResolution === "Credit Note" || newResolution === "Ledger Credit") {
+        // No cash changes hands, but the debt itself is reduced right now -
+        // same direction/effect as a cash refund from the supplier, just
+        // settled via credit instead. Recorded as type: "Received" (the
+        // payments.type CHECK constraint only allows 'Received'/'Paid' -
+        // the literal strings "Credit Note"/"Ledger Credit" used here
+        // before were silently failing this insert on every single use,
+        // confirmed live: zero such rows exist in production despite this
+        // code path running - the supplier's balance was updated via
+        // adjustSupplierBalance, a column nothing else in the app reads
+        // (app/ledger/suppliers/page.tsx and app/suppliers/page.tsx both
+        // compute balance live from `payments`), so it never showed up
+        // anywhere the shop owner actually looks. status: "Completed" (not
+        // "Pending") because the debt reduction is immediate, not awaiting
+        // anything - every payments-based balance calculation in this app
+        // (lib/api/payment-sync.ts) only counts Completed rows, so
+        // "Pending" would have kept this invisible even after fixing the
+        // type value. method/notes preserve which resolution this was.
+        const { error: creditErr } = await supabase.from("payments").insert({
+          tenant_id: tenantId, date: today, type: "Received",
+          entity_type: "Supplier", entity_id: newSupplierId, entity_name: newSupplierName,
+          reference_type: "Purchase Return", reference_number: returnNumber,
+          amount: newTotal,
+          method: newResolution === "Credit Note" ? "Credit Note" : "Ledger Credit",
+          status: "Completed",
+          notes: newResolution === "Credit Note"
+            ? `Credit note applied - ${returnNumber}`
+            : `Ledger credit for future settlement - ${returnNumber}`,
+        })
+        if (creditErr) throw new Error(`Failed to record ${newResolution.toLowerCase()}: ${creditErr.message}`)
+
         // No cash - credit reduces what we owe; can go negative (they owe us),
         // so no floor here.
         await adjustSupplierBalance(newSupplierId, -newTotal)
-
-        await supabase.from("payments").insert({
-          tenant_id: tenantId, date: today, type: "Credit Note",
-          entity_type: "Supplier", entity_id: newSupplierId, entity_name: newSupplierName,
-          reference_type: "Purchase Return", reference_number: returnNumber,
-          amount: newTotal, method: "Credit Note", status: "Completed",
-          notes: `Credit note applied - ${returnNumber}`,
-        })
-      }
-
-      if (newResolution === "Ledger Credit") {
-        // No cash - recorded in ledger for future settlement; can go
-        // negative (they owe us), so no floor here.
-        await adjustSupplierBalance(newSupplierId, -newTotal)
-
-        await supabase.from("payments").insert({
-          tenant_id: tenantId, date: today, type: "Ledger Credit",
-          entity_type: "Supplier", entity_id: newSupplierId, entity_name: newSupplierName,
-          reference_type: "Purchase Return", reference_number: returnNumber,
-          amount: newTotal, method: "Ledger", status: "Pending",
-          notes: `Ledger credit pending settlement - ${returnNumber}`,
-        })
       }
 
       // Replacement: no financial movement - stock deducted above, record exists for tracking
@@ -1054,7 +1101,9 @@ function PurchaseReturnsPageInner() {
                     <span className="font-normal text-slate-400 ml-2">- how does the supplier settle this?</span>
                   </Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {(Object.entries(RESOLUTION_CONFIG) as [Resolution, typeof RESOLUTION_CONFIG[Resolution]][]).map(([key, cfg]) => (
+                    {availableResolutions.map((key) => {
+                      const cfg = RESOLUTION_CONFIG[key]
+                      return (
                       <button key={key} type="button" onClick={() => setNewResolution(key)}
                         className={cn("rounded-xl border p-3 text-left transition-all",
                           newResolution === key ? cfg.selectedColor : cfg.hoverColor
@@ -1065,8 +1114,12 @@ function PurchaseReturnsPageInner() {
                         </div>
                         <p className="text-[11px] leading-snug opacity-80">{cfg.description}</p>
                       </button>
-                    ))}
+                      )
+                    })}
                   </div>
+                  {!newSupplierId && (
+                    <p className="text-[11px] text-slate-400 mt-1.5">Credit Note / Ledger Credit are hidden for a walk-in purchase - there's no supplier ledger to apply them against.</p>
+                  )}
                 </div>
 
                 {/* Refund: account cards */}

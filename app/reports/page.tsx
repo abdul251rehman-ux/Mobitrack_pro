@@ -14,6 +14,9 @@ import { getMobiles, getAccessories } from "@/lib/api/products"
 import { getUsedPhones } from "@/lib/api/inventory"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getExpenses } from "@/lib/api/expenses"
+import { getPayments } from "@/lib/api/payments"
+import { withLivePurchaseBalances, computeNetPaidBySupplier } from "@/lib/api/payment-sync"
+import type { Payment } from "@/data/types"
 import type { Sale, Purchase, Mobile, Accessory, Supplier, Expense } from "@/data/types"
 import type { UsedPhone } from "@/data/used-phones"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -112,12 +115,13 @@ function ReportsPageInner() {
   const [usedPhones, setUsedPhones]     = useState<UsedPhone[]>([])
   const [suppliers, setSuppliers]       = useState<Supplier[]>([])
   const [expenses, setExpenses]         = useState<Expense[]>([])
+  const [payments, setPayments]         = useState<Payment[]>([])
 
   useEffect(() => {
     async function load() {
       try {
-        const [s, p, m, a, up, sup, exp] = await Promise.all([getSales(), getPurchases(), getMobiles(), getAccessories(), getUsedPhones(), getSuppliers(), getExpenses()])
-        setSales(s); setPurchases(p); setMobiles(m); setAccessories(a); setUsedPhones(up); setSuppliers(sup); setExpenses(exp)
+        const [s, p, m, a, up, sup, exp, pay] = await Promise.all([getSales(), getPurchases(), getMobiles(), getAccessories(), getUsedPhones(), getSuppliers(), getExpenses(), getPayments()])
+        setSales(s); setPurchases(p); setMobiles(m); setAccessories(a); setUsedPhones(up); setSuppliers(sup); setExpenses(exp); setPayments(pay)
       } catch { toast.error("Failed to load reports data") }
       finally { setLoading(false) }
     }
@@ -160,9 +164,14 @@ function ReportsPageInner() {
     }
   }, [salesFrom, salesTo, sales])
 
+  // Live amountPaid/balanceDue/paymentStatus per purchase - see
+  // lib/api/payment-sync.ts for the shared fold logic (also used by the
+  // Supplier Ledger, Dashboard, and Purchases pages).
+  const livePurchases = useMemo(() => withLivePurchaseBalances(purchases, payments), [purchases, payments])
+
   // â"€â"€ Purchases data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const purchasesData = useMemo(() => {
-    const filtered = purchases.filter((p) => p.date >= purchasesFrom && p.date <= purchasesTo)
+    const filtered = livePurchases.filter((p) => p.date >= purchasesFrom && p.date <= purchasesTo)
     const totalSpend = filtered.reduce((a, p) => a + p.total, 0)
     const monthlyMap: Record<string, number> = {}
     filtered.forEach((p) => { const k = format(parseISO(p.date), "MMM yyyy"); monthlyMap[k] = (monthlyMap[k] || 0) + p.total })
@@ -184,7 +193,7 @@ function ReportsPageInner() {
       supplierRows: Object.values(supplierMap).sort((a, b) => b.spent - a.spent).map((s) => ({ ...s, pct: totalSpend ? ((s.spent / totalSpend) * 100).toFixed(1) : "0.0" })),
       categoryBarData: [{ category: "Mobiles", Spend: catMap.Mobiles }, { category: "Accessories", Spend: catMap.Accessories }],
     }
-  }, [purchasesFrom, purchasesTo, purchases])
+  }, [purchasesFrom, purchasesTo, livePurchases])
 
   // â"€â"€ P&L data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const plData = useMemo(() => {
@@ -254,12 +263,30 @@ function ReportsPageInner() {
 
   // â"€â"€ Supplier perf data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const supplierPerf = useMemo(() => {
-    const supplierRows = suppliers.filter((s) => s.status === "Active").sort((a, b) => b.totalPurchases - a.totalPurchases).map((s, i) => ({ rank: i + 1, ...s }))
+    // outstandingBalance computed live from `payments` rather than trusted
+    // from the supplier row's own outstanding_balance DB column - that
+    // column is only ever initialized to 0 at supplier creation and never
+    // updated afterward, so it's always stale. Same approach as
+    // app/suppliers/page.tsx.
+    const paidBySupplier = computeNetPaidBySupplier(payments)
+    const purchasedBySupplier = new Map<string, number>()
+    purchases.forEach((p) => {
+      purchasedBySupplier.set(p.supplierId, (purchasedBySupplier.get(p.supplierId) ?? 0) + p.total)
+    })
+    const supplierRows = suppliers
+      .filter((s) => s.status === "Active")
+      .map((s) => {
+        const totalPurchases = purchasedBySupplier.get(s.id) ?? 0
+        const paid = paidBySupplier.get(s.id) ?? 0
+        return { ...s, totalPurchases, outstandingBalance: Math.max(0, totalPurchases - paid) }
+      })
+      .sort((a, b) => b.totalPurchases - a.totalPurchases)
+      .map((s, i) => ({ rank: i + 1, ...s }))
     const top5 = supplierRows.slice(0, 5).map((s) => ({ name: s.companyName.split(" ").slice(0, 2).join(" "), Volume: s.totalPurchases }))
     const pmCount: Record<string, number> = { Paid: 0, Partial: 0, Unpaid: 0 }
-    purchases.forEach((p) => { pmCount[p.paymentStatus] = (pmCount[p.paymentStatus] || 0) + p.total })
+    livePurchases.forEach((p) => { pmCount[p.paymentStatus] = (pmCount[p.paymentStatus] || 0) + p.total })
     return { supplierRows, top5, paymentPie: Object.entries(pmCount).map(([name, value]) => ({ name, value })) }
-  }, [suppliers, purchases])
+  }, [suppliers, purchases, payments, livePurchases])
 
   if (loading) {
     return (

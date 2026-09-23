@@ -250,6 +250,10 @@ export interface Purchase {
   date: string;
   supplierId: string;
   supplierName: string;
+  /** Set instead of supplierId for a used-phone trade-in bought from an
+   *  existing registered customer, so a return can refund them via their
+   *  own Customer Ledger rather than a nonexistent supplier record. */
+  customerId?: string;
   items: PurchaseItem[];
   subtotal: number;
   shippingCost: number;

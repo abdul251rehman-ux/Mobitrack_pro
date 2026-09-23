@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { getCustomers } from "@/lib/api/customers"
-import { getSales } from "@/lib/api/sales"
+import { getSales, settleCustomerPayment } from "@/lib/api/sales"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { createAuditLog } from "@/lib/api/audit"
@@ -403,9 +403,17 @@ function CustomerLedgerPageInner() {
         a.id === collectAccountId ? { ...a, currentBalance: newBalance } : a
       ))
 
-      // Refresh payments
-      const fresh = await getPayments()
+      // Apply this payment onto the customer's oldest not-fully-paid sales
+      // (FIFO) so sales.amountReceived stays in sync with what this ledger
+      // and the Dashboard both compute from - without this, the Dashboard's
+      // Receivable card (which sums total - amountReceived per sale) would
+      // keep counting an invoice as owed forever, even after it's paid off here.
+      await settleCustomerPayment(selectedCustomer.id, amount)
+
+      // Refresh payments + sales (settleCustomerPayment just changed sales rows)
+      const [fresh, freshSales] = await Promise.all([getPayments(), getSales()])
       setCustomerPayments(fresh.filter(pay => pay.entityType === "Customer" && (pay.type === "Received" || pay.type === "Paid")))
+      setSales(freshSales)
 
       toast.success(`${formatCurrency(amount)} collected from ${selectedCustomer.name}`)
       createAuditLog({
@@ -479,9 +487,18 @@ function CustomerLedgerPageInner() {
         a.id === giveAccountId ? { ...a, currentBalance: newBalance } : a
       ))
 
-      // Refresh payments
-      const fresh = await getPayments()
+      // Unwind this amount against the customer's most-recently-paid sales
+      // (LIFO), via a negative amount - see
+      // supabase/fix_settle_payment_refunds.sql. Without this,
+      // sales.amountReceived stays overstated forever after money is given
+      // back to a customer, the same class of bug confirmed live on the
+      // supplier side (a balance understated by exactly the refunded amount).
+      await settleCustomerPayment(selectedCustomer.id, -amount)
+
+      // Refresh payments + sales (settleCustomerPayment just changed sales rows)
+      const [fresh, freshSales] = await Promise.all([getPayments(), getSales()])
       setCustomerPayments(fresh.filter(pay => pay.entityType === "Customer" && (pay.type === "Received" || pay.type === "Paid")))
+      setSales(freshSales)
 
       toast.success(`${formatCurrency(amount)} given to ${selectedCustomer.name}`)
       createAuditLog({

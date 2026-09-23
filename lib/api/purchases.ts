@@ -103,6 +103,24 @@ export async function createPurchase(
   }
 }
 
+// Applies a general (not tied to one PO) supplier payment across that
+// supplier's oldest unpaid/partial purchases first (FIFO), via the
+// settle_supplier_payment RPC (supabase/fix_purchase_payment_sync.sql).
+// Without this, a "Pay Supplier" payment only ever lands in the `payments`
+// table - the purchases rows themselves (amount_paid/balance_due/
+// payment_status) never move, which is exactly what let the Supplier
+// Ledger page ("paid off") and the Dashboard's Payable card (still summing
+// the stale balance_due) silently disagree in production.
+export async function settleSupplierPayment(supplierId: string, amount: number): Promise<void> {
+  const tenantId = await getTenantId()
+  const { error } = await supabase.rpc('settle_supplier_payment', {
+    p_tenant_id: tenantId,
+    p_supplier_id: supplierId,
+    p_amount: amount,
+  })
+  if (error) throw new Error(`Failed to settle supplier payment: ${error.message}`)
+}
+
 export async function updatePurchaseStatus(id: string, data: Partial<Purchase>): Promise<void> {
   try {
     const tenantId = await getTenantId()

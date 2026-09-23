@@ -123,6 +123,22 @@ export async function voidSale(saleId: string): Promise<void> {
   if (error) throw new Error(`Failed to void sale: ${error.message}`)
 }
 
+// Applies a general (not tied to one invoice) customer payment across that
+// customer's oldest not-fully-paid sales first (FIFO), via the
+// settle_customer_payment RPC (supabase/fix_purchase_payment_sync.sql). See
+// settleSupplierPayment (lib/api/purchases.ts) for the matching supplier-side
+// gap this closes - "Collect Payment" only wrote to `payments`, never back
+// onto the sales rows themselves.
+export async function settleCustomerPayment(customerId: string, amount: number): Promise<void> {
+  const tenantId = await getTenantId()
+  const { error } = await supabase.rpc('settle_customer_payment', {
+    p_tenant_id: tenantId,
+    p_customer_id: customerId,
+    p_amount: amount,
+  })
+  if (error) throw new Error(`Failed to settle customer payment: ${error.message}`)
+}
+
 export async function updateSaleStatus(id: string, status: string): Promise<void> {
   try {
     const tenantId = await getTenantId()

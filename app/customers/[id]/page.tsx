@@ -14,7 +14,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 
 import { getCustomerById } from "@/lib/api/customers"
-import { getSales } from "@/lib/api/sales"
+import { getSales, settleCustomerPayment } from "@/lib/api/sales"
+import { withLiveSaleBalances, findExistingPayment } from "@/lib/api/payment-sync"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { createAuditLog } from "@/lib/api/audit"
@@ -172,18 +173,31 @@ export default function CustomerDetailPage() {
   }, [customerSales])
 
   // ── Derived stats ────────────────────────────────────────────────────────
+  // Completed only - a "Pending" row (e.g. the outstanding-balance row
+  // fn_create_sale inserts alongside a partial payment) is an IOU, not money
+  // actually received, and must not count toward what's been paid.
+  const completedCustomerPayments = useMemo(
+    () => customerPayments.filter(p => p.status === "Completed"),
+    [customerPayments]
+  )
+  // Live amountReceived/changeDue/status per sale - see
+  // lib/api/payment-sync.ts. Feeds every per-sale display on this page (the
+  // sales table/cards below) so none of them can show a stale amount.
+  const liveCustomerSales = useMemo(
+    () => withLiveSaleBalances(customerSales, completedCustomerPayments),
+    [customerSales, completedCustomerPayments]
+  )
+
   const totalBilled            = useMemo(() => customerSales.reduce((acc, s) => acc + s.total, 0), [customerSales])
-  const totalPaid              = useMemo(() => customerPayments.reduce((acc, p) => acc + p.amount, 0), [customerPayments])
-  const totalReceivedFromSales = useMemo(() => customerSales.reduce((acc, s) => acc + s.amountReceived, 0), [customerSales])
-  const effectiveTotalPaid     = Math.max(totalPaid, totalReceivedFromSales)
-  const outstandingBalance     = Math.max(0, totalBilled - effectiveTotalPaid)
-  const creditBalance          = effectiveTotalPaid > totalBilled ? effectiveTotalPaid - totalBilled : 0
+  const totalPaid              = useMemo(
+    () => completedCustomerPayments.reduce((acc, p) => acc + p.amount, 0),
+    [completedCustomerPayments]
+  )
+  const outstandingBalance     = Math.max(0, totalBilled - totalPaid)
+  const creditBalance          = totalPaid > totalBilled ? totalPaid - totalBilled : 0
   const avgOrder               = customerSales.length > 0 ? totalBilled / customerSales.length : 0
 
-  const unpaidSales = useMemo(() => customerSales.filter(s => {
-    const paidForInvoice = customerPayments.filter(p => p.referenceNumber === s.invoiceNumber).reduce((sum, p) => sum + p.amount, 0)
-    return s.total > paidForInvoice
-  }), [customerSales, customerPayments])
+  const unpaidSales = useMemo(() => liveCustomerSales.filter(s => s.total > s.amountReceived), [liveCustomerSales])
 
   async function handleReceivePayment() {
     if (paySubmitting) return
@@ -191,25 +205,61 @@ export default function CustomerDetailPage() {
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return }
     if (!payAccountId) { toast.error("Select a finance account"); return }
     if (!customer) return
+    // Warn (don't block) if a Completed payment already exists against this
+    // exact invoice - catches the same real-world payment being recorded
+    // twice through two different screens (this dialog, the Customer
+    // Ledger, Finance page's Record Payment), which would silently
+    // double-apply to the sale's balance, not just double-count a total.
+    if (payInvoice) {
+      const tenantId0 = await getTenantId()
+      const existing = await findExistingPayment(tenantId0, "Customer", customer.id, payInvoice)
+      if (existing) {
+        const proceed = window.confirm(
+          `A payment of ${formatCurrency(existing.amount)} against "${payInvoice}" was already recorded on ${existing.date}. Record this one too?`
+        )
+        if (!proceed) return
+      }
+    }
     setPaySubmitting(true)
     try {
       const tenantId = await getTenantId()
       const today     = todayPKT()
-      const sale      = payInvoice ? customerSales.find(s => s.invoiceNumber === payInvoice) : null
+      const saleRef   = payInvoice ? customerSales.find(s => s.invoiceNumber === payInvoice) : null
       const refNumber = payInvoice || `PAYMENT-${Date.now()}`
       const { error } = await supabase.from("payments").insert({
         tenant_id: tenantId, date: today, type: "Received",
         entity_type: "Customer", entity_id: customer.id, entity_name: customer.name,
-        reference_type: "Sale", reference_number: refNumber, amount, method: payMethod,
+        reference_type: "Sale", reference_number: refNumber, reference_id: saleRef?.id ?? null,
+        amount, method: payMethod,
         status: "Completed", notes: payNotes || `Payment received from ${customer.name}`,
       })
       if (error) throw new Error(`Failed to record payment: ${error.message}`)
-      if (sale) {
-        const newReceived = (sale.amountReceived || 0) + amount
-        await supabase.from("sales").update({
-          amount_received: newReceived, change_due: Math.max(0, newReceived - sale.total),
-          status: newReceived >= sale.total ? "Completed" : "Pending",
-        }).eq("id", sale.id)
+      if (saleRef) {
+        // Re-read fresh right before writing (not the page-load `customerSales`
+        // snapshot) to minimize the staleness window, then write with an
+        // optimistic-concurrency guard (WHERE amount_received = the value we
+        // just read) - no per-sale atomic RPC exists yet, so this is the
+        // closest achievable protection: if a concurrent payment (another
+        // tab, a double-click) changed the row between the read and this
+        // write, zero rows match and nothing is silently lost or clobbered -
+        // the user sees an error and can safely retry instead.
+        const { data: freshSale } = await supabase.from("sales").select("amount_received, total").eq("id", saleRef.id).single()
+        const currentReceived = (freshSale as any)?.amount_received ?? saleRef.amountReceived ?? 0
+        const total = (freshSale as any)?.total ?? saleRef.total
+        const newReceived = currentReceived + amount
+        const { data: updated, error: updateErr } = await supabase.from("sales").update({
+          amount_received: newReceived, change_due: Math.max(0, newReceived - total),
+          status: newReceived >= total ? "Completed" : "Pending",
+        }).eq("id", saleRef.id).eq("amount_received", currentReceived).select()
+        if (updateErr) throw new Error(`Failed to update invoice balance: ${updateErr.message}`)
+        if (!updated || updated.length === 0) {
+          throw new Error(`${payInvoice} was updated by another action just now - the payment was recorded, but please refresh and verify the invoice balance before recording another payment against it.`)
+        }
+      } else {
+        // No specific invoice chosen - apply FIFO across this customer's
+        // oldest unpaid/partial sales (supabase/fix_purchase_payment_sync.sql),
+        // same as the Customer Ledger and Finance page's Record Payment.
+        await settleCustomerPayment(customer.id, amount)
       }
 
       // Finance transaction - keeps the cash/bank balance in sync with the
@@ -434,7 +484,7 @@ export default function CustomerDetailPage() {
             <StatMini title="Total Billed" value={formatCurrency(totalBilled)}
               sub={`${customerSales.length} sale${customerSales.length !== 1 ? "s" : ""}`}
               accent="border-blue-200" />
-            <StatMini title="Total Paid" value={formatCurrency(effectiveTotalPaid)}
+            <StatMini title="Total Paid" value={formatCurrency(totalPaid)}
               sub="Payments received" accent="border-emerald-200" valueColor="text-emerald-700" />
             {creditBalance > 0 ? (
               <StatMini
@@ -533,7 +583,7 @@ export default function CustomerDetailPage() {
           ) : (
             <DataTable
               columns={columns}
-              data={customerSales}
+              data={liveCustomerSales}
               searchKey="invoiceNumber"
               searchPlaceholder="Search invoices..."
               renderCard={(sale) => {
@@ -573,7 +623,7 @@ export default function CustomerDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-slate-500">
-              Total Received: <span className="font-semibold text-emerald-700">{formatCurrency(effectiveTotalPaid)}</span>
+              Total Received: <span className="font-semibold text-emerald-700">{formatCurrency(totalPaid)}</span>
             </span>
             <Button size="sm" variant="outline" onClick={() => setPayDialogOpen(true)} className="h-7 text-[10px] gap-1 px-2">
               <Plus className="w-2.5 h-2.5" />Add Payment
