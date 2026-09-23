@@ -419,7 +419,7 @@ export interface DbReturn {
   status: string
   restock_items: boolean
   exchange_sale_id: string | null
-  processed_by: string
+  processed_by: string | null
   notes: string | null
   created_at: string
   resolved_at: string | null
@@ -1171,7 +1171,7 @@ export function toReturn(db: DbReturn, items: DbReturnItem[]): Return {
     status: db.status as Return['status'],
     restockItems: db.restock_items,
     exchangeSaleId: db.exchange_sale_id ?? undefined,
-    processedBy: db.processed_by,
+    processedBy: db.processed_by ?? undefined,
     notes: db.notes ?? undefined,
     createdAt: db.created_at,
     resolvedAt: db.resolved_at ?? undefined,

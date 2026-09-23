@@ -323,7 +323,9 @@ export interface Return {
   status: ReturnStatus
   restockItems: boolean
   exchangeSaleId?: string
-  processedBy: string
+  /** The real profiles.id of whoever processed this - the DB column is a
+   *  UUID foreign key, never a display label like "Current User". */
+  processedBy?: string
   notes?: string
   createdAt: string
   resolvedAt?: string
