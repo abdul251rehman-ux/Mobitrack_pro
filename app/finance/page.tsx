@@ -20,8 +20,9 @@ import { getTenantId } from "@/lib/api/helpers"
 import { getPayments, createPayment } from "@/lib/api/payments"
 import { getCustomers } from "@/lib/api/customers"
 import { getSuppliers } from "@/lib/api/suppliers"
-import { getSales } from "@/lib/api/sales"
-import { getPurchases } from "@/lib/api/purchases"
+import { getSales, settleCustomerPayment } from "@/lib/api/sales"
+import { getPurchases, settleSupplierPayment } from "@/lib/api/purchases"
+import { findExistingPayment } from "@/lib/api/payment-sync"
 import type {
   FinanceAccount, FinanceTransaction, FinanceAccountType,
 } from "@/lib/api/types"
@@ -477,6 +478,23 @@ function FinancePageInner() {
       ? customers.find(c => c.id === payForm.entityId)?.name ?? ""
       : suppliers.find(s => s.id === payForm.entityId)?.companyName ?? ""
     if (!payForm.accountId) { toast.error("Select a finance account"); return }
+    // Warn (don't block) if a Completed payment already exists for this
+    // exact entity + reference number - catches the same real-world
+    // payment being recorded twice through two different screens (Ledger,
+    // this dialog, a customer/supplier detail page), which would silently
+    // double-apply to purchases/sales balances, not just double-count a
+    // display total.
+    if (payForm.referenceNumber) {
+      const tenantId = await getTenantId()
+      const existing = await findExistingPayment(tenantId, payForm.entityType, payForm.entityId, payForm.referenceNumber)
+      if (existing) {
+        const proceed = window.confirm(
+          `A payment of ${formatCurrency(existing.amount)} against "${payForm.referenceNumber}" was already recorded on ${existing.date}. ` +
+          `Record this one too?`
+        )
+        if (!proceed) return
+      }
+    }
     setSaving(true)
     try {
       const created = await createPayment({
@@ -519,6 +537,86 @@ function FinancePageInner() {
         supabase.from("payments").update({ account_id: payForm.accountId }).eq("id", (created as any).id),
       ])
       setAccounts(prev => prev.map(a => a.id === payForm.accountId ? { ...a, currentBalance: newBal } : a))
+
+      // Apply this payment onto purchases/sales so their balance fields stay
+      // in sync with what the Dashboard and Ledger both compute from - this
+      // "Record Payment" dialog is a third, independent path (besides the
+      // Ledger's own Pay Supplier/Collect Payment) that can record a
+      // Customer/Supplier payment, and without this it would silently
+      // reproduce the exact same desync bug this session already fixed
+      // elsewhere (see supabase/fix_purchase_payment_sync.sql).
+      //
+      // The Reference # field's placeholder ("e.g. INV-2026-0011 or
+      // PO-2026-0138") tells the user this payment can target one specific
+      // invoice/PO - so if what they typed matches a real one for this
+      // entity, apply the full amount there directly instead of FIFO across
+      // everything. FIFO (settleCustomerPayment/settleSupplierPayment) is
+      // the fallback only when no reference was given or it doesn't match
+      // anything - matching that field's promise to the user rather than
+      // silently applying to their oldest invoice/PO instead of the one typed.
+      if (payForm.type === "Received" && payForm.entityType === "Customer") {
+        const targetSale = payForm.referenceNumber
+          ? sales.find(s => s.customerId === payForm.entityId && s.invoiceNumber === payForm.referenceNumber && s.status !== "Refunded")
+          : null
+        if (targetSale) {
+          // Optimistic-concurrency guard (WHERE amount_received = the value
+          // just read) - no per-sale atomic RPC exists yet; this at least
+          // makes a lost-update race fail loudly instead of silently.
+          const { data: freshSale } = await supabase.from("sales").select("amount_received, total").eq("id", targetSale.id).single()
+          const currentReceived = (freshSale as any)?.amount_received ?? targetSale.amountReceived
+          const total = (freshSale as any)?.total ?? targetSale.total
+          const newReceived = currentReceived + amount
+          await supabase.from("payments").update({ reference_id: targetSale.id }).eq("id", (created as any).id)
+          const { data: updated, error: updateErr } = await supabase.from("sales").update({
+            amount_received: newReceived, change_due: Math.max(0, newReceived - total),
+            status: newReceived >= total ? "Completed" : "Pending",
+          }).eq("id", targetSale.id).eq("amount_received", currentReceived).select()
+          if (updateErr) throw new Error(`Failed to update invoice balance: ${updateErr.message}`)
+          if (!updated || updated.length === 0) {
+            throw new Error(`${payForm.referenceNumber} was updated by another action just now - the payment was recorded, but please refresh and verify the invoice balance.`)
+          }
+        } else {
+          await settleCustomerPayment(payForm.entityId, amount)
+        }
+        setSales(await getSales())
+      } else if (payForm.type === "Paid" && payForm.entityType === "Supplier") {
+        const targetPurchase = payForm.referenceNumber
+          ? purchases.find(p => p.supplierId === payForm.entityId && p.poNumber === payForm.referenceNumber)
+          : null
+        if (targetPurchase) {
+          const { data: freshPurchase } = await supabase.from("purchases").select("amount_paid, total").eq("id", targetPurchase.id).single()
+          const currentPaid = (freshPurchase as any)?.amount_paid ?? targetPurchase.amountPaid
+          const total = (freshPurchase as any)?.total ?? targetPurchase.total
+          const newPaid = currentPaid + amount
+          await supabase.from("payments").update({ reference_id: targetPurchase.id }).eq("id", (created as any).id)
+          const { data: updated, error: updateErr } = await supabase.from("purchases").update({
+            amount_paid: newPaid, balance_due: Math.max(0, total - newPaid),
+            payment_status: newPaid >= total ? "Paid" : newPaid > 0 ? "Partial" : "Unpaid",
+          }).eq("id", targetPurchase.id).eq("amount_paid", currentPaid).select()
+          if (updateErr) throw new Error(`Failed to update PO balance: ${updateErr.message}`)
+          if (!updated || updated.length === 0) {
+            throw new Error(`${payForm.referenceNumber} was updated by another action just now - the payment was recorded, but please refresh and verify the PO balance.`)
+          }
+        } else {
+          await settleSupplierPayment(payForm.entityId, amount)
+        }
+        setPurchases(await getPurchases())
+      } else if (payForm.type === "Received" && payForm.entityType === "Supplier") {
+        // Refund from a supplier - unwind their most-recently-paid purchases
+        // (LIFO) via a negative amount, same as the Supplier Ledger's
+        // "Received from Supplier" (see supabase/fix_settle_payment_refunds.sql).
+        // Without this, purchases.amount_paid stays overstated forever after
+        // a refund - the exact bug confirmed live (a supplier's balance_due
+        // understated by exactly the refunded amount).
+        await settleSupplierPayment(payForm.entityId, -amount)
+        setPurchases(await getPurchases())
+      } else if (payForm.type === "Paid" && payForm.entityType === "Customer") {
+        // Money given to a customer not tied to a sale - unwind their
+        // most-recently-paid sales (LIFO) via a negative amount, same as
+        // the Customer Ledger's "Gave Payment".
+        await settleCustomerPayment(payForm.entityId, -amount)
+        setSales(await getSales())
+      }
 
       setPayments(prev => [created, ...prev])
       setModal(null)

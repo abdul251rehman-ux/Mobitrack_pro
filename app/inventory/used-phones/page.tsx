@@ -1361,15 +1361,14 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
       const firstAccount = activeSplits[0] ? accounts.find(a => a.id === activeSplits[0].accountId) : undefined
       const payStatus = paid <= 0 ? "Unpaid" : paid >= grandTotal ? "Paid" : "Partial"
       const dateTag = purchaseDate.replace(/-/g, "")
-      const { data: poRows } = await supabase.from("purchases").select("po_number")
-        .eq("tenant_id", tenantId).eq("date", purchaseDate).like("po_number", `PO-${dateTag}-%`)
-      let maxSeq = 0
-      for (const row of (poRows ?? [])) {
-        const parts = (row.po_number as string).split("-")
-        const n = parseInt(parts[parts.length - 1], 10)
-        if (!isNaN(n) && n > maxSeq) maxSeq = n
-      }
-      const poNumber = `PO-${dateTag}-${String(maxSeq + 1).padStart(3, "0")}`
+      // Atomic, row-locked reservation (supabase/fix_po_number_race.sql) -
+      // replaces the old `SELECT ... MAX(seq)` + compute-locally approach,
+      // which raced two close-together purchase creations into computing
+      // the same or an inconsistent PO number (the same bug already fixed
+      // for the main New Purchase flow in app/purchases/new-purchase-sheet.tsx
+      // - this Bulk Add flow had its own separate, un-fixed copy of it).
+      const { data: poNumber, error: poErr } = await supabase.rpc('reserve_po_number', { p_tenant_id: tenantId, p_date_tag: dateTag })
+      if (poErr) throw new Error(`Failed to reserve PO number: ${poErr.message}`)
       const purchaseItems = rows.map((r, i) => ({
         productId: (inserted as any)?.[i]?.id as string | undefined,
         productName: `${r.brand} ${r.model.trim()}`,
@@ -1389,6 +1388,11 @@ function BulkAddDialog({ onClose, onSaved, brands, models, colors, storageOption
         date: purchaseDate,
         supplier_id: resolvedSupplierId || null,
         supplier_name: purchaseSourceLabel,
+        // Links this purchase to the actual customer record for a trade-in
+        // (as opposed to a real supplier or an anonymous walk-in seller),
+        // so a later Purchase Return can correctly refund THIS customer via
+        // their own Customer Ledger (supabase/add_customer_id_to_purchases.sql).
+        customer_id: resolvedCustomerId || null,
         subtotal: grandTotal,
         shipping_cost: 0,
         tax: 0,
@@ -3418,15 +3422,15 @@ function UsedPhonesPageInner() {
             `Customer: ${phoneData.source_customer_name ?? ""}`
 
           const dateTag = purchaseDate.replace(/-/g, "")
-          const { data: poRows } = await supabase.from("purchases").select("po_number")
-            .eq("tenant_id", tenantId).eq("date", purchaseDate).like("po_number", `PO-${dateTag}-%`)
-          let maxSeq = 0
-          for (const row of (poRows ?? [])) {
-            const parts = (row.po_number as string).split("-")
-            const n = parseInt(parts[parts.length - 1], 10)
-            if (!isNaN(n) && n > maxSeq) maxSeq = n
-          }
-          const poNumber = `PO-${dateTag}-${String(maxSeq + 1).padStart(3, "0")}`
+          // Atomic, row-locked reservation (supabase/fix_po_number_race.sql) -
+          // replaces the old `SELECT ... MAX(seq)` + compute-locally
+          // approach, which raced two close-together purchase creations
+          // into computing the same or an inconsistent PO number (the same
+          // bug already fixed for the main New Purchase flow in
+          // app/purchases/new-purchase-sheet.tsx - this single-phone Add
+          // flow had its own separate, un-fixed copy of it).
+          const { data: poNumber, error: poErr } = await supabase.rpc('reserve_po_number', { p_tenant_id: tenantId, p_date_tag: dateTag })
+          if (poErr) throw new Error(`Failed to reserve PO number: ${poErr.message}`)
 
           const { data: purchaseRecord, error: purchaseErr } = await supabase.from("purchases").insert({
             tenant_id: tenantId,
@@ -3434,6 +3438,11 @@ function UsedPhonesPageInner() {
             date: purchaseDate,
             supplier_id: sourceType === "purchased" ? (supplierId || null) : null,
             supplier_name: sourceLabel,
+            // See supabase/add_customer_id_to_purchases.sql - links a
+            // trade-in purchase to the actual customer record so a later
+            // Purchase Return can refund THIS customer via their own
+            // Customer Ledger.
+            customer_id: sourceType === "customer_trade_in" ? ((phoneData as any).source_customer_id || null) : null,
             subtotal: purchasePrice,
             shipping_cost: 0,
             tax: 0,

@@ -11,6 +11,8 @@ import {
 import { toast } from "sonner"
 
 import { getSaleById, updateSaleStatus } from "@/lib/api/sales"
+import { getPayments } from "@/lib/api/payments"
+import { withLiveSaleBalances } from "@/lib/api/payment-sync"
 import { getTenant } from "@/lib/api/settings"
 import { createAuditLog } from "@/lib/api/audit"
 import { generateInvoicePDF } from "@/lib/pdf/invoice"
@@ -67,9 +69,16 @@ export default function SaleDetailPage() {
     async function load() {
       try {
         setLoading(true)
-        const [data, tenant] = await Promise.all([getSaleById(id), getTenant()])
+        const [data, tenant, allPayments] = await Promise.all([getSaleById(id), getTenant(), getPayments()])
         if (!data) { toast.error("Sale not found"); router.push("/sales"); return }
-        setSale(data)
+        // Live amountReceived/changeDue/status - see lib/api/payment-sync.ts.
+        // The cached fields on `data` can drift from what was actually paid
+        // (see supabase/fix_purchase_payment_sync.sql for the mirror bug on
+        // the purchase side); this guarantees this page always agrees with
+        // the Dashboard and Customer Ledger.
+        const customerPayments = allPayments.filter(p => p.entityType === "Customer" && p.status === "Completed")
+        const [liveData] = withLiveSaleBalances([data], customerPayments)
+        setSale(liveData)
         if (tenant) setShopInfo({ shopName: tenant.name, shopAddress: tenant.address ?? "", shopPhone: tenant.phone ?? "", shopLogo: tenant.logo ?? "" })
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to load sale")

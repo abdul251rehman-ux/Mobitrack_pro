@@ -11,11 +11,13 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { getSales, voidSale } from "@/lib/api/sales"
+import { getPayments } from "@/lib/api/payments"
+import { withLiveSaleBalances } from "@/lib/api/payment-sync"
 import { getTenant } from "@/lib/api/settings"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
 import type { ShopInfo } from "@/lib/pdf/invoice"
-import { Sale } from "@/data/types"
+import { Sale, Payment } from "@/data/types"
 import { generateInvoicePDF } from "@/lib/pdf/invoice"
 import { DataTable } from "@/components/shared/data-table"
 import { PageHeader } from "@/components/shared/page-header"
@@ -74,6 +76,7 @@ function SalesPageInner() {
 
   // â"€â"€ Data state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [salesList, setSalesList] = useState<Sale[]>([])
+  const [customerPayments, setCustomerPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [shopInfo, setShopInfo] = useState<ShopInfo>({ shopName: "Mobile Shop", shopAddress: "", shopPhone: "" })
 
@@ -87,8 +90,9 @@ function SalesPageInner() {
     async function fetchSales() {
       try {
         setLoading(true)
-        const [data, tenant] = await Promise.all([getSales(), getTenant()])
+        const [data, tenant, allPayments] = await Promise.all([getSales(), getTenant(), getPayments()])
         setSalesList(data)
+        setCustomerPayments(allPayments.filter(p => p.entityType === "Customer" && p.status === "Completed"))
         if (tenant) setShopInfo({ shopName: tenant.name, shopAddress: tenant.address ?? "", shopPhone: tenant.phone ?? "", shopLogo: tenant.logo ?? "" })
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to load sales")
@@ -98,6 +102,11 @@ function SalesPageInner() {
     }
     fetchSales()
   }, [])
+
+  // Live amountReceived/changeDue/status per sale - see
+  // lib/api/payment-sync.ts for the shared fold logic (also used by the
+  // Customer Ledger, Dashboard, and Sale detail page).
+  const liveSalesList = useMemo(() => withLiveSaleBalances(salesList, customerPayments), [salesList, customerPayments])
 
   // â"€â"€ Filter state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const [dateFrom, setDateFrom] = useState("")
@@ -154,28 +163,28 @@ function SalesPageInner() {
 
   // â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const stats = useMemo(() => {
-    const todaySales = salesList.filter((s) => s.date === TODAY_STR)
+    const todaySales = liveSalesList.filter((s) => s.date === TODAY_STR)
     const todayTotal = todaySales.reduce((acc, s) => acc + s.total, 0)
 
-    const weekSales = salesList.filter((s) => {
+    const weekSales = liveSalesList.filter((s) => {
       const d = parseISO(s.date)
       return isAfter(d, START_OF_WEEK) || d.getTime() === START_OF_WEEK.getTime()
     })
     const weekTotal = weekSales.reduce((acc, s) => acc + s.total, 0)
 
-    const monthSales = salesList.filter((s) => s.date.startsWith(THIS_MONTH_PREFIX))
+    const monthSales = liveSalesList.filter((s) => s.date.startsWith(THIS_MONTH_PREFIX))
     const monthTotal = monthSales.reduce((acc, s) => acc + s.total, 0)
 
-    const pendingSales = salesList.filter((s) => s.status === "Pending")
+    const pendingSales = liveSalesList.filter((s) => s.status === "Pending")
     const pendingTotal = pendingSales.reduce((acc, s) => acc + s.total, 0)
 
-    const completedCount = salesList.filter((s) => s.status === "Completed").length
-    const completionRate = salesList.length > 0
-      ? Math.round((completedCount / salesList.length) * 100)
+    const completedCount = liveSalesList.filter((s) => s.status === "Completed").length
+    const completionRate = liveSalesList.length > 0
+      ? Math.round((completedCount / liveSalesList.length) * 100)
       : 0
 
-    const totalRevenue = salesList.reduce((acc, s) => acc + s.total, 0)
-    const collectedRevenue = salesList.reduce((acc, s) => acc + s.amountReceived, 0)
+    const totalRevenue = liveSalesList.reduce((acc, s) => acc + s.total, 0)
+    const collectedRevenue = liveSalesList.reduce((acc, s) => acc + s.amountReceived, 0)
     const collectionRate = totalRevenue > 0
       ? Math.round((collectedRevenue / totalRevenue) * 100)
       : 0
@@ -195,14 +204,14 @@ function SalesPageInner() {
       totalRevenue,
       collectedRevenue,
     }
-  }, [salesList])
+  }, [liveSalesList])
 
   // â"€â"€ Selected-period stat - same period options + date math as the Dashboard's
   //     Financial Overview selector (Refunded sales excluded, matching Dashboard's
   //     periodRevenue), so switching to "This Month" here should show the exact
   //     same total as the Dashboard's "This Month" Sales Revenue card â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const selectedPeriodStats = useMemo(() => {
-    const base = salesList.filter(s => s.status !== "Refunded")
+    const base = liveSalesList.filter(s => s.status !== "Refunded")
     let matched: Sale[]
     if (statsPeriod === "today") matched = base.filter(s => s.date === TODAY_STR)
     else if (statsPeriod === "yesterday") matched = base.filter(s => s.date === YESTERDAY_STR)
@@ -217,13 +226,13 @@ function SalesPageInner() {
     const total = matched.reduce((s, x) => s + x.total, 0)
     const received = matched.reduce((s, x) => s + x.amountReceived, 0)
     return { total, count: matched.length, received, outstanding: Math.max(0, total - received) }
-  }, [salesList, statsPeriod, statsDateFrom, statsDateTo])
+  }, [liveSalesList, statsPeriod, statsDateFrom, statsDateTo])
 
   // â"€â"€ Filtered data â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const filtered = useMemo(() => {
     const priceMin = salePriceMin ? parseFloat(salePriceMin) : null
     const priceMax = salePriceMax ? parseFloat(salePriceMax) : null
-    return salesList.filter((sale) => {
+    return liveSalesList.filter((sale) => {
       if (customerSearch && !sale.customerName.toLowerCase().includes(customerSearch.toLowerCase())) return false
       if (paymentFilter !== "all" && sale.paymentMethod !== paymentFilter) return false
       if (statusFilter !== "all" && sale.status !== statusFilter) return false
@@ -256,7 +265,7 @@ function SalesPageInner() {
 
       return true
     })
-  }, [salesList, customerSearch, paymentFilter, statusFilter, dateFrom, dateTo, salePriceMin, salePriceMax, modelSearch, universalSearch])
+  }, [liveSalesList, customerSearch, paymentFilter, statusFilter, dateFrom, dateTo, salePriceMin, salePriceMax, modelSearch, universalSearch])
 
   // Detail fields beyond the always-visible universal search - drives the
   // mobile filter-toggle's active-indicator dot.

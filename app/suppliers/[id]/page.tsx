@@ -11,7 +11,9 @@ import {
 
 import { getSupplierById } from "@/lib/api/suppliers"
 import { getPurchases } from "@/lib/api/purchases"
-import { Supplier, Purchase } from "@/data/types"
+import { getPayments } from "@/lib/api/payments"
+import { withLivePurchaseBalances } from "@/lib/api/payment-sync"
+import { Supplier, Purchase, Payment } from "@/data/types"
 import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { DataTable } from "@/components/shared/data-table"
@@ -132,18 +134,23 @@ export default function SupplierDetailPage() {
 
   const [supplier, setSupplier] = useState<Supplier | null | undefined>(undefined)
   const [supplierPurchases, setSupplierPurchases] = useState<Purchase[]>([])
+  const [supplierPayments, setSupplierPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true)
-        const [sup, allPurchases] = await Promise.all([
+        const [sup, allPurchases, allPayments] = await Promise.all([
           getSupplierById(id),
           getPurchases(),
+          getPayments(),
         ])
         setSupplier(sup)
         setSupplierPurchases(sup ? allPurchases.filter((p) => p.supplierId === sup.id) : [])
+        setSupplierPayments(
+          sup ? allPayments.filter((p) => p.entityType === "Supplier" && p.entityId === sup.id && p.status === "Completed") : []
+        )
       } catch {
         setSupplier(null)
       } finally {
@@ -157,25 +164,36 @@ export default function SupplierDetailPage() {
     () => supplierPurchases.reduce((sum, p) => sum + p.total, 0),
     [supplierPurchases]
   )
+  // Computed live from `payments` (Paid minus Received), not from
+  // purchases.amountPaid/balanceDue - those cached fields can drift from
+  // what was actually paid (see supabase/fix_purchase_payment_sync.sql).
+  // Matches the same approach used on the Dashboard and Supplier Ledger.
   const totalPaid = useMemo(
-    () => supplierPurchases.reduce((sum, p) => sum + p.amountPaid, 0),
-    [supplierPurchases]
+    () => supplierPayments.reduce((sum, p) => sum + (p.type === "Paid" ? p.amount : -p.amount), 0),
+    [supplierPayments]
   )
   const balanceDue = useMemo(
-    () => supplierPurchases.reduce((sum, p) => sum + p.balanceDue, 0),
-    [supplierPurchases]
+    () => Math.max(0, totalPurchased - totalPaid),
+    [totalPurchased, totalPaid]
   )
   // When totalPaid > totalPurchased, supplier owes us (advance/credit)
   const creditBalance = useMemo(
     () => Math.max(0, totalPaid - totalPurchased),
     [totalPaid, totalPurchased]
   )
+  // Per-purchase live balance - see lib/api/payment-sync.ts for the shared
+  // fold logic (also used by the Supplier Ledger, Dashboard, and the
+  // Purchases list page).
+  const displayPurchases = useMemo(
+    () => withLivePurchaseBalances(supplierPurchases, supplierPayments),
+    [supplierPurchases, supplierPayments]
+  )
   const recentPayments = useMemo(() => {
-    return supplierPurchases
+    return displayPurchases
       .filter((p) => p.amountPaid > 0)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5)
-  }, [supplierPurchases])
+  }, [displayPurchases])
 
   if (loading) {
     return (
@@ -326,7 +344,7 @@ export default function SupplierDetailPage() {
             <div className="p-2">
               <DataTable
                 columns={purchaseColumns}
-                data={supplierPurchases}
+                data={displayPurchases}
                 searchKey="poNumber"
                 searchPlaceholder="Search by PO number..."
                 renderCard={(purchase) => {

@@ -17,6 +17,7 @@ import { toast } from "sonner"
 import { getSales } from "@/lib/api/sales"
 import { getPayments } from "@/lib/api/payments"
 import { getPurchases } from "@/lib/api/purchases"
+import { computeNetPaidBySupplier, computeNetReceivedByCustomer } from "@/lib/api/payment-sync"
 import { getMobiles, getAccessories } from "@/lib/api/products"
 import { getUsedPhones } from "@/lib/api/inventory"
 import { getCustomers } from "@/lib/api/customers"
@@ -314,16 +315,78 @@ export default function DashboardPage() {
 
   // Three running balances, not period figures - "how much do we currently owe /
   // get owed right now", same reasoning as Total Inventory Investment above.
-  const totalPayableToSuppliers = useMemo(
-    () => purchases.reduce((s, p) => s + p.balanceDue, 0),
-    [purchases]
-  )
-  const totalReceivableFromCustomers = useMemo(
-    () => sales
-      .filter(s => s.status !== "Refunded")
-      .reduce((s, x) => s + Math.max(0, x.total - x.amountReceived), 0),
-    [sales]
-  )
+  //
+  // Payable/Receivable are computed straight from the `payments` table
+  // (single source of truth) rather than from purchases.balance_due /
+  // sales.amountReceived - those two fields are meant to be kept in sync by
+  // settleSupplierPayment/settleCustomerPayment (lib/api/purchases.ts,
+  // lib/api/sales.ts) every time a payment is recorded, but a real
+  // production bug (Pay Supplier never touching purchases at all) let them
+  // silently drift apart for weeks before anyone noticed the Dashboard and
+  // Supplier Ledger disagreeing. Computing directly from `payments` here
+  // means the Dashboard can never be wrong about how much has actually been
+  // paid, even if that sync bug ever recurs. purchases.total/sales.total
+  // (the amount OWED) still comes from those tables, not from `payments` -
+  // that side is never wrong since it's set once at creation.
+  // See lib/api/payment-sync.ts for the shared fold logic (also used by the
+  // Supplier Ledger, Reports, and Purchases pages) - keeping this in one
+  // place is what guarantees the Dashboard and Ledger can never drift apart
+  // again the way they did before (see supabase/fix_purchase_payment_sync.sql).
+  const paidToSupplierMap = useMemo(() => computeNetPaidBySupplier(payments), [payments])
+  const receivedFromCustomerMap = useMemo(() => computeNetReceivedByCustomer(payments), [payments])
+
+  const totalPayableToSuppliers = useMemo(() => {
+    const owedPerSupplier = new Map<string, number>()
+    purchases.forEach(p => {
+      if (!p.supplierId) return
+      owedPerSupplier.set(p.supplierId, (owedPerSupplier.get(p.supplierId) ?? 0) + p.total)
+    })
+    let total = 0
+    owedPerSupplier.forEach((totalOwed, supplierId) => {
+      total += Math.max(0, totalOwed - (paidToSupplierMap.get(supplierId) ?? 0))
+    })
+    return total
+  }, [purchases, paidToSupplierMap])
+
+  const totalReceivableFromCustomers = useMemo(() => {
+    const billedPerCustomer = new Map<string, number>()
+    sales.filter(s => s.status !== "Refunded" && s.customerId).forEach(s => {
+      billedPerCustomer.set(s.customerId!, (billedPerCustomer.get(s.customerId!) ?? 0) + s.total)
+    })
+    let total = 0
+    billedPerCustomer.forEach((totalBilled, customerId) => {
+      total += Math.max(0, totalBilled - (receivedFromCustomerMap.get(customerId) ?? 0))
+    })
+    return total
+  }, [sales, receivedFromCustomerMap])
+
+  // Safety net: if purchases.balance_due / sales.amountReceived (the cached
+  // fields settleSupplierPayment/settleCustomerPayment maintain, still used
+  // elsewhere - e.g. the per-purchase breakdown dialogs) ever drift from
+  // what `payments` says was actually paid, surface a visible warning
+  // instead of a silent, slow-to-notice mismatch like last time.
+  const paymentsSyncWarning = useMemo(() => {
+    let supplierMismatch = 0
+    const supplierIds = new Set(purchases.map(p => p.supplierId).filter(Boolean) as string[])
+    supplierIds.forEach(supplierId => {
+      const cachedBalance = purchases.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.balanceDue, 0)
+      const totalOwed = purchases.filter(p => p.supplierId === supplierId).reduce((s, p) => s + p.total, 0)
+      const recomputedBalance = Math.max(0, totalOwed - (paidToSupplierMap.get(supplierId) ?? 0))
+      if (Math.abs(recomputedBalance - cachedBalance) > 1) supplierMismatch += Math.abs(recomputedBalance - cachedBalance)
+    })
+
+    let customerMismatch = 0
+    const customerIds = new Set(sales.filter(s => s.status !== "Refunded" && s.customerId).map(s => s.customerId) as string[])
+    customerIds.forEach(customerId => {
+      const cachedReceived = sales.filter(s => s.customerId === customerId && s.status !== "Refunded").reduce((s, x) => s + x.amountReceived, 0)
+      const recomputedReceived = receivedFromCustomerMap.get(customerId) ?? 0
+      if (Math.abs(recomputedReceived - cachedReceived) > 1) customerMismatch += Math.abs(recomputedReceived - cachedReceived)
+    })
+
+    return supplierMismatch + customerMismatch > 1
+      ? { supplierMismatch: Math.round(supplierMismatch), customerMismatch: Math.round(customerMismatch) }
+      : null
+  }, [purchases, sales, paidToSupplierMap, receivedFromCustomerMap])
   const totalReceivableFromPersons = useMemo(() => {
     const balances = new Map<string, number>(persons.map(p => [p.id, p.openingBalance]))
     for (const tx of personTransactions) {
@@ -336,40 +399,60 @@ export default function DashboardPage() {
   }, [persons, personTransactions])
 
   // Per-entity breakdowns for the click-through dialogs - built from the exact
-  // same filters/fields as the three totals above, so the number on the card
-  // and the sum of the breakdown rows always agree.
+  // same payments-based logic as totalPayableToSuppliers/totalReceivableFromCustomers
+  // above, so the number on the card and the sum of the breakdown rows always agree.
   const payableBySupplier = useMemo(() => {
-    const map = new Map<string, { name: string; amount: number; date: string }>()
+    // Purchases with no supplierId (used-phone "Walk-in: <name>" buybacks from
+    // an individual, not a ledger supplier) never get a `payments` row - their
+    // own balanceDue is already the only truth for them. Mixing them into the
+    // payments-based map here (keyed by name) would double as "always unpaid"
+    // since paidToSupplierMap can never have an entry for them, badly
+    // overstating payable. Excluded here to match totalPayableToSuppliers exactly.
+    const owedPerSupplier = new Map<string, { name: string; amount: number; date: string }>()
     purchases.forEach(p => {
-      if (p.balanceDue <= 0) return
-      const key = p.supplierId || p.supplierName || "unknown"
-      const existing = map.get(key)
+      if (!p.supplierId) return
+      const existing = owedPerSupplier.get(p.supplierId)
       if (existing) {
-        existing.amount += p.balanceDue
+        existing.amount += p.total
         if (p.date > existing.date) existing.date = p.date
       } else {
-        map.set(key, { name: p.supplierName || "Unknown Supplier", amount: p.balanceDue, date: p.date })
+        owedPerSupplier.set(p.supplierId, { name: p.supplierName || "Unknown Supplier", amount: p.total, date: p.date })
       }
     })
-    return [...map.values()].sort((a, b) => b.date.localeCompare(a.date))
-  }, [purchases])
+    return [...owedPerSupplier.entries()]
+      .map(([supplierId, entry]) => ({
+        name: entry.name,
+        amount: Math.max(0, entry.amount - (paidToSupplierMap.get(supplierId) ?? 0)),
+        date: entry.date,
+      }))
+      .filter(row => row.amount > 0)
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }, [purchases, paidToSupplierMap])
 
   const receivableByCustomer = useMemo(() => {
-    const map = new Map<string, { name: string; amount: number; date: string }>()
-    sales.filter(s => s.status !== "Refunded").forEach(s => {
-      const due = Math.max(0, s.total - s.amountReceived)
-      if (due <= 0) return
-      const key = s.customerId || s.customerName || "unknown"
-      const existing = map.get(key)
+    // Same reasoning as payableBySupplier above - walk-in sales with no
+    // customerId never get a `payments` row, so they're excluded here to
+    // match totalReceivableFromCustomers (which also requires customerId).
+    const billedPerCustomer = new Map<string, { name: string; amount: number; date: string }>()
+    sales.filter(s => s.status !== "Refunded" && s.customerId).forEach(s => {
+      const key = s.customerId!
+      const existing = billedPerCustomer.get(key)
       if (existing) {
-        existing.amount += due
+        existing.amount += s.total
         if (s.date > existing.date) existing.date = s.date
       } else {
-        map.set(key, { name: s.customerName || "Walk-in Customer", amount: due, date: s.date })
+        billedPerCustomer.set(key, { name: s.customerName || "Walk-in Customer", amount: s.total, date: s.date })
       }
     })
-    return [...map.values()].sort((a, b) => b.date.localeCompare(a.date))
-  }, [sales])
+    return [...billedPerCustomer.entries()]
+      .map(([customerId, entry]) => ({
+        name: entry.name,
+        amount: Math.max(0, entry.amount - (receivedFromCustomerMap.get(customerId) ?? 0)),
+        date: entry.date,
+      }))
+      .filter(row => row.amount > 0)
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }, [sales, receivedFromCustomerMap])
 
   const receivableByPerson = useMemo(() => {
     const balances = new Map<string, number>(persons.map(p => [p.id, p.openingBalance]))
@@ -647,6 +730,28 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Visible only when purchases/sales payment totals disagree with the
+          payments table they're supposed to stay in sync with - see
+          paymentsSyncWarning above for why this exists: a real bug once let
+          these drift apart silently for weeks. */}
+      {canSeeFinancials && paymentsSyncWarning && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-amber-800">
+              Payment totals may be out of sync
+            </p>
+            <p className="text-[11px] text-amber-700 mt-0.5">
+              Purchases/Sales balances don't match the payments on record
+              {paymentsSyncWarning.supplierMismatch > 0 && ` (suppliers off by ~${formatCurrency(paymentsSyncWarning.supplierMismatch)})`}
+              {paymentsSyncWarning.supplierMismatch > 0 && paymentsSyncWarning.customerMismatch > 0 && ", "}
+              {paymentsSyncWarning.customerMismatch > 0 && ` (customers off by ~${formatCurrency(paymentsSyncWarning.customerMismatch)})`}
+              . Numbers below may be understated or overstated until this is reconciled.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* â"€â"€ Financial Overview - revenue/profit is sensitive, hidden from roles without reports/finance access â"€â"€ */}
       {canSeeFinancials && (

@@ -242,6 +242,7 @@ export interface DbPurchase {
   date: string
   supplier_id: string
   supplier_name: string
+  customer_id?: string | null
   subtotal: number
   shipping_cost: number
   tax: number
@@ -918,6 +919,7 @@ export function toPurchase(db: DbPurchase, items: DbPurchaseItem[]): Purchase {
     date: db.date,
     supplierId: db.supplier_id,
     supplierName: db.supplier_name,
+    customerId: db.customer_id ?? undefined,
     items: items.map(toPurchaseItem),
     subtotal: db.subtotal,
     shippingCost: db.shipping_cost,
@@ -953,6 +955,7 @@ export function toDbPurchase(p: Partial<Purchase>, tenantId: string): Partial<Db
   if (p.date !== undefined) db.date = p.date
   if (p.supplierId !== undefined) db.supplier_id = p.supplierId
   if (p.supplierName !== undefined) db.supplier_name = p.supplierName
+  if (p.customerId !== undefined) db.customer_id = p.customerId || null
   if (p.subtotal !== undefined) db.subtotal = p.subtotal
   if (p.shippingCost !== undefined) db.shipping_cost = p.shippingCost
   if (p.tax !== undefined) db.tax = p.tax

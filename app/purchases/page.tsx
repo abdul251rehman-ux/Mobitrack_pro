@@ -8,11 +8,17 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import { getPurchases, updatePurchaseStatus } from "@/lib/api/purchases"
+import { getPurchases, settleSupplierPayment } from "@/lib/api/purchases"
 import { getSuppliers } from "@/lib/api/suppliers"
+import { getPayments } from "@/lib/api/payments"
+import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
+import { withLivePurchaseBalances } from "@/lib/api/payment-sync"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
-import { Purchase, PurchaseItem, Supplier } from "@/data/types"
+import { getTenantId } from "@/lib/api/helpers"
+import { supabase } from "@/lib/supabase"
+import { Purchase, PurchaseItem, Supplier, Payment } from "@/data/types"
+import type { FinanceAccount } from "@/lib/api/types"
 import { DataTable } from "@/components/shared/data-table"
 import { PageWrapper } from "@/components/layout/page-wrapper"
 import { PageHeader } from "@/components/shared/page-header"
@@ -374,17 +380,23 @@ function PurchasesPageInner() {
   // ── Data state ──────────────────────────────────────────────────────────
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadPurchases = useCallback(async () => {
     try {
       setLoading(true)
-      const [purchasesData, suppliersData] = await Promise.all([
+      const [purchasesData, suppliersData, paymentsData, accountsData] = await Promise.all([
         getPurchases(),
         getSuppliers(),
+        getPayments(),
+        getFinanceAccounts(),
       ])
       setPurchases(purchasesData)
       setSuppliers(suppliersData)
+      setPayments(paymentsData.filter(p => p.entityType === "Supplier" && p.status === "Completed"))
+      setAccounts(accountsData)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load purchases")
     } finally {
@@ -407,6 +419,7 @@ function PurchasesPageInner() {
   const [viewPurchase, setViewPurchase] = useState<Purchase | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
   const [markPaidTarget, setMarkPaidTarget] = useState<Purchase | null>(null)
+  const [markPaidAccountId, setMarkPaidAccountId] = useState("")
   const [markingPaid, setMarkingPaid] = useState(false)
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -428,9 +441,17 @@ function PurchasesPageInner() {
     return { count: list.length, total: list.reduce((s, p) => s + p.total, 0) }
   }, [purchases])
 
+  // Live amountPaid/balanceDue/paymentStatus per purchase, computed from
+  // `payments` instead of trusted from the row's own cached fields - those
+  // can drift from what was actually paid (see
+  // supabase/fix_purchase_payment_sync.sql; confirmed live in production).
+  // See lib/api/payment-sync.ts for the shared fold logic (also used by the
+  // Supplier Ledger, Dashboard, and app/suppliers/[id]/page.tsx).
+  const livePurchases = useMemo(() => withLivePurchaseBalances(purchases, payments), [purchases, payments])
+
   // ── Filtered data ──────────────────────────────────────────────────────────
   const filteredPurchases = useMemo(() => {
-    return purchases.filter((p) => {
+    return livePurchases.filter((p) => {
       if (dateFrom && p.date < dateFrom) return false
       if (dateTo && p.date > dateTo) return false
       if (supplierFilter !== "all" && p.supplierId !== supplierFilter) return false
@@ -452,7 +473,7 @@ function PurchasesPageInner() {
       }
       return true
     })
-  }, [purchases, dateFrom, dateTo, supplierFilter, paymentStatusFilter, deliveryStatusFilter, typeFilter, search])
+  }, [livePurchases, dateFrom, dateTo, supplierFilter, paymentStatusFilter, deliveryStatusFilter, typeFilter, search])
 
   const totalPayable = useMemo(
     () =>
@@ -492,20 +513,97 @@ function PurchasesPageInner() {
 
   function handleMarkPaid(purchase: Purchase) {
     setMarkPaidTarget(purchase)
+    setMarkPaidAccountId(purchase.supplierId ? (accounts.find(a => a.isDefaultCash)?.id ?? accounts[0]?.id ?? "") : "")
   }
 
+  // Marking a purchase Paid means real money left a real account, the same
+  // as "Pay Supplier" in the Supplier Ledger - so it now records an actual
+  // payment (payments + finance_transactions + account balance deduction),
+  // not just a silent flip of this row's own fields. Without this, the
+  // purchase would look paid here but the Supplier Ledger/Dashboard (which
+  // both compute from `payments`) would still count it as owed forever.
+  // Walk-in purchases (no supplierId, e.g. used-phone buybacks) have no
+  // supplier ledger to desync from, so they keep the old direct-field
+  // update - there's nothing to record a payment against.
   async function confirmMarkPaid() {
     if (!markPaidTarget) return
+    if (markPaidTarget.supplierId && !markPaidAccountId) {
+      toast.error("Select a payment account")
+      return
+    }
     setMarkingPaid(true)
     try {
-      await updatePurchaseStatus(markPaidTarget.id, {
-        paymentStatus: "Paid",
-        amountPaid: markPaidTarget.total,
-        balanceDue: 0,
-      })
-      setPurchases(prev => prev.map(p =>
-        p.id === markPaidTarget.id ? { ...p, paymentStatus: "Paid", amountPaid: p.total, balanceDue: 0 } : p
-      ))
+      const remaining = markPaidTarget.balanceDue
+      if (markPaidTarget.supplierId && remaining > 0) {
+        const tenantId = await getTenantId()
+        const selectedAccount = accounts.find(a => a.id === markPaidAccountId)
+        const payMethod = selectedAccount?.type === "bank" ? "Bank Transfer"
+          : selectedAccount?.type === "mobile_wallet" ? "Mobile Wallet"
+          : "Cash"
+        const refNum = "PAY-SUP-" + Date.now().toString().slice(-8)
+
+        const { error: payErr } = await supabase.from("payments").insert({
+          tenant_id: tenantId,
+          entity_type: "Supplier",
+          entity_id: markPaidTarget.supplierId,
+          entity_name: markPaidTarget.supplierName ?? "",
+          type: "Paid",
+          amount: remaining,
+          method: payMethod,
+          account_id: markPaidAccountId,
+          reference_number: refNum,
+          reference_id: markPaidTarget.id,
+          date: todayPKT(),
+          notes: `Mark as Paid — ${markPaidTarget.poNumber}`,
+          status: "Completed",
+        })
+        if (payErr) throw new Error(payErr.message)
+
+        await adjustAccountBalance(markPaidAccountId, -remaining, 0)
+
+        // The payment row and account debit above are already committed at
+        // this point - if settleSupplierPayment or the finance_transactions
+        // insert below fails, the payment is real but purchases.balance_due
+        // hasn't caught up yet. Same no-rollback shape as handlePaySupplier
+        // in the Supplier Ledger (this isn't a new gap introduced here) -
+        // but since balance_due is still read directly in a few places
+        // (the "Bal Due" column falls back to it before payments reload),
+        // tell the user plainly instead of a generic error that implies
+        // nothing happened, so they know to check rather than retry blindly.
+        try {
+          await settleSupplierPayment(markPaidTarget.supplierId, remaining)
+          await supabase.from("finance_transactions").insert({
+            tenant_id: tenantId,
+            date: todayPKT(),
+            type: "supplier_payment",
+            account_id: markPaidAccountId,
+            amount: remaining,
+            reference_type: "Purchase",
+            reference_number: refNum,
+            description: `Marked ${markPaidTarget.poNumber} as Paid`,
+          })
+        } catch (syncErr) {
+          await loadPurchases()
+          toast.error(
+            `Payment of ${formatCurrency(remaining)} was recorded and the account was debited, ` +
+            `but syncing the purchase balance failed. Refresh and check ${markPaidTarget.poNumber} - ` +
+            `it may still show as unpaid until this is retried.`
+          )
+          setMarkPaidTarget(null)
+          return
+        }
+
+        await loadPurchases()
+      } else {
+        const tenantId = await getTenantId()
+        await supabase.from("purchases").update({
+          payment_status: "Paid", amount_paid: markPaidTarget.total, balance_due: 0,
+        }).eq("id", markPaidTarget.id).eq("tenant_id", tenantId)
+        setPurchases(prev => prev.map(p =>
+          p.id === markPaidTarget.id ? { ...p, paymentStatus: "Paid", amountPaid: p.total, balanceDue: 0 } : p
+        ))
+      }
+
       toast.success(`${markPaidTarget.poNumber} marked as Paid`)
       createAuditLog({
         timestamp: new Date().toISOString(),
@@ -929,17 +1027,45 @@ function PurchasesPageInner() {
       />
 
       {/* ── Mark Paid Confirmation ───────────────────────────────────────────── */}
-      <ConfirmDialog
-        open={markPaidTarget !== null}
-        onOpenChange={(open) => { if (!open) setMarkPaidTarget(null) }}
-        title="Mark as Paid?"
-        description={markPaidTarget
-          ? `${markPaidTarget.poNumber} — the remaining balance of ${formatCurrency(markPaidTarget.balanceDue)} will be marked as paid. This only updates this purchase order and does not record a payment in Finance or the Supplier Ledger.`
-          : ""}
-        confirmLabel="Mark as Paid"
-        onConfirm={confirmMarkPaid}
-        loading={markingPaid}
-      />
+      {markPaidTarget?.supplierId ? (
+        <Dialog open={markPaidTarget !== null} onOpenChange={(open) => { if (!open && !markingPaid) setMarkPaidTarget(null) }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Mark as Paid?</DialogTitle>
+              <DialogDescription>
+                {markPaidTarget.poNumber} — the remaining balance of {formatCurrency(markPaidTarget.balanceDue)} will be recorded as a payment to {markPaidTarget.supplierName}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600">Pay from account</label>
+              <Select value={markPaidAccountId} onValueChange={setMarkPaidAccountId}>
+                <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>{a.name} — {formatCurrency(a.currentBalance)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" disabled={markingPaid} onClick={() => setMarkPaidTarget(null)}>Cancel</Button>
+              <Button size="sm" disabled={markingPaid} onClick={confirmMarkPaid}>{markingPaid ? "Working..." : "Mark as Paid"}</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <ConfirmDialog
+          open={markPaidTarget !== null}
+          onOpenChange={(open) => { if (!open) setMarkPaidTarget(null) }}
+          title="Mark as Paid?"
+          description={markPaidTarget
+            ? `${markPaidTarget.poNumber} — the remaining balance of ${formatCurrency(markPaidTarget.balanceDue)} will be marked as paid.`
+            : ""}
+          confirmLabel="Mark as Paid"
+          onConfirm={confirmMarkPaid}
+          loading={markingPaid}
+        />
+      )}
 
     </PageWrapper>
   )

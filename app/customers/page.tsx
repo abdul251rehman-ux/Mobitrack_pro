@@ -251,21 +251,42 @@ function CustomersPageInner() {
     setLedgerLoading(true)
     try {
       const tenantId = await getTenantId()
-      const { data, error } = await supabase
-        .from("sales")
-        .select("id, invoice_number, date, total, amount_received, status")
-        .eq("tenant_id", tenantId)
-        .eq("customer_id", customer.id)
-        .order("date", { ascending: false })
+      const [{ data, error }, { data: payData, error: payError }] = await Promise.all([
+        supabase
+          .from("sales")
+          .select("id, invoice_number, date, total, amount_received, status")
+          .eq("tenant_id", tenantId)
+          .eq("customer_id", customer.id)
+          .order("date", { ascending: false }),
+        supabase
+          .from("payments")
+          .select("reference_id, reference_number, amount")
+          .eq("tenant_id", tenantId)
+          .eq("entity_type", "Customer")
+          .eq("entity_id", customer.id)
+          .eq("type", "Received")
+          .eq("status", "Completed"),
+      ])
       if (error) throw error
-      setLedgerSales((data ?? []).map((r: any) => ({
-        id: r.id,
-        invoiceNumber: r.invoice_number,
-        date: r.date,
-        total: r.total ?? 0,
-        amountReceived: r.amount_received ?? 0,
-        status: r.status,
-      })))
+      if (payError) throw payError
+      const sales = data ?? []
+      // Live amountReceived, same reasoning as lib/api/payment-sync.ts's
+      // withLiveSaleBalances - sales.amount_received can drift from what was
+      // actually paid, so this small "quick ledger" dialog recomputes it
+      // from `payments` too instead of trusting the cached column.
+      setLedgerSales(sales.map((r: any) => {
+        const received = (payData ?? [])
+          .filter((p: any) => (p.reference_id ? p.reference_id === r.id : p.reference_number === r.invoice_number))
+          .reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+        return {
+          id: r.id,
+          invoiceNumber: r.invoice_number,
+          date: r.date,
+          total: r.total ?? 0,
+          amountReceived: received,
+          status: r.status === "Refunded" ? r.status : (received >= (r.total ?? 0) ? "Completed" : r.status),
+        }
+      }))
     } catch (err) {
       toast.error("Failed to load ledger")
     } finally {

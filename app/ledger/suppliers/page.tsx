@@ -5,7 +5,8 @@ import { useState, useMemo, useEffect } from "react"
 import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText, Eye, X, ArrowUpRight, ArrowDownLeft, Hash, Calendar, AlignLeft, Wallet, Plus, Banknote, Search } from "lucide-react"
 import { toast } from "sonner"
 import { getSuppliers } from "@/lib/api/suppliers"
-import { getPurchases } from "@/lib/api/purchases"
+import { getPurchases, settleSupplierPayment } from "@/lib/api/purchases"
+import { computePaidPerPurchase } from "@/lib/api/payment-sync"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { getRebateEntries } from "@/lib/api/rebate"
@@ -139,6 +140,14 @@ function SupplierLedgerPageInner() {
       //    this one; floored at 0, matching the old Math.max(0, ...) clamp.
       await adjustAccountBalance(payAccountId, -amount, 0)
 
+      // 2b. Apply this payment onto the supplier's oldest unpaid/partial
+      //     purchase rows (FIFO) so purchases.amount_paid/balance_due/
+      //     payment_status stay in sync with what the Ledger and Dashboard
+      //     both compute from - without this, the Dashboard's Payable card
+      //     (which sums purchases.balance_due) would keep counting a PO as
+      //     owed forever, even after this payment fully settles it here.
+      await settleSupplierPayment(selectedSupplierId, amount)
+
       // 3. Write finance_transactions audit row so Finance page shows it
       const { error: ftErr } = await supabase.from("finance_transactions").insert({
         tenant_id: tenantId,
@@ -230,6 +239,14 @@ function SupplierLedgerPageInner() {
       //    this one. Money coming in, so no floor needed (unlike paying out).
       await adjustAccountBalance(receiveAccountId, amount)
 
+      // 2b. Unwind this refund against the supplier's most-recently-paid
+      //     purchases (LIFO), via a negative amount - see
+      //     supabase/fix_settle_payment_refunds.sql. Without this,
+      //     purchases.amount_paid stays overstated forever after a refund,
+      //     the exact bug confirmed live (a supplier whose balance_due
+      //     showed Rs 100,000 less than what was actually still owed).
+      await settleSupplierPayment(selectedSupplierId, -amount)
+
       // 3. Write finance_transactions audit row so Finance page shows it. Uses
       //    its own inflow type (not supplier_payment, which the Finance page
       //    always treats as an outflow) since money is coming IN here.
@@ -302,17 +319,32 @@ function SupplierLedgerPageInner() {
       ? supplierPayments.filter((sp) => sp.entityId === selectedSupplierId)
       : supplierPayments
 
-    // Every payment WE MADE against a PO (same-day or later) is folded into that purchase's row rather
-    // than shown as its own line - the row then shows just what's paid so far (Dr) and what's still
-    // short (Cr), not the full gross purchase value. Only payments with no matching PO keep their own
-    // row. Received-from-supplier payments are excluded here - they're money flowing the other way
-    // (a refund/credit), never a paydown toward what we owe on a specific PO.
+    // Every payment WE MADE against a PO (its own down payment, recorded at purchase time) is folded
+    // into that purchase's row rather than shown as its own line - the row then shows just what's
+    // still short (Cr), not the full gross purchase value. Matched by referenceId (the payment's real
+    // foreign key to the purchase row, set since supabase/fix_po_number_race.sql) rather than by
+    // matching PO-number strings - string matching could silently drift apart if a PO number was ever
+    // reused, mistyped, or (as confirmed live in production) raced by two concurrent purchase
+    // creations computing the same number. Older payments recorded before that fix have no
+    // referenceId, so they still fall back to PO-number matching. Only payments with no matching
+    // purchase keep their own row. Received-from-supplier payments are excluded here - they're money
+    // flowing the other way (a refund/credit) that's never tied back onto a specific PO's balance.
     const downPaymentIds = new Set<string>()
     filteredPurchases.forEach((p) => {
       filteredPayments.forEach((sp) => {
-        if (sp.type === "Paid" && sp.referenceNumber === p.poNumber && !downPaymentIds.has(sp.id)) downPaymentIds.add(sp.id)
+        if (sp.type !== "Paid" || downPaymentIds.has(sp.id)) return
+        const matches = sp.referenceId ? sp.referenceId === p.id : sp.referenceNumber === p.poNumber
+        if (matches) downPaymentIds.add(sp.id)
       })
     })
+
+    // A purchase row's "still owed" is now total minus the sum of its own folded-in down payments -
+    // computed live from `payments` rather than read from purchases.balance_due (a separately cached
+    // field that a production bug let drift out of sync with what was actually paid - see
+    // supabase/fix_purchase_payment_sync.sql). This guarantees the Ledger and Dashboard (app/page.tsx,
+    // same payments-based approach, see lib/api/payment-sync.ts) always agree, and self-corrects the
+    // moment payments load, with no backfill required.
+    const downPaymentTotalByPurchase = computePaidPerPurchase(filteredPurchases, filteredPayments)
 
     // filteredPurchases/Payments/Rebates are each already newest-first from the API (created_at desc).
     // Record each entry's position in its source array so same-date ties can be broken by true
@@ -323,15 +355,15 @@ function SupplierLedgerPageInner() {
       const preview = names.length <= 2
         ? names.join(", ")
         : `${names[0]}, ${names[1]} +${names.length - 2} more`
-      const payStatus = p.paymentStatus === "Paid" ? "Fully Paid"
-        : p.paymentStatus === "Partial" ? "Partial"
-        : "Unpaid"
+      const paidSoFar = downPaymentTotalByPurchase.get(p.id) ?? 0
+      const stillOwed = Math.max(0, p.total - paidSoFar)
+      const payStatus = stillOwed <= 0 ? "Fully Paid" : paidSoFar > 0 ? "Partial" : "Unpaid"
       raw.push({
         id: p.id, date: p.date, reference: p.poNumber,
         description: preview || `${p.items.length} item(s)`,
-        // Net effect on the balance: what's still owed, after every payment made against this PO
-        debit: 0, credit: p.balanceDue,
-        grossCredit: p.total, grossDebit: p.amountPaid,
+        // Net effect on the balance: what's still owed, after every down payment made against this PO
+        debit: 0, credit: stillOwed,
+        grossCredit: p.total, grossDebit: paidSoFar,
         type: "purchase", supplierName: supName, payStatus, recency: -idx,
         items: p.items.map(i => ({ name: i.productName.trim(), qty: i.quantity, unitCost: i.unitCost, total: i.total })),
       })
