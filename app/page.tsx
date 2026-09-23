@@ -341,24 +341,47 @@ export default function DashboardPage() {
       if (!p.supplierId) return
       owedPerSupplier.set(p.supplierId, (owedPerSupplier.get(p.supplierId) ?? 0) + p.total)
     })
+    // Include each supplier's own openingBalance (a debt carried over from
+    // before this system was used) - without this, a supplier owed money
+    // from before go-live was silently invisible here, while the Supplier
+    // Ledger (which has an explicit Opening Balance row) already counted it
+    // correctly - confirmed live as a real Rs 139,000 gap on the customer
+    // side of this same bug. Iterates every supplier with either a nonzero
+    // opening balance or at least one purchase - not just owedPerSupplier's
+    // keys - so a supplier with an opening debt and zero purchases since
+    // isn't silently skipped.
+    const supplierIds = new Set([...owedPerSupplier.keys(), ...suppliers.filter(s => (s.openingBalance ?? 0) !== 0).map(s => s.id)])
     let total = 0
-    owedPerSupplier.forEach((totalOwed, supplierId) => {
-      total += Math.max(0, totalOwed - (paidToSupplierMap.get(supplierId) ?? 0))
+    supplierIds.forEach(supplierId => {
+      const supplierOpening = suppliers.find(s => s.id === supplierId)?.openingBalance ?? 0
+      const totalOwed = owedPerSupplier.get(supplierId) ?? 0
+      total += Math.max(0, supplierOpening + totalOwed - (paidToSupplierMap.get(supplierId) ?? 0))
     })
     return total
-  }, [purchases, paidToSupplierMap])
+  }, [purchases, paidToSupplierMap, suppliers])
 
   const totalReceivableFromCustomers = useMemo(() => {
     const billedPerCustomer = new Map<string, number>()
     sales.filter(s => s.status !== "Refunded" && s.customerId).forEach(s => {
       billedPerCustomer.set(s.customerId!, (billedPerCustomer.get(s.customerId!) ?? 0) + s.total)
     })
+    // Include each customer's own openingBalance (a debt carried over from
+    // before this system was used) - confirmed live: two real customers
+    // (ali ammar Rs 133,000, Qaisar MESAM Rs 6,000) had this debt entirely
+    // invisible here, while the Customer Ledger's Opening Balance row
+    // already counted it correctly. Iterates every customer with either a
+    // nonzero opening balance or at least one sale - not just
+    // billedPerCustomer's keys - so a customer with an opening debt and no
+    // sales since isn't silently skipped.
+    const customerIds = new Set([...billedPerCustomer.keys(), ...customers.filter(c => (c.openingBalance ?? 0) !== 0).map(c => c.id)])
     let total = 0
-    billedPerCustomer.forEach((totalBilled, customerId) => {
-      total += Math.max(0, totalBilled - (receivedFromCustomerMap.get(customerId) ?? 0))
+    customerIds.forEach(customerId => {
+      const custOpening = customers.find(c => c.id === customerId)?.openingBalance ?? 0
+      const totalBilled = billedPerCustomer.get(customerId) ?? 0
+      total += Math.max(0, custOpening + totalBilled - (receivedFromCustomerMap.get(customerId) ?? 0))
     })
     return total
-  }, [sales, receivedFromCustomerMap])
+  }, [sales, receivedFromCustomerMap, customers])
 
   // Safety net: if purchases.balance_due / sales.amountReceived (the cached
   // fields settleSupplierPayment/settleCustomerPayment maintain, still used
@@ -419,15 +442,20 @@ export default function DashboardPage() {
         owedPerSupplier.set(p.supplierId, { name: p.supplierName || "Unknown Supplier", amount: p.total, date: p.date })
       }
     })
+    // Opening balance included, same as totalPayableToSuppliers - otherwise
+    // this breakdown dialog's rows would never sum to the card total above it.
     return [...owedPerSupplier.entries()]
-      .map(([supplierId, entry]) => ({
-        name: entry.name,
-        amount: Math.max(0, entry.amount - (paidToSupplierMap.get(supplierId) ?? 0)),
-        date: entry.date,
-      }))
+      .map(([supplierId, entry]) => {
+        const supplierOpening = suppliers.find(s => s.id === supplierId)?.openingBalance ?? 0
+        return {
+          name: entry.name,
+          amount: Math.max(0, supplierOpening + entry.amount - (paidToSupplierMap.get(supplierId) ?? 0)),
+          date: entry.date,
+        }
+      })
       .filter(row => row.amount > 0)
       .sort((a, b) => b.date.localeCompare(a.date))
-  }, [purchases, paidToSupplierMap])
+  }, [purchases, paidToSupplierMap, suppliers])
 
   const receivableByCustomer = useMemo(() => {
     // Same reasoning as payableBySupplier above - walk-in sales with no
@@ -444,15 +472,21 @@ export default function DashboardPage() {
         billedPerCustomer.set(key, { name: s.customerName || "Walk-in Customer", amount: s.total, date: s.date })
       }
     })
+    // Opening balance included, same as totalReceivableFromCustomers -
+    // otherwise this breakdown dialog's rows would never sum to the card
+    // total above it.
     return [...billedPerCustomer.entries()]
-      .map(([customerId, entry]) => ({
-        name: entry.name,
-        amount: Math.max(0, entry.amount - (receivedFromCustomerMap.get(customerId) ?? 0)),
-        date: entry.date,
-      }))
+      .map(([customerId, entry]) => {
+        const custOpening = customers.find(c => c.id === customerId)?.openingBalance ?? 0
+        return {
+          name: entry.name,
+          amount: Math.max(0, custOpening + entry.amount - (receivedFromCustomerMap.get(customerId) ?? 0)),
+          date: entry.date,
+        }
+      })
       .filter(row => row.amount > 0)
       .sort((a, b) => b.date.localeCompare(a.date))
-  }, [sales, receivedFromCustomerMap])
+  }, [sales, receivedFromCustomerMap, customers])
 
   const receivableByPerson = useMemo(() => {
     const balances = new Map<string, number>(persons.map(p => [p.id, p.openingBalance]))

@@ -87,6 +87,26 @@ function PersonLedgerPageInner() {
 
   const selectedPerson = persons.find(p => p.id === selectedPersonId)
 
+  // "All Persons" combined closing balance = the SUM of each person's own
+  // closing balance, not the last chronological row of the combined
+  // timeline below - once every person's gave/took transactions are
+  // interleaved by date, the running total's last row stops meaning
+  // anything for any single person. Same fix as
+  // app/ledger/suppliers/page.tsx (allSuppliersClosingBalance) and
+  // app/ledger/customers/page.tsx (allCustomersClosingBalance) - confirmed
+  // on the supplier page live as a real, visible bug.
+  const allPersonsClosingBalance = useMemo(() => {
+    let total = 0
+    persons.forEach(p => {
+      let balance = p.openingBalance ?? 0
+      transactions.filter(t => t.personId === p.id).forEach(t => {
+        balance += t.type === "gave" ? t.amount : -t.amount
+      })
+      total += balance
+    })
+    return total
+  }, [persons, transactions])
+
   const allEntries = useMemo<LedgerEntry[]>(() => {
     const raw: Omit<LedgerEntry, "balance">[] = []
 
@@ -150,7 +170,12 @@ function PersonLedgerPageInner() {
   // Includes the Opening Balance row so Total Gave/Took match what the rows visibly sum to.
   const totalDebit = filtered.reduce((s, e) => s + e.debit, 0)
   const totalCredit = filtered.reduce((s, e) => s + e.credit, 0)
-  const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : (selectedPerson?.openingBalance ?? 0)
+  // Single person: the running balance's own last row is correct. "All
+  // Persons": see allPersonsClosingBalance above for why the last row
+  // can't be used there.
+  const closingBalance = selectedPersonId
+    ? (filtered.length > 0 ? filtered[filtered.length - 1].balance : (selectedPerson?.openingBalance ?? 0))
+    : allPersonsClosingBalance
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const displayOrder = useMemo(() => [...filtered].reverse(), [filtered])

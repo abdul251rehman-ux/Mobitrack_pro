@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { getCustomers } from "@/lib/api/customers"
 import { getSales, settleCustomerPayment } from "@/lib/api/sales"
+import { computeNetReceivedByCustomer } from "@/lib/api/payment-sync"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { createAuditLog } from "@/lib/api/audit"
@@ -559,6 +560,27 @@ function CustomerLedgerPageInner() {
     })
   }, [customers, customerBalanceMap, accountStatus])
 
+  // "All Customers" combined closing balance = the SUM of each customer's
+  // own closing balance, not the last chronological row of the combined
+  // timeline below - once every customer's sales/payments are interleaved
+  // by date, the running total's last row stops meaning anything for any
+  // single customer. Same fix as app/ledger/suppliers/page.tsx
+  // (allSuppliersClosingBalance) - confirmed there live as a real, visible
+  // bug (Rs 6,353,500 shown instead of the true Rs 119,000).
+  const allCustomersClosingBalance = useMemo(() => {
+    const netReceivedMap = computeNetReceivedByCustomer(customerPayments)
+    const billedMap = new Map<string, number>()
+    sales.filter(s => s.status !== "Refunded" && s.customerId).forEach(s => {
+      billedMap.set(s.customerId!, (billedMap.get(s.customerId!) ?? 0) + s.total)
+    })
+    let total = 0
+    billedMap.forEach((billed, customerId) => {
+      const custOpening = customers.find(c => c.id === customerId)?.openingBalance ?? 0
+      total += custOpening + billed - (netReceivedMap.get(customerId) ?? 0)
+    })
+    return total
+  }, [sales, customerPayments, customers])
+
   // Build all ledger entries
   const allEntries = useMemo<LedgerEntry[]>(() => {
     const raw: Omit<LedgerEntry, "balance">[] = []
@@ -659,7 +681,12 @@ function CustomerLedgerPageInner() {
   // Includes the Opening Balance row so Total Debit/Credit match what the rows visibly sum to.
   const totalDebit     = filtered.reduce((s, e) => s + e.debit,  0)
   const totalCredit    = filtered.reduce((s, e) => s + e.credit, 0)
-  const closingBalance = filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance
+  // Single customer: the running balance's own last row is correct. "All
+  // Customers": see allCustomersClosingBalance above for why the last row
+  // can't be used there.
+  const closingBalance = selectedCustomerId
+    ? (filtered.length > 0 ? filtered[filtered.length - 1].balance : openingBalance)
+    : allCustomersClosingBalance
 
   // Display newest first (balance already computed oldest→newest above)
   const displayEntries = [...filtered].reverse()
