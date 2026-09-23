@@ -219,6 +219,21 @@ function ReturnsPageInner() {
   // to real sale/customer records (see handleCreateReturn).
   const [matchedSale, setMatchedSale] = useState<Sale | null>(null)
 
+  // Original sale price for a return item being viewed in the details dialog.
+  // item.unitPrice on a saved return is the refund price actually given (which
+  // may be lower than what the customer originally paid) - this looks up what
+  // they originally paid so both can be shown side by side.
+  const originalPriceForViewItem = (ret: Return, item: ReturnItem): number | null => {
+    const sale = salesList.find((s) => s.id === ret.saleId)
+    if (!sale) return null
+    const bySaleItemId = item.saleItemId && sale.items.find((si) => si.id === item.saleItemId)
+    if (bySaleItemId) return bySaleItemId.unitPrice
+    const byMatch = sale.items.find(
+      (si) => si.productId === item.productId && (!item.imei || si.imei === item.imei)
+    )
+    return byMatch ? byMatch.unitPrice : null
+  }
+
   // â"€â"€ Stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const stats = useMemo(() => {
     const total = returnsList.length
@@ -1501,20 +1516,32 @@ function ReturnsPageInner() {
                           </Badge>
                         </div>
                         {item.imei && <p className="text-xs text-slate-400">IMEI: {item.imei}</p>}
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>Qty {item.quantity} × {formatCurrency(item.unitPrice)}</span>
-                          <span
-                            className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
-                              item.condition === "Good"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : item.condition === "Damaged"
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : "bg-rose-50 text-rose-700 border border-rose-200"
-                            }`}
-                          >
-                            {item.condition}
-                          </span>
-                        </div>
+                        {(() => {
+                          const orig = originalPriceForViewItem(viewReturn, item)
+                          const adjusted = orig !== null && orig !== item.unitPrice
+                          return (
+                            <div className="flex items-center justify-between text-xs text-slate-500">
+                              {adjusted ? (
+                                <span>
+                                  Qty {item.quantity} · Sold at {formatCurrency(orig!)} · Refunded {formatCurrency(item.unitPrice)}
+                                </span>
+                              ) : (
+                                <span>Qty {item.quantity} × {formatCurrency(item.unitPrice)}</span>
+                              )}
+                              <span
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium shrink-0 ${
+                                  item.condition === "Good"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : item.condition === "Damaged"
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                                }`}
+                              >
+                                {item.condition}
+                              </span>
+                            </div>
+                          )
+                        })()}
                         <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
                           <span className="text-xs text-slate-400">Total</span>
                           <span className="font-semibold text-sm text-slate-900">{formatCurrency(item.lineTotal)}</span>
@@ -1531,13 +1558,17 @@ function ReturnsPageInner() {
                           <TableHead>Product</TableHead>
                           <TableHead>Type</TableHead>
                           <TableHead>Qty</TableHead>
-                          <TableHead>Price</TableHead>
+                          <TableHead>Sold Price</TableHead>
+                          <TableHead>Refund Price</TableHead>
                           <TableHead>Total</TableHead>
                           <TableHead>Condition</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {viewReturn.items.map((item, idx) => (
+                        {viewReturn.items.map((item, idx) => {
+                          const orig = originalPriceForViewItem(viewReturn, item)
+                          const adjusted = orig !== null && orig !== item.unitPrice
+                          return (
                           <TableRow key={idx}>
                             <TableCell>
                               <p className="font-medium text-slate-800">{item.productName}</p>
@@ -1551,7 +1582,10 @@ function ReturnsPageInner() {
                               </Badge>
                             </TableCell>
                             <TableCell>{item.quantity}</TableCell>
-                            <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                            <TableCell className="text-slate-500">{orig !== null ? formatCurrency(orig) : "—"}</TableCell>
+                            <TableCell className={adjusted ? "font-medium text-amber-700" : ""}>
+                              {formatCurrency(item.unitPrice)}
+                            </TableCell>
                             <TableCell className="font-medium">{formatCurrency(item.lineTotal)}</TableCell>
                             <TableCell>
                               <span
@@ -1567,7 +1601,8 @@ function ReturnsPageInner() {
                               </span>
                             </TableCell>
                           </TableRow>
-                        ))}
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   </div>
