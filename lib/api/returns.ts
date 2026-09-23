@@ -89,7 +89,7 @@ export async function createReturn(
       status: data.status,
       restock_items: data.restockItems,
       exchange_sale_id: data.exchangeSaleId || null,
-      processed_by: data.processedBy,
+      processed_by: data.processedBy || null,
       notes: data.notes || null,
     }
 

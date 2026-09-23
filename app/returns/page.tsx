@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner"
 
 import { getReturns, createReturn, updateReturnStatus } from "@/lib/api/returns"
+import { getProfiles } from "@/lib/api/settings"
 import { getSales, reserveReturnQty, releaseReturnQty } from "@/lib/api/sales"
 import { createAuditLog } from "@/lib/api/audit"
 import { useAuth } from "@/context/auth-context"
@@ -103,7 +104,15 @@ interface NewReturnItem {
   quantity: number
   maxQty: number          // originalQty - alreadyReturned - what's actually returnable; Infinity for manual entry
   originalQty: number
+  /** What the customer originally paid per unit - fixed, shown as reference
+   *  only, never edited directly. */
   unitPrice: number
+  /** What's actually being refunded per unit - defaults to unitPrice, but
+   *  the shopkeeper can lower it (a restocking fee, condition-based
+   *  deduction, partial goodwill refund, etc.) without touching the
+   *  original sale record. This is what the return total is calculated
+   *  from, not unitPrice. */
+  refundPrice: number
   condition: ReturnItem["condition"]
   imei: string
   selected: boolean
@@ -117,6 +126,7 @@ const EMPTY_ITEM: NewReturnItem = {
   maxQty: Infinity,
   originalQty: 1,
   unitPrice: 0,
+  refundPrice: 0,
   condition: "Good",
   imei: "",
   selected: true,
@@ -134,16 +144,22 @@ function ReturnsPageInner() {
   const [returnsList, setReturnsList] = useState<Return[]>([])
   const [salesList, setSalesList] = useState<Sale[]>([])
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
+  // Maps processedBy (a profiles.id UUID) to a display name for the view
+  // dialog - processedBy itself must stay a real UUID (it's a DB foreign
+  // key), so the readable name is resolved separately rather than stored
+  // as the field itself.
+  const [staffNameById, setStaffNameById] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true)
-        const [data, sales, accounts] = await Promise.all([getReturns(), getSales(), getFinanceAccounts()])
+        const [data, sales, accounts, profiles] = await Promise.all([getReturns(), getSales(), getFinanceAccounts(), getProfiles()])
         setReturnsList(data)
         setSalesList(sales)
         setFinanceAccounts(accounts)
+        setStaffNameById(Object.fromEntries(profiles.map(p => [p.id, p.name])))
         const def = accounts.find(a => a.isDefaultCash) ?? accounts[0]
         if (def) setNewAccountId(def.id)
       } catch (err) {
@@ -277,6 +293,7 @@ function ReturnsPageInner() {
           maxQty,
           originalQty: si.quantity,
           unitPrice: si.unitPrice,
+          refundPrice: si.unitPrice,
           condition: "Good" as ReturnItem["condition"],
           imei: si.imei ?? "",
           selected: false,
@@ -311,7 +328,7 @@ function ReturnsPageInner() {
   function calcRefundTotal(): number {
     return newItems
       .filter((item) => item.selected)
-      .reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+      .reduce((sum, item) => sum + item.quantity * item.refundPrice, 0)
   }
 
   function updateItem(index: number, patch: Partial<NewReturnItem>) {
@@ -365,6 +382,11 @@ function ReturnsPageInner() {
 
     const refundAmount = calcRefundTotal()
 
+    // return_items.unit_price/line_total record the REFUND price (what was
+    // actually given back), not the original sale price - that's the real
+    // money that moved, and it's what refund_amount is built from. The
+    // original sale price is still recoverable via saleId/the linked sale
+    // whenever needed, so nothing is lost by not storing it a second time.
     const items: ReturnItem[] = selectedItems.map((it) => ({
       saleItemId: it.saleItemId,
       productId: it.productId || `ret-${Date.now()}`,
@@ -372,8 +394,8 @@ function ReturnsPageInner() {
       // DB return_items CHECK only allows Mobile/Accessory - map UsedPhone â†' Mobile
       productType: (it.productType === "UsedPhone" ? "Mobile" : it.productType) as ReturnItem["productType"],
       quantity: it.quantity,
-      unitPrice: it.unitPrice,
-      lineTotal: it.quantity * it.unitPrice,
+      unitPrice: it.refundPrice,
+      lineTotal: it.quantity * it.refundPrice,
       imei: it.imei || undefined,
       condition: it.condition,
     }))
@@ -410,7 +432,11 @@ function ReturnsPageInner() {
       refundMethod: newRefundMethod,
       status: "Pending",
       restockItems: newRestock,
-      processedBy: "Current User",
+      // The DB column is a UUID foreign key to profiles - "Current User"
+      // (a display label, not an id) was failing this insert on every
+      // single use, confirmed live. undefined when not logged in (should
+      // not happen in practice, but the column is nullable).
+      processedBy: user?.id,
       notes: newNotes || undefined,
       createdAt: new Date().toISOString(),
     }
@@ -1247,16 +1273,37 @@ function ReturnsPageInner() {
                           className="h-9"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Unit Price (â‚¨)</Label>
-                        <MoneyInput
-                          min={0}
-                          disabled={matchedSale ? !item.selected : false}
-                          value={item.unitPrice}
-                          onChange={(v) => updateItem(idx, { unitPrice: Math.max(0, Number(v)) })}
-                          className="h-9"
-                        />
-                      </div>
+                      {matchedSale ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Original Sale Price</Label>
+                            <p className="h-9 px-3 flex items-center rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-500">
+                              {formatCurrency(item.unitPrice)}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Refund Amount {item.refundPrice !== item.unitPrice && "(adjusted)"}</Label>
+                            <MoneyInput
+                              min={0}
+                              max={item.unitPrice}
+                              disabled={!item.selected}
+                              value={item.refundPrice}
+                              onChange={(v) => updateItem(idx, { refundPrice: Math.min(item.unitPrice, Math.max(0, Number(v))) })}
+                              className="h-9"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="space-y-1">
+                          <Label className="text-xs">Unit Price</Label>
+                          <MoneyInput
+                            min={0}
+                            value={item.unitPrice}
+                            onChange={(v) => updateItem(idx, { unitPrice: Math.max(0, Number(v)), refundPrice: Math.max(0, Number(v)) })}
+                            className="h-9"
+                          />
+                        </div>
+                      )}
                       <div className="space-y-1">
                         <Label className="text-xs">Condition</Label>
                         <Select
@@ -1427,7 +1474,7 @@ function ReturnsPageInner() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Processed By</p>
-                    <p className="text-slate-800">{viewReturn.processedBy}</p>
+                    <p className="text-slate-800">{(viewReturn.processedBy && staffNameById[viewReturn.processedBy]) || "—"}</p>
                   </div>
                 </div>
 
