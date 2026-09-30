@@ -208,9 +208,16 @@ function ReturnsPageInner() {
   const [newCustomerName, setNewCustomerName] = useState("")
   const [newCustomerPhone, setNewCustomerPhone] = useState("")
   const [newReason, setNewReason] = useState<ReturnReason>("Defective")
-  const [newRefundType, setNewRefundType] = useState<"cash" | "store_credit">("cash")
+  const [newRefundType, setNewRefundType] = useState<"cash" | "store_credit" | "partial">("cash")
   const [newRefundMethod, setNewRefundMethod] = useState("Cash")
   const [newAccountId, setNewAccountId] = useState("")
+  // Only used when newRefundType === "partial": how much is being handed over
+  // right now. The rest (refundAmount - this) becomes a Ledger credit for the
+  // customer instead of leaving the account - e.g. a Rs 99,000 refund where
+  // the shopkeeper only has Rs 50,000 on hand today. Requires a real
+  // registered customer (matchedSale?.customerId) since a walk-in has no
+  // Ledger to carry the remainder in - they must be paid the full amount.
+  const [newCashPaidNow, setNewCashPaidNow] = useState(0)
   const [newRestock, setNewRestock] = useState(true)
   const [newNotes, setNewNotes] = useState("")
   const [newItems, setNewItems] = useState<NewReturnItem[]>([{ ...EMPTY_ITEM }])
@@ -282,6 +289,7 @@ function ReturnsPageInner() {
     setNewReason("Defective")
     setNewRefundType("cash")
     setNewRefundMethod("Cash")
+    setNewCashPaidNow(0)
     const def = financeAccounts.find(a => a.isDefaultCash) ?? financeAccounts[0]
     if (def) setNewAccountId(def.id)
     setNewRestock(true)
@@ -391,6 +399,18 @@ function ReturnsPageInner() {
         return
       }
     }
+    // Partial requires a real customer (the Ledger carries the remainder) -
+    // the dropdown already hides this option for a walk-in, but guard here
+    // too in case newRefundType was left over from a previous invoice lookup
+    // that did have a matched customer.
+    if (newRefundType === "partial" && !matchedSale?.customerId) {
+      toast.error("Partial refund requires a registered customer - walk-in customers must be paid in full")
+      return
+    }
+    if (newRefundType === "partial" && !newAccountId) {
+      toast.error("Please select an account to pay the cash portion from")
+      return
+    }
 
     setCreating(true)
     try {
@@ -468,7 +488,7 @@ function ReturnsPageInner() {
           reason: newReturn.reason,
           subtotal: newReturn.subtotal,
           refundAmount: newReturn.refundAmount,
-          refundMethod: newRefundType === "store_credit" ? "Store Credit" : newRefundMethod,
+          refundMethod: newRefundType === "store_credit" ? "Store Credit" : newRefundType === "partial" ? "Partial (Cash + Ledger)" : newRefundMethod,
           status: newReturn.status,
           restockItems: newReturn.restockItems,
           processedBy: newReturn.processedBy,
@@ -612,12 +632,72 @@ function ReturnsPageInner() {
           .update({ refund_type: "store_credit" })
           .eq("id", (created as any).id)
         if (tagErr) throw new Error(`Failed to tag return as store credit: ${tagErr.message}`)
+      } else if (newRefundType === "partial" && matchedSale?.customerId) {
+        // Splits the refund into two pieces: `newCashPaidNow` actually
+        // leaves the account today, and the rest (refundAmount -
+        // newCashPaidNow) becomes a Ledger credit the customer can draw down
+        // later - e.g. a Rs 99,000 refund where the shopkeeper only has Rs
+        // 50,000 on hand. Requires a real customer (validated above) since a
+        // walk-in has no Ledger to carry the remainder in.
+        const remainderOnLedger = Math.max(0, refundAmount - newCashPaidNow)
+
+        if (newCashPaidNow > 0) {
+          const { error: refundFtErr } = await supabase.from("finance_transactions").insert({
+            tenant_id: tenantId,
+            date: newReturn.date,
+            type: "sale_refund",
+            account_id: newAccountId,
+            amount: newCashPaidNow,
+            reference_type: "Return",
+            reference_number: newReturn.returnNumber,
+            description: `Partial refund (cash portion) - ${newReturn.returnNumber} (${newReturn.invoiceNumber})`,
+            notes: newReturn.notes ?? null,
+          })
+          if (refundFtErr) throw new Error(`Finance audit failed: ${refundFtErr.message}`)
+
+          await adjustAccountBalance(newAccountId, -newCashPaidNow)
+        }
+
+        // One "Paid" entry for the FULL refund amount - the customer is due
+        // the whole thing, and the Ledger is what tracks how much of it is
+        // still outstanding vs. already paid out. Recording only the
+        // remainder would make the Ledger blind to the cash portion ever
+        // having been part of this refund.
+        const { error: refundPayErr } = await supabase.from("payments").insert({
+          tenant_id: tenantId,
+          date: newReturn.date,
+          type: "Paid",
+          entity_type: "Customer",
+          entity_id: matchedSale.customerId,
+          entity_name: newReturn.customerName,
+          reference_type: "Return",
+          reference_number: newReturn.returnNumber,
+          reference_id: (created as any).id,
+          amount: refundAmount,
+          method: "Partial (Cash + Ledger)",
+          status: "Completed",
+          notes: `Refund for return ${newReturn.returnNumber} (${newReturn.invoiceNumber}) - Rs ${newCashPaidNow.toLocaleString()} paid now, Rs ${remainderOnLedger.toLocaleString()} on Ledger`,
+        })
+        if (refundPayErr) throw new Error(`Failed to record refund payment: ${refundPayErr.message}`)
+
+        const { error: tagErr } = await supabase.from("returns")
+          .update({ account_id: newCashPaidNow > 0 ? newAccountId : null, refund_type: "partial", cash_paid_now: newCashPaidNow })
+          .eq("id", (created as any).id)
+        if (tagErr) throw new Error(`Failed to tag return as partial: ${tagErr.message}`)
       }
 
       setReturnsList((prev) => [created, ...prev])
       setShowCreate(false)
       resetForm()
-      toast.success(`Return ${newReturn.returnNumber} created - ${newRefundType === "store_credit" ? "Store Credit issued" : `Rs ${refundAmount.toLocaleString()} refunded from account`}`)
+      toast.success(
+        `Return ${newReturn.returnNumber} created - ${
+          newRefundType === "store_credit"
+            ? "Store Credit issued"
+            : newRefundType === "partial"
+            ? `Rs ${newCashPaidNow.toLocaleString()} paid now, Rs ${Math.max(0, refundAmount - newCashPaidNow).toLocaleString()} added to Ledger`
+            : `Rs ${refundAmount.toLocaleString()} refunded from account`
+        }`
+      )
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create return")
     } finally {
@@ -679,7 +759,7 @@ function ReturnsPageInner() {
         .eq("id", id)
         .eq("tenant_id", tenantId)
         .eq("status", "Pending")
-        .select("refund_type, account_id, refund_amount, sale_id, customer_id, customer_name, return_number")
+        .select("refund_type, account_id, refund_amount, cash_paid_now, sale_id, customer_id, customer_name, return_number")
       if (statusErr) throw new Error(statusErr.message)
 
       const retRow = statusRows?.[0]
@@ -689,23 +769,30 @@ function ReturnsPageInner() {
         return
       }
 
-      // Reverse cash refund that was issued when the return was created
-      if (retRow.refund_type === "cash" && retRow.account_id && retRow.refund_amount > 0) {
+      // Reverse cash refund that was issued when the return was created.
+      // For "partial", only cash_paid_now actually left the account (the
+      // rest was a Ledger credit, reversed separately below via the
+      // compensating "Received" entry) - crediting back the full
+      // refund_amount here would overcredit the account by the Ledger
+      // portion that never left it.
+      if ((retRow.refund_type === "cash" || retRow.refund_type === "partial") && retRow.account_id) {
         const accId = retRow.account_id as string
-        const amount = retRow.refund_amount as number
-        // Atomic, row-locked credit (supabase/fix_balance_race_condition.sql).
-        await adjustAccountBalance(accId, amount)
-        // Record the reversal transaction
-        await supabase.from("finance_transactions").insert({
-          tenant_id: tenantId,
-          date: todayPKT(),
-          type: "return_reversal",
-          account_id: accId,
-          amount,
-          reference_type: "Return",
-          reference_number: id,
-          description: `Return rejected - refund reversed`,
-        })
+        const amount = retRow.refund_type === "partial" ? (retRow.cash_paid_now as number) : (retRow.refund_amount as number)
+        if (amount > 0) {
+          // Atomic, row-locked credit (supabase/fix_balance_race_condition.sql).
+          await adjustAccountBalance(accId, amount)
+          // Record the reversal transaction
+          await supabase.from("finance_transactions").insert({
+            tenant_id: tenantId,
+            date: todayPKT(),
+            type: "return_reversal",
+            account_id: accId,
+            amount,
+            reference_type: "Return",
+            reference_number: id,
+            description: `Return rejected - refund reversed`,
+          })
+        }
       }
 
       // Re-read return_items fresh from the DB rather than trusting the
@@ -754,7 +841,7 @@ function ReturnsPageInner() {
           reference_number: `${retRow.return_number}-REJECTED`,
           reference_id: id,
           amount: retRow.refund_amount,
-          method: retRow.refund_type === "store_credit" ? "Store Credit" : "Cash",
+          method: retRow.refund_type === "store_credit" ? "Store Credit" : retRow.refund_type === "partial" ? "Partial (Cash + Ledger)" : "Cash",
           status: "Completed",
           notes: `Return ${retRow.return_number} rejected - reversing its refund`,
         })
@@ -1368,11 +1455,16 @@ function ReturnsPageInner() {
               </div>
               <div className="space-y-2">
                 <Label>Refund Type</Label>
-                <Select value={newRefundType} onValueChange={v => setNewRefundType(v as "cash" | "store_credit")}>
+                <Select value={newRefundType} onValueChange={v => setNewRefundType(v as "cash" | "store_credit" | "partial")}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">Cash Refund (money out)</SelectItem>
                     <SelectItem value="store_credit">Store Credit (no money out)</SelectItem>
+                    {/* Walk-in has no Ledger to carry a remainder in, so they
+                        must always be paid in full - no partial option. */}
+                    {matchedSale?.customerId && (
+                      <SelectItem value="partial">Partial (cash now + rest on Ledger)</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1397,6 +1489,34 @@ function ReturnsPageInner() {
             {newRefundType === "store_credit" && (
               <div className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2.5 text-xs text-indigo-700">
                 Store Credit issued - no money leaves any account. Customer can use this credit on next purchase.
+              </div>
+            )}
+            {newRefundType === "partial" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Pay Refund From Account</Label>
+                  <Select value={newAccountId} onValueChange={setNewAccountId}>
+                    <SelectTrigger><SelectValue placeholder="Select account..." /></SelectTrigger>
+                    <SelectContent>
+                      {financeAccounts.map(a => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name} - Rs {a.currentBalance.toLocaleString()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Cash Paid Now</Label>
+                  <MoneyInput
+                    value={newCashPaidNow}
+                    onChange={(v) => setNewCashPaidNow(Math.min(calcRefundTotal(), Math.max(0, Number(v))))}
+                  />
+                </div>
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-700">
+                  Rs {newCashPaidNow.toLocaleString()} paid now from the account, remaining Rs{" "}
+                  {Math.max(0, calcRefundTotal() - newCashPaidNow).toLocaleString()} added as credit to {newCustomerName || "the customer"}'s Ledger.
+                </div>
               </div>
             )}
 
