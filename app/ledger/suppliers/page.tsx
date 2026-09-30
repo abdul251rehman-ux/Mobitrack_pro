@@ -6,7 +6,7 @@ import { Download, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, F
 import { toast } from "sonner"
 import { getSuppliers } from "@/lib/api/suppliers"
 import { getPurchases, settleSupplierPayment } from "@/lib/api/purchases"
-import { computePaidPerPurchase, computeNetPaidBySupplier } from "@/lib/api/payment-sync"
+import { computePaidPerPurchase, computeNetPaidBySupplier, findRecentDuplicatePayment } from "@/lib/api/payment-sync"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { getRebateEntries } from "@/lib/api/rebate"
@@ -117,6 +117,18 @@ function SupplierLedgerPageInner() {
         : selectedAccount?.type === "mobile_wallet" ? "Mobile Wallet"
         : "Cash"
       const refNum = "PAY-SUP-" + Date.now().toString().slice(-8)
+
+      // Guards against two staff/tabs both clicking "Pay Supplier" for the
+      // same supplier/amount within moments of each other - each click
+      // generates its own fresh refNum, so a reference-number check alone
+      // wouldn't catch this. See findRecentDuplicatePayment's own comment.
+      const dupe = await findRecentDuplicatePayment(tenantId, "Supplier", selectedSupplierId, "Paid", amount)
+      if (dupe) {
+        const proceed = window.confirm(
+          `A payment of ${formatCurrency(amount)} to this supplier was just recorded moments ago. Record this as a separate payment anyway?`
+        )
+        if (!proceed) { setPaying(false); return }
+      }
 
       // 1. Insert payment record
       const { error: payErr } = await supabase.from("payments").insert({
