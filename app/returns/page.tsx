@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { getReturns, createReturn, updateReturnStatus } from "@/lib/api/returns"
+import { getReturns, createReturn } from "@/lib/api/returns"
 import { getProfiles } from "@/lib/api/settings"
 import { getSales, reserveReturnQty, releaseReturnQty } from "@/lib/api/sales"
 import { createAuditLog } from "@/lib/api/audit"
@@ -853,8 +853,29 @@ function ReturnsPageInner() {
     const ret = returnsList.find(r => r.id === id)
     if (!ret) return
     setProcessingId(id)
+    const tenantId = await getTenantId()
     try {
-      const tenantId = await getTenantId()
+      // Atomic, status-guarded claim BEFORE the restock loop runs - without
+      // this, two tabs/devices clicking Complete on the same return at
+      // nearly the same time would both pass the client-side `processingId`
+      // check (each in its own tab) and both run the restock loop, double-
+      // crediting accessory stock (a plain read-then-write, not an atomic
+      // RPC) and potentially double-restoring IMEIs. This UPDATE only
+      // succeeds for whichever request gets there first; the loser gets 0
+      // rows back and aborts before touching any stock.
+      const { data: claimRows, error: claimErr } = await supabase
+        .from("returns")
+        .update({ status: "Completed", resolved_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("tenant_id", tenantId)
+        .eq("status", "Pending")
+        .select("id")
+      if (claimErr) throw new Error(claimErr.message)
+      if (!claimRows || claimRows.length === 0) {
+        toast.error("This return was already completed or rejected")
+        setProcessingId(null)
+        return
+      }
 
       // â"€â"€ 1. Reverse inventory - all steps must succeed before marking Completed
       if (ret.restockItems) {
@@ -922,15 +943,20 @@ function ReturnsPageInner() {
       }
 
       // Finance was already deducted when the return was created (Pending state).
-      // No second deduction here - just mark as Completed.
+      // No second deduction here - status was already set to Completed by
+      // the guarded claim above.
 
-      await updateReturnStatus(id, "Completed")
       setReturnsList(prev => prev.map(r =>
         r.id === id ? { ...r, status: "Completed" as ReturnStatus, resolvedAt: new Date().toISOString() } : r
       ))
       toast.success("Return completed - inventory restocked & refund recorded")
       logReturnStatusChange(ret, "Completed", "UPDATE")
     } catch (err) {
+      // Restock failed after the status claim already committed - revert
+      // back to Pending so this isn't stuck "Completed" with inventory
+      // never actually restocked, and so a retry (or a different staff
+      // member) can claim it again.
+      await supabase.from("returns").update({ status: "Pending", resolved_at: null }).eq("id", id).eq("tenant_id", tenantId)
       toast.error(err instanceof Error ? err.message : "Failed to complete return")
     } finally {
       setProcessingId(null)
