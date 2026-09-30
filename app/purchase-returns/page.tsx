@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react"
 import {
-  RotateCcw, Search, Plus, CheckCircle2, XCircle, Clock,
+  RotateCcw, Search, Plus, CheckCircle2, Clock,
   Package, Truck, Minus,
   AlertCircle, BookOpen,
 } from "lucide-react"
@@ -50,6 +50,7 @@ interface ReturnLineItem {
   originalQty: number      // total purchased
   alreadyReturned: number  // how many returned in past returns
   unitCost: number
+  originalUnitCost: number // what was actually paid on the original purchase - unitCost is editable, this isn't, so the UI can warn when they diverge
   reason: string
   imeis: string[]          // all IMEIs from original purchase for this line
   selected: boolean
@@ -216,7 +217,8 @@ function PurchaseReturnsPageInner() {
           maxQty,
           originalQty:    item.quantity,
           alreadyReturned,
-          unitCost:       item.unitCost,
+          unitCost:         item.unitCost,
+          originalUnitCost: item.unitCost,
           reason:         "Defective",
           imeis,
           selected:       false,
@@ -337,6 +339,23 @@ function PurchaseReturnsPageInner() {
       }
     }
 
+    // Unit cost is editable per line (e.g. a partial credit agreed with the
+    // supplier), but a significant deviation from what was actually paid is
+    // more often a typo (extra zero, wrong field) than an intentional
+    // adjustment - confirm before it becomes a ledger credit.
+    const adjustedLines = selectedLines.filter(
+      (l) => l.originalUnitCost > 0 && Math.abs(l.unitCost - l.originalUnitCost) / l.originalUnitCost > 0.2
+    )
+    if (adjustedLines.length > 0) {
+      const summary = adjustedLines
+        .map((l) => `${l.productName}: bought at ${formatCurrency(l.originalUnitCost)}, crediting ${formatCurrency(l.unitCost)}`)
+        .join("\n")
+      const confirmed = window.confirm(
+        `${adjustedLines.length} item(s) have a unit cost different from what was actually paid:\n\n${summary}\n\nContinue anyway?`
+      )
+      if (!confirmed) return
+    }
+
     if (saving) return
     setSaving(true)
 
@@ -376,26 +395,32 @@ function PurchaseReturnsPageInner() {
         await supabase.from("purchase_returns").delete().eq("id", (pr as any).id)
       })
 
-      // â"€â"€ Step 2: Update returned_qty on each purchase_item (FIX 6) â"€â"€â"€â"€â"€
-      // This prevents double-returning in future - the source of truth
+      // â"€â"€ Step 2: Reserve returned_qty on each purchase_item (FIX 6) â"€â"€â"€â"€â"€
+      // This prevents double-returning in future - the source of truth.
+      // Atomic, row-locked RPC (supabase/add_purchase_return_qty_rpc.sql) -
+      // replaces a plain read-then-write, which could lose an update if two
+      // staff filed returns against the same purchase_item within moments
+      // of each other (second write overwriting the first). Also backstopped
+      // by a DB CHECK constraint, so over-returning can't happen even via a
+      // direct API call that bypasses the client-side maxQty validation.
       for (const line of selectedLines) {
         if (!line.purchaseItemId) continue
-        const { error } = await supabase
-          .from("purchase_items")
-          .update({ returned_qty: line.alreadyReturned + line.returnQty })
-          .eq("id", line.purchaseItemId)
-          .eq("tenant_id", tenantId)
-        if (error) throw new Error(`Failed to update returned qty for ${line.productName}: ${error.message}`)
+        const { error } = await supabase.rpc("reserve_purchase_return_qty", {
+          p_purchase_item_id: line.purchaseItemId,
+          p_tenant_id: tenantId,
+          p_qty: line.returnQty,
+        })
+        if (error) throw new Error(`Failed to reserve returned qty for ${line.productName}: ${error.message}`)
       }
 
       rollback.push(async () => {
         for (const line of selectedLines) {
           if (!line.purchaseItemId) continue
-          await supabase
-            .from("purchase_items")
-            .update({ returned_qty: line.alreadyReturned })
-            .eq("id", line.purchaseItemId)
-            .eq("tenant_id", tenantId)
+          await supabase.rpc("release_purchase_return_qty", {
+            p_purchase_item_id: line.purchaseItemId,
+            p_tenant_id: tenantId,
+            p_qty: line.returnQty,
+          })
         }
       })
 
@@ -582,34 +607,6 @@ function PurchaseReturnsPageInner() {
       toast.error(err instanceof Error ? err.message : "Failed to save return")
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleUpdateStatus(id: string, status: PRStatus) {
-    try {
-      const ret = returnsList.find(r => r.id === id)
-      const { error } = await supabase.from("purchase_returns").update({ status }).eq("id", id)
-      if (error) throw new Error(error.message)
-      setReturnsList(prev => prev.map(r => r.id === id ? { ...r, status } : r))
-      if (viewReturn?.id === id) setViewReturn(prev => prev ? { ...prev, status } : prev)
-      toast.success(`Status updated to ${status}`)
-      if (ret) {
-        createAuditLog({
-          timestamp: new Date().toISOString(),
-          userId: user?.id ?? "system",
-          userName: user?.name ?? "Unknown",
-          userRole: user?.role ?? "Admin",
-          action: status === "Rejected" ? "REJECT" : status === "Completed" ? "APPROVE" : "UPDATE",
-          module: "Purchases",
-          entityId: ret.id,
-          entityName: ret.returnNumber,
-          description: `Purchase return ${ret.returnNumber} (PO ${ret.poNumber}) - ${ret.status} → ${status}`,
-          oldValue: JSON.stringify({ status: ret.status }),
-          newValue: JSON.stringify({ status }),
-        }).catch(() => {})
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update status")
     }
   }
 
@@ -895,7 +892,12 @@ function PurchaseReturnsPageInner() {
                                 </div>
                               </div>
                               <div>
-                                <Label className="text-[10px] text-slate-500 mb-1 block">Unit Cost</Label>
+                                <Label className="text-[10px] text-slate-500 mb-1 block">
+                                  Unit Cost
+                                  {line.originalUnitCost > 0 && Math.abs(line.unitCost - line.originalUnitCost) / line.originalUnitCost > 0.2 && (
+                                    <span className="text-amber-600 font-semibold ml-1">(adjusted)</span>
+                                  )}
+                                </Label>
                                 <MoneyInput min={0} value={line.unitCost}
                                   onChange={v => updateLine(idx, "unitCost", parseFloat(v) || 0)}
                                   className="h-6 text-xs" />
@@ -906,6 +908,11 @@ function PurchaseReturnsPageInner() {
                                   {formatCurrency(line.unitCost * line.returnQty)}
                                 </div>
                               </div>
+                              {line.originalUnitCost > 0 && Math.abs(line.unitCost - line.originalUnitCost) / line.originalUnitCost > 0.2 && (
+                                <div className="col-span-2 sm:col-span-3 rounded-md bg-amber-50 border border-amber-200 px-2 py-1.5 text-[10px] text-amber-700">
+                                  This item was bought at {formatCurrency(line.originalUnitCost)} - the credit amount above is different. Double-check before saving.
+                                </div>
+                              )}
                               <div className="col-span-2 sm:col-span-3">
                                 <Label className="text-[10px] text-slate-500 mb-1 block">Reason</Label>
                                 <Select value={line.reason} onValueChange={v => updateLine(idx, "reason", v)}>
@@ -1041,26 +1048,6 @@ function PurchaseReturnsPageInner() {
                 <p className="mt-3 text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">{viewReturn.notes}</p>
               )}
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {viewReturn.status === "Pending" && (
-                  <>
-                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white h-8 text-xs gap-1.5"
-                      onClick={() => handleUpdateStatus(viewReturn.id, "Approved")}>
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50"
-                      onClick={() => handleUpdateStatus(viewReturn.id, "Rejected")}>
-                      <XCircle className="w-3.5 h-3.5" /> Reject
-                    </Button>
-                  </>
-                )}
-                {viewReturn.status === "Approved" && (
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs gap-1.5"
-                    onClick={() => handleUpdateStatus(viewReturn.id, "Completed")}>
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Mark Completed
-                  </Button>
-                )}
-              </div>
             </>
           )}
         </DialogContent>
