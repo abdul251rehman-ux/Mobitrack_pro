@@ -723,23 +723,6 @@ function ReturnsPageInner() {
     }).catch(() => {})
   }
 
-  async function approveReturn(id: string) {
-    if (processingId) return
-    setProcessingId(id)
-    try {
-      await updateReturnStatus(id, "Approved")
-      const ret = returnsList.find(r => r.id === id)
-      setReturnsList((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status: "Approved" as ReturnStatus } : r))
-      )
-      toast.success("Return approved")
-      if (ret) logReturnStatusChange(ret, "Approved", "APPROVE")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to approve return")
-    } finally {
-      setProcessingId(null)
-    }
-  }
 
   async function rejectReturn(id: string) {
     if (processingId) return
@@ -1121,18 +1104,13 @@ function ReturnsPageInner() {
                   </Button>
                   {ret.status === "Pending" && (
                     <>
-                      <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => approveReturn(ret.id)} disabled={processingId === ret.id} title="Approve">
-                        <CheckCircle2 className="w-4 h-4" />
+                      <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} disabled={processingId === ret.id} title="Complete">
+                        <Package className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => rejectReturn(ret.id)} disabled={processingId === ret.id} title="Reject">
                         <XCircle className="w-4 h-4" />
                       </Button>
                     </>
-                  )}
-                  {ret.status === "Approved" && (
-                    <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} disabled={processingId === ret.id} title="Complete">
-                      <Package className="w-4 h-4" />
-                    </Button>
                   )}
                 </div>
               </div>
@@ -1199,18 +1177,13 @@ function ReturnsPageInner() {
                         </Button>
                         {ret.status === "Pending" && (
                           <>
-                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => approveReturn(ret.id)} disabled={processingId === ret.id} title="Approve">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} disabled={processingId === ret.id} title="Complete">
+                              <Package className="w-3.5 h-3.5" />
                             </Button>
                             <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => rejectReturn(ret.id)} disabled={processingId === ret.id} title="Reject">
                               <XCircle className="w-3.5 h-3.5" />
                             </Button>
                           </>
-                        )}
-                        {ret.status === "Approved" && (
-                          <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => completeReturn(ret.id)} disabled={processingId === ret.id} title="Complete">
-                            <Package className="w-3.5 h-3.5" />
-                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -1743,19 +1716,6 @@ function ReturnsPageInner() {
                       </div>
                     </div>
 
-                    {/* Status-specific steps */}
-                    {(viewReturn.status === "Approved" || viewReturn.status === "Completed") && (
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="w-3 h-3 text-indigo-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">Approved</p>
-                          <p className="text-xs text-slate-400">Return approved for processing</p>
-                        </div>
-                      </div>
-                    )}
-
                     {viewReturn.status === "Rejected" && (
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
@@ -1811,8 +1771,8 @@ function ReturnsPageInner() {
                           <Clock className="w-3 h-3 text-amber-600" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-slate-800">Awaiting Review</p>
-                          <p className="text-xs text-slate-400">Return is pending approval or rejection</p>
+                          <p className="text-sm font-medium text-slate-800">Awaiting Completion</p>
+                          <p className="text-xs text-slate-400">Refund recorded - complete the return to restock the item</p>
                         </div>
                       </div>
                     )}
@@ -1839,28 +1799,16 @@ function ReturnsPageInner() {
                       Reject
                     </Button>
                     <Button
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       onClick={() => {
-                        approveReturn(viewReturn.id)
+                        completeReturn(viewReturn.id)
                         setViewReturn(null)
                       }}
                     >
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Approve
+                      <Package className="w-4 h-4 mr-2" />
+                      Complete Return
                     </Button>
                   </>
-                )}
-                {viewReturn.status === "Approved" && (
-                  <Button
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={() => {
-                      completeReturn(viewReturn.id)
-                      setViewReturn(null)
-                    }}
-                  >
-                    <Package className="w-4 h-4 mr-2" />
-                    Complete Return
-                  </Button>
                 )}
               </DialogFooter>
             </>
