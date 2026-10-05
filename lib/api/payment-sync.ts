@@ -35,6 +35,42 @@ export async function findExistingPayment(
 }
 
 /**
+ * Guards free-text "Pay Supplier"/"Collect Payment" style dialogs, which
+ * have no user-typed reference number for findExistingPayment to match on -
+ * each call generates its own fresh Date.now()-based reference, so two
+ * concurrent clicks (two staff, two tabs) both look like "new" payments to
+ * that check. This instead looks for a Completed payment to the same
+ * entity, same type, same amount, recorded in the last `windowSeconds` -
+ * the real-world signature of "someone already just did this" rather than
+ * a reference match. Not a hard block (a legitimate second identical
+ * payment minutes apart is fine) - the caller decides what to do with a hit.
+ */
+export async function findRecentDuplicatePayment(
+  tenantId: string,
+  entityType: 'Customer' | 'Supplier',
+  entityId: string,
+  type: 'Paid' | 'Received',
+  amount: number,
+  windowSeconds = 15
+): Promise<{ id: string; createdAt: string } | null> {
+  const since = new Date(Date.now() - windowSeconds * 1000).toISOString()
+  const { data } = await supabase
+    .from('payments')
+    .select('id, created_at')
+    .eq('tenant_id', tenantId)
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId)
+    .eq('type', type)
+    .eq('amount', amount)
+    .eq('status', 'Completed')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data ? { id: (data as any).id, createdAt: (data as any).created_at } : null
+}
+
+/**
  * Live "amount received so far" per customer sale, computed from `payments`
  * instead of trusted from sales.amountReceived - mirrors
  * computePaidPerPurchase (see its comment for the full rationale). A

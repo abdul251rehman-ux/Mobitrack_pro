@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabase"
 import { getTenantId } from "@/lib/api/helpers"
 import { getCustomers } from "@/lib/api/customers"
 import { getSales, settleCustomerPayment } from "@/lib/api/sales"
-import { computeNetReceivedByCustomer } from "@/lib/api/payment-sync"
+import { computeNetReceivedByCustomer, findRecentDuplicatePayment } from "@/lib/api/payment-sync"
 import { getPayments } from "@/lib/api/payments"
 import { getFinanceAccounts, adjustAccountBalance } from "@/lib/api/finance"
 import { createAuditLog } from "@/lib/api/audit"
@@ -382,6 +382,16 @@ function CustomerLedgerPageInner() {
       const tenantId = await getTenantId()
       const today    = todayPKT()
 
+      // Guards against two staff/tabs both clicking "Collect Payment" for
+      // the same customer/amount within moments of each other.
+      const dupe = await findRecentDuplicatePayment(tenantId, "Customer", selectedCustomer.id, "Received", amount)
+      if (dupe) {
+        const proceed = window.confirm(
+          `A payment of ${formatCurrency(amount)} from this customer was just recorded moments ago. Record this as a separate payment anyway?`
+        )
+        if (!proceed) { setCollecting(false); return }
+      }
+
       await supabase.from("payments").insert({
         tenant_id: tenantId, date: today, type: "Received",
         entity_type: "Customer", entity_id: selectedCustomer.id,
@@ -462,6 +472,16 @@ function CustomerLedgerPageInner() {
     try {
       const tenantId = await getTenantId()
       const today    = todayPKT()
+
+      // Guards against two staff/tabs both clicking "Give Payment" for the
+      // same customer/amount within moments of each other.
+      const dupe = await findRecentDuplicatePayment(tenantId, "Customer", selectedCustomer.id, "Paid", amount)
+      if (dupe) {
+        const proceed = window.confirm(
+          `A payment of ${formatCurrency(amount)} given to this customer was just recorded moments ago. Record this as a separate payment anyway?`
+        )
+        if (!proceed) { setGiving(false); return }
+      }
 
       await supabase.from("payments").insert({
         tenant_id: tenantId, date: today, type: "Paid",

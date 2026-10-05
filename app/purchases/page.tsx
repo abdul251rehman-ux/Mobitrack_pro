@@ -536,6 +536,29 @@ function PurchasesPageInner() {
       const remaining = markPaidTarget.balanceDue
       if (markPaidTarget.supplierId && remaining > 0) {
         const tenantId = await getTenantId()
+
+        // Atomic claim BEFORE recording any payment - without this, two
+        // staff members (or two tabs) clicking "Mark as Paid" on the same
+        // purchase within moments of each other would both pass this point
+        // and both insert a payment/debit the account/settle the supplier
+        // balance, double-recording the same payment. Only the request that
+        // flips payment_status away from "Paid" first proceeds; the loser
+        // gets 0 rows back and aborts before touching any money.
+        const { data: claimRows, error: claimErr } = await supabase
+          .from("purchases")
+          .update({ payment_status: "Paid", amount_paid: markPaidTarget.total, balance_due: 0 })
+          .eq("id", markPaidTarget.id)
+          .eq("tenant_id", tenantId)
+          .neq("payment_status", "Paid")
+          .select("id")
+        if (claimErr) throw new Error(claimErr.message)
+        if (!claimRows || claimRows.length === 0) {
+          toast.error(`${markPaidTarget.poNumber} was already marked as Paid`)
+          setMarkPaidTarget(null)
+          setMarkingPaid(false)
+          return
+        }
+
         const selectedAccount = accounts.find(a => a.id === markPaidAccountId)
         const payMethod = selectedAccount?.type === "bank" ? "Bank Transfer"
           : selectedAccount?.type === "mobile_wallet" ? "Mobile Wallet"
@@ -557,7 +580,15 @@ function PurchasesPageInner() {
           notes: `Mark as Paid — ${markPaidTarget.poNumber}`,
           status: "Completed",
         })
-        if (payErr) throw new Error(payErr.message)
+        if (payErr) {
+          // The claim above already flipped payment_status to "Paid" - undo
+          // it so this purchase isn't stuck showing Paid with no real
+          // payment behind it, and so a retry is possible.
+          await supabase.from("purchases").update({
+            payment_status: markPaidTarget.paymentStatus, amount_paid: markPaidTarget.amountPaid, balance_due: markPaidTarget.balanceDue,
+          }).eq("id", markPaidTarget.id).eq("tenant_id", tenantId)
+          throw new Error(payErr.message)
+        }
 
         await adjustAccountBalance(markPaidAccountId, -remaining, 0)
 
