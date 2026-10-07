@@ -17,7 +17,7 @@ import { toast } from "sonner"
 import { getSales } from "@/lib/api/sales"
 import { getPayments } from "@/lib/api/payments"
 import { getPurchases } from "@/lib/api/purchases"
-import { computeNetPaidBySupplier, computeNetReceivedByCustomer } from "@/lib/api/payment-sync"
+import { computeNetPaidBySupplier, computeNetReceivedByCustomer, withLiveSaleBalances } from "@/lib/api/payment-sync"
 import { getMobiles, getAccessories } from "@/lib/api/products"
 import { getUsedPhones } from "@/lib/api/inventory"
 import { getCustomers } from "@/lib/api/customers"
@@ -165,8 +165,25 @@ export default function DashboardPage() {
   const lastWeekStartStr = format(startOfWeek(subWeeks(todayParsed, 1), { weekStartsOn: 1 }), "yyyy-MM-dd")
   const lastWeekEndStr = format(endOfWeek(subWeeks(todayParsed, 1), { weekStartsOn: 1 }), "yyyy-MM-dd")
 
+  // Live amountReceived/changeDue/status per sale, derived from the real
+  // `payments` table instead of trusted from the sale's own cached field -
+  // same shared helper the Sales page, Customer Ledger, and Sale detail page
+  // all use (lib/api/payment-sync.ts). Without this, periodCollected below
+  // could drift from what the Sales page's own "Selected Period Sales" card
+  // shows for the same period, even though a comment here already claims
+  // they "always agree" - confirmed live: two sales in this tenant's data
+  // had a cached amountReceived that didn't match their real Completed
+  // payments (one included a payment still sitting as Pending). Walk-in
+  // sales (no customerId) fall back to their own cached field unchanged -
+  // see withLiveSaleBalances's own comment for why.
+  const customerPayments = useMemo(
+    () => payments.filter(p => p.entityType === "Customer" && p.status === "Completed"),
+    [payments]
+  )
+  const liveSales = useMemo(() => withLiveSaleBalances(sales, customerPayments), [sales, customerPayments])
+
   const filteredSales = useMemo(() => {
-    const base = sales.filter(s => s.status !== "Refunded")
+    const base = liveSales.filter(s => s.status !== "Refunded")
     if (period === "today") return base.filter(s => s.date === todayStr)
     if (period === "yesterday") return base.filter(s => s.date === yesterdayStr)
     if (period === "thisWeek") return base.filter(s => s.date >= thisWeekStart && s.date <= todayStr)
@@ -176,7 +193,7 @@ export default function DashboardPage() {
     if (period === "year") return base.filter(s => s.date.startsWith(currentYearKey))
     if (period === "range" && dateFrom && dateTo) return base.filter(s => s.date >= dateFrom && s.date <= dateTo)
     return base.filter(s => s.date.startsWith(currentMonthKey))
-  }, [period, sales, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
+  }, [period, liveSales, currentMonthKey, lastMonthKey, currentYearKey, yesterdayStr, thisWeekStart, todayStr, lastWeekStartStr, lastWeekEndStr, dateFrom, dateTo])
 
   // Payments actually received from customers within the selected period, by
   // the PAYMENT's own date - not the sale's date. This is different from
@@ -662,8 +679,16 @@ export default function DashboardPage() {
       const revenue    = monthSales.reduce((s, x) => s + x.total, 0)
       const profit     = monthSales.reduce((total, sale) => {
         const itemProfit = sale.items.reduce((sub, item) => {
-          const costMap = item.productType === "Mobile" ? mobileMap : item.productType === "UsedPhone" ? usedPhoneMap : accMap
-          const cost = costMap.get(item.productId)
+          // fn_create_sale stores used-phone sale items with product_type='Mobile'
+          // too (sale_items has no separate UsedPhone type) - this tenant's entire
+          // business is used phones, so a plain "Mobile" -> mobileMap lookup alone
+          // found no cost for any item and silently zeroed out every month's
+          // profit on this chart (confirmed live: Sept 2026 showed Profit: 0 here
+          // while the Gross Profit card correctly showed Rs 253,500 for the same
+          // month, using this same fallback). Mirrors periodProfit's lookup above.
+          const cost = item.productType === "Accessory"
+            ? accMap.get(item.productId)
+            : mobileMap.get(item.productId) ?? usedPhoneMap.get(item.productId)
           if (cost === undefined) return sub
           return sub + (item.unitPrice - cost) * item.quantity - (item.discount ?? 0)
         }, 0)
@@ -917,7 +942,7 @@ export default function DashboardPage() {
             },
             {
               label: t("dash.Purchases"), value: formatCurrency(periodPurchases),
-              sub: `${filteredPurchases.length} ${t("dash.orders")}`,
+              sub: `${filteredPurchases.length} ${t("dash.orders")} · value ordered`,
               icon: TrendingUp, grad: "from-violet-500 to-violet-600",
               shadow: "shadow-violet-200/60", card: "purchases" as const,
             },
@@ -998,7 +1023,11 @@ export default function DashboardPage() {
                 </div>
               </div>
               <p className="text-white text-xl font-bold tracking-tight leading-tight mb-0.5">{formatCurrency(periodPurchases)}</p>
-              <p className="text-violet-200 text-[11px]">{filteredPurchases.length} purchase orders</p>
+              {/* "Value ordered" not "cash paid" - a purchase bought on credit still
+                  counts its full total here even if nothing's been paid to the
+                  supplier yet. See the Payable to Suppliers card for what's
+                  actually still owed. */}
+              <p className="text-violet-200 text-[11px]">{filteredPurchases.length} purchase orders · value ordered, not cash paid</p>
               <div className="mt-2 h-10">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={purchaseSparkData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
@@ -1084,7 +1113,7 @@ export default function DashboardPage() {
             happened - a sale from last month paid off today counts toward
             today's Cash In, but toward last month's Collected. â"€â"€ */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <button type="button" onClick={() => setBreakdownCard("cashIn")} className="flex items-center gap-3 rounded-xl bg-white border border-emerald-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+          <button type="button" onClick={() => setBreakdownCard("cashIn")} title="Money that physically landed in an account this period, from any sale regardless of when it was made (e.g. an old sale paid off today counts here)" className="flex items-center gap-3 rounded-xl bg-white border border-emerald-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
             <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
               <Wallet className="w-4 h-4 text-emerald-600" />
             </div>
@@ -1093,7 +1122,7 @@ export default function DashboardPage() {
               <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">Cash received - {periodLabel}</p>
             </div>
           </button>
-          <button type="button" onClick={() => setBreakdownCard("collected")} className="flex items-center gap-3 rounded-xl bg-white border border-emerald-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+          <button type="button" onClick={() => setBreakdownCard("collected")} title="How much of THIS period's own sales has been paid off so far, by sale date (not payment date) - may differ from Cash Received, which counts by payment date instead" className="flex items-center gap-3 rounded-xl bg-white border border-emerald-100 px-4 py-3 shadow-sm text-left hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
             <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
               <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
             </div>
